@@ -1,0 +1,308 @@
+"""Database schema, expressed once as SQLAlchemy Core tables.
+
+This module is the single source of truth for the DDL: the Alembic migration
+imports `metadata` and creates the tables from it, so a column cannot drift between
+the app and the database.
+
+Table set = PRD 7 (manufacturer, product, document, chunk, fact, alias, tender,
+requirement, run, result) + PRD 5.3.1 additions (tender_page, tender_table,
+tender_item, extraction_batch) + `attribute`, which closes the `fact.attribute_id`
+reference the PRD leaves dangling.
+"""
+
+from __future__ import annotations
+
+import uuid
+
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    MetaData,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+
+from app.schemas.enums import (
+    AliasSource,
+    Applicability,
+    ConfidenceLevel,
+    ExtractionMethod,
+    FactVerificationStatus,
+    LedgerStatus,
+    Operator,
+    RequirementStatus,
+    RequirementType,
+    RunStatus,
+    ValueType,
+    VerificationOutcome,
+)
+
+metadata = MetaData()
+
+
+def _enum(enum_cls, name: str):
+    """VARCHAR + CHECK constraint rather than a native PG enum.
+
+    Native enums need ALTER TYPE to add a value; a CHECK constraint needs a
+    migration that drops and recreates it, which is simpler to review.
+    """
+    return Enum(
+        enum_cls,
+        name=name,
+        native_enum=False,
+        length=64,
+        create_constraint=True,
+        values_callable=lambda e: [m.value for m in e],
+    )
+
+
+def _uuid_pk():
+    return Column("id", Uuid(), primary_key=True, default=uuid.uuid4)
+
+
+# --- corpus -----------------------------------------------------------------
+
+manufacturer = Table(
+    "manufacturer",
+    metadata,
+    _uuid_pk(),
+    Column("name", String(255), nullable=False, unique=True),
+    Column("official_domain", String(255)),
+    Column("notes", Text),
+)
+
+product = Table(
+    "product",
+    metadata,
+    _uuid_pk(),
+    Column("manufacturer_id", Uuid(), ForeignKey("manufacturer.id"), nullable=False),
+    Column("model", String(255), nullable=False),
+    Column("family", String(255)),
+    Column("category", String(255)),
+    UniqueConstraint("manufacturer_id", "model", name="uq_product_manufacturer_model"),
+    # The table cannot be referenced by name while it is being defined.
+    Index("ix_product_manufacturer_id", "manufacturer_id"),
+)
+
+document = Table(
+    "document",
+    metadata,
+    _uuid_pk(),
+    Column("manufacturer_id", Uuid(), ForeignKey("manufacturer.id"), nullable=False),
+    Column("url", Text),
+    Column("sha256", String(64), nullable=False),
+    Column("doc_type", String(64)),
+    Column("version_date", DateTime(timezone=True)),
+    Column("retrieved_at", DateTime(timezone=True)),
+    Column("path", Text),
+    # Distributor / reseller documents are marked secondary and never override
+    # manufacturer documents (FR-7).
+    Column("is_secondary", Boolean, nullable=False, server_default="false"),
+    Column("restriction_note", Text),
+    Index("ix_document_sha256", "sha256"),
+    Index("ix_document_manufacturer_id", "manufacturer_id"),
+)
+
+chunk = Table(
+    "chunk",
+    metadata,
+    _uuid_pk(),
+    Column("document_id", Uuid(), ForeignKey("document.id"), nullable=False),
+    Column("page", Integer),
+    Column("section", String(512)),
+    Column("is_table", Boolean, nullable=False, server_default="false"),
+    Column("ocr", Boolean, nullable=False, server_default="false"),
+    Column("text", Text, nullable=False),
+    # Dimension is left unset until EMBEDDING_MODEL is chosen; the ANN index is
+    # added in the retrieval phase, once the dimension is fixed.
+    Column("embedding", Vector()),
+    Index("ix_chunk_document_id", "document_id"),
+)
+
+attribute = Table(
+    "attribute",
+    metadata,
+    _uuid_pk(),
+    Column("canonical_term", String(255), nullable=False, unique=True),
+    Column("value_type", _enum(ValueType, "value_type")),
+    Column("unit_default", String(64)),
+    Column("notes", Text),
+)
+
+fact = Table(
+    "fact",
+    metadata,
+    _uuid_pk(),
+    Column("product_id", Uuid(), ForeignKey("product.id"), nullable=False),
+    Column("attribute_id", Uuid(), ForeignKey("attribute.id")),
+    Column("original_name", String(255)),
+    Column("value", Text),
+    Column("unit", String(64)),
+    Column("value_type", _enum(ValueType, "fact_value_type")),
+    Column("operator", _enum(Operator, "fact_operator")),
+    Column("conditions", Text),
+    Column("document_id", Uuid(), ForeignKey("document.id"), nullable=False),
+    Column("page", Integer),
+    Column("quote", Text),
+    Column("verification_status", _enum(FactVerificationStatus, "fact_verification_status")),
+    Column("extractor_version", String(64)),
+    Index("ix_fact_product_id", "product_id"),
+    Index("ix_fact_attribute_id", "attribute_id"),
+)
+
+alias = Table(
+    "alias",
+    metadata,
+    _uuid_pk(),
+    Column("canonical_term", String(255), nullable=False),
+    Column("alias", String(255), nullable=False),
+    Column("source", _enum(AliasSource, "alias_source")),
+    Column("confidence", Float),
+    Column("approved", Boolean, nullable=False, server_default="false"),
+    Index("ix_alias_canonical_term", "canonical_term"),
+)
+
+# --- tender -----------------------------------------------------------------
+
+tender = Table(
+    "tender",
+    metadata,
+    _uuid_pk(),
+    Column("filename", String(512), nullable=False),
+    # Category is inferred per BOQ item, not once per tender (FR-16), so this is
+    # a coarse hint only and stays nullable.
+    Column("category", String(255)),
+    Column("uploaded_at", DateTime(timezone=True), server_default=func.now()),
+    # FR-12: idempotent ingestion keys on hash + extractor/prompt/schema versions.
+    Column("sha256", String(64), nullable=False, unique=True),
+    Column("page_count", Integer),
+    Column("processing_version", String(64)),
+)
+
+tender_item = Table(
+    "tender_item",
+    metadata,
+    Column("item_id", String(64), primary_key=True),
+    Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False),
+    Column("name", String(255), nullable=False),
+    Column("category", String(255)),
+    Column("boq_ref", String(64)),
+    Index("ix_tender_item_tender_id", "tender_id"),
+)
+
+tender_page = Table(
+    "tender_page",
+    metadata,
+    Column("tender_id", Uuid(), ForeignKey("tender.id"), primary_key=True),
+    Column("page", Integer, primary_key=True),
+    Column("tags", JSONB, nullable=False, server_default="[]"),
+    Column("extraction_method", _enum(ExtractionMethod, "page_extraction_method")),
+    Column("quality_warnings", JSONB, nullable=False, server_default="[]"),
+    Column("ledger_status", _enum(LedgerStatus, "ledger_status"), nullable=False),
+    Column("skip_reason", Text),
+)
+
+tender_table = Table(
+    "tender_table",
+    metadata,
+    _uuid_pk(),
+    Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False),
+    Column("page_range", JSONB),
+    Column("headers", JSONB),
+    Column("rows", JSONB),
+    Column("continued_from", Uuid(), ForeignKey("tender_table.id")),
+    Index("ix_tender_table_tender_id", "tender_id"),
+)
+
+requirement = Table(
+    "requirement",
+    metadata,
+    _uuid_pk(),
+    Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False),
+    Column("item_id", String(64), ForeignKey("tender_item.item_id")),
+    Column("parent_requirement_id", Uuid(), ForeignKey("requirement.id")),
+    Column("source_table_id", Uuid(), ForeignKey("tender_table.id")),
+    Column("source_row_id", String(128)),
+    Column("source_page", Integer, nullable=False),
+    Column("source_section", String(512)),
+    Column("parent_clause", String(512)),
+    Column("source_text", Text, nullable=False),
+    Column("source_span", JSONB),
+    Column("extraction_method", _enum(ExtractionMethod, "requirement_extraction_method"), nullable=False),
+    Column("text", Text),
+    Column("type", _enum(RequirementType, "requirement_type"), nullable=False),
+    Column("attribute", String(255)),
+    Column("operator", _enum(Operator, "requirement_operator")),
+    Column("value", Text),
+    Column("unit", String(64)),
+    Column("value_type", _enum(ValueType, "requirement_value_type")),
+    Column("mandatory", Boolean, nullable=False, server_default="true"),
+    Column("extraction_confidence", Float),
+    Column("review_required", Boolean, nullable=False, server_default="false"),
+    Column("review_reason", Text),
+    Column("extraction_version", String(64), nullable=False),
+    Column("schema_version", String(64), nullable=False),
+    Index("ix_requirement_tender_id", "tender_id"),
+    Index("ix_requirement_item_id", "item_id"),
+)
+
+extraction_batch = Table(
+    "extraction_batch",
+    metadata,
+    _uuid_pk(),
+    Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False),
+    Column("section", String(255)),
+    Column("status", String(64), nullable=False),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("extractor_version", String(64)),
+    Column("prompt_version", String(64)),
+    Column("output_hash", String(64)),
+    Index("ix_extraction_batch_tender_id", "tender_id"),
+)
+
+# --- run and results --------------------------------------------------------
+
+run = Table(
+    "run",
+    metadata,
+    _uuid_pk(),
+    Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False),
+    Column("started_at", DateTime(timezone=True), server_default=func.now()),
+    Column("status", _enum(RunStatus, "run_status"), nullable=False),
+    Column("config_snapshot", JSONB),
+    Column("corpus_hash", String(64)),
+    Index("ix_run_tender_id", "tender_id"),
+)
+
+result = Table(
+    "result",
+    metadata,
+    _uuid_pk(),
+    Column("run_id", Uuid(), ForeignKey("run.id"), nullable=False),
+    Column("requirement_id", Uuid(), ForeignKey("requirement.id"), nullable=False),
+    Column("manufacturer_id", Uuid(), ForeignKey("manufacturer.id"), nullable=False),
+    Column("status", _enum(RequirementStatus, "result_status"), nullable=False),
+    Column("verification_outcome", _enum(VerificationOutcome, "verification_outcome"), nullable=False),
+    Column("applicability", _enum(Applicability, "applicability"), nullable=False),
+    Column("score", Float, nullable=False),
+    Column("capability_text", Text),
+    # Traceability: every result points at the stored fact that backs it (PRD 13).
+    Column("evidence_ref", Uuid(), ForeignKey("fact.id")),
+    Column("confidence", _enum(ConfidenceLevel, "confidence_level")),
+    Column("review_required", Boolean, nullable=False, server_default="false"),
+    Column("review_reason", Text),
+    Index("ix_result_run_id", "run_id"),
+    Index("ix_result_requirement_id", "requirement_id"),
+)

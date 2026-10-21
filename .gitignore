@@ -1,0 +1,27 @@
+# Local secrets and overrides
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Corpus / uploads (large binaries live outside git; manifest.json is tracked)
+backend/data/manufacturers/*/raw/
+backend/data/uploads/
+backend/data/tmp/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
