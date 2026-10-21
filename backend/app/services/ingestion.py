@@ -113,10 +113,15 @@ def ingest_corpus(
 def main() -> int:
     """Ingest the corpus and report what happened."""
     from app.core.config import get_settings
+    from app.repositories.aliases import seed_aliases, seed_attributes
     from app.repositories.db import session_scope
 
     data_dir = get_settings().data_dir
     with session_scope() as session:
+        # The canonical terms and their synonyms have to be in the database
+        # before anything can resolve a name against them.
+        seed_attributes(session)
+        seed_aliases(session)
         report = ingest_corpus(data_dir, session)
 
     print(f"documents ingested: {report.documents}")

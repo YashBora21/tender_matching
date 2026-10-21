@@ -244,3 +244,23 @@ def test_a_document_on_disk_that_no_manifest_lists_is_still_ingested(tmp_path, m
     # It is hashed here, because a document without a hash cannot be tracked.
     assert len(calls[0]["sha256"]) == 64
     assert calls[0]["manufacturer"] == "acme"
+
+
+def test_every_doc_type_the_corpus_uses_is_in_the_vocabulary():
+    """A doc_type outside the vocabulary is not collected (D-30), so a corpus
+    that uses one is a corpus the collector would refuse."""
+    import csv
+
+    from app.services.evidence import load_doc_types
+
+    vocabulary = set(load_doc_types().doc_types)
+    manifest = Path(
+        "C:/Users/Lenovo/OneDrive/Desktop/tender_matching/backend/data/catalogue/manifest.csv"
+    )
+    if not manifest.exists():
+        pytest.skip("the collected corpus is not present")
+
+    with manifest.open(encoding="utf-8", newline="") as handle:
+        used = {row["doc_type"] for row in csv.DictReader(handle) if row.get("doc_type")}
+
+    assert used <= vocabulary, f"doc types not in the vocabulary: {used - vocabulary}"

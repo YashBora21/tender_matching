@@ -16,6 +16,7 @@ known attribute, so it is kept but not used: it says "we saw this name", not
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass
 from typing import Optional
 
@@ -200,4 +201,35 @@ def seed_aliases(session: Session) -> int:
                 approved=True,
             )
             added += 1
+    return added
+
+
+def seed_attributes(session: Session) -> int:
+    """Fill the attribute table from the vocabulary file.
+
+    The table is what a fact points at, so it has to hold the canonical
+    terms. It was empty schema until now: the terms lived only in the file.
+    """
+    from app.comparison.vocabulary import load_vocabulary
+    from app.repositories.schema import attribute as attribute_table
+
+    existing = {
+        row[0]
+        for row in session.execute(
+            select(attribute_table.c.canonical_term)
+        ).all()
+    }
+    added = 0
+    for spec in load_vocabulary().attributes:
+        if spec.canonical_term in existing:
+            continue
+        session.execute(
+            attribute_table.insert().values(
+                id=uuid.uuid4(),
+                canonical_term=spec.canonical_term,
+                value_type=spec.value_type.value,
+                unit_default=spec.default_unit,
+            )
+        )
+        added += 1
     return added

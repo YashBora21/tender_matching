@@ -1,11 +1,14 @@
 {
+  "_comment": "The document-type vocabulary. The collector validates a manifest entry's doc_type against this list, and the evidence layer maps a document's class from it, so the two cannot disagree.",
   "doc_types": [
     "datasheet",
     "specification",
     "catalogue",
     "compliance_schedule",
     "technical_offer",
-    "manual"
+    "manual",
+    "brochure",
+    "other"
   ],
 
   "class_markers": {
@@ -13,7 +16,7 @@
     "compliance_schedule": ["compliance-schedule", "compliance_schedule", "compliance"],
     "technical_offer": ["technical-offer", "technical_offer", "technical-offering", "offer", "proposal"],
     "specification": ["specification", "spec"],
-    "datasheet": ["datasheet", "data-sheet", "catalogue", "catalog"],
+    "datasheet": ["datasheet", "data-sheet", "catalogue", "catalog", "brochure", "bulletin"],
     "ignored": ["commercial", "pricing", "price", "quotation", "quote", "invoice"]
   },
 
