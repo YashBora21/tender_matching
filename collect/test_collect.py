@@ -257,7 +257,7 @@ def test_an_entry_with_an_unknown_doc_type_is_not_collected(tmp_path, monkeypatc
                     {
                         "manufacturer": "Acme Valves",
                         "url": "https://example.com/a.pdf",
-                        "doc_type": "brochure",
+                        "doc_type": "wibble",
                         "model_or_family": "GV",
                     }
                 ],
