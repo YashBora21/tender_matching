@@ -279,3 +279,32 @@ sent to review for no reason.
 — rejected, it would lose the whole point of the overrides, which exist
 precisely because pint's dimensionality is too permissive.
 
+---
+
+**D-24 — Every split rule is tried; the list is never short-circuited.**
+*Decision:* `_split_spans` runs the whole list of split patterns against every
+span, and does not stop at the first pattern that matched nothing.
+*Why:* A pattern that matched nothing on one span says nothing about the next
+pattern. Short-circuiting made every rule after the first miss dead code — the
+semicolon rule only ever ran when a lettered or numbered sub-clause happened
+to come first in the same sentence. A semicolon-joined clause is exactly the
+compound line FR-13 exists to split, and unsplit content cannot be scored
+separately: a partial failure inside it is invisible.
+*Alternatives:* Keeping the break and reordering the patterns — rejected, it
+leaves the same trap for the next rule that is added.
+
+---
+
+**D-25 — Dispositions are decided before any audit entry is written.**
+*Decision:* `consolidate` computes the disposition of every fact first, then
+writes exactly one audit entry per fact.
+*Why:* The audit exists so a reviewer can ask why a fact was used and what
+happened to the others. Writing a losing group as `selected` and then
+rewriting it as `lower-priority` left one fact with two entries, one of them
+claiming it had won. The outcome was right; the record of how it was reached
+was not.
+*Alternatives:* Rewriting the earlier entry in place — rejected, deciding
+everything first is the same amount of code and cannot produce a fact with two
+dispositions.
+
+

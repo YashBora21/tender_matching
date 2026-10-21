@@ -70,7 +70,13 @@ class AtomicRequirement:
 
 
 def _split_spans(text: str) -> list[tuple[int, int]]:
-    """Split the text into spans, keeping the original offsets."""
+    """Split the text into spans, keeping the original offsets.
+
+    Every pattern in the list is tried against every span. A pattern that
+    matched nothing on one span says nothing about the next pattern, so the
+    list is always run to completion - otherwise a rule that happens to come
+    after a non-matching one is dead code.
+    """
     spans = [(0, len(text))]
     for pattern in _SPLIT_PATTERNS:
         new_spans: list[tuple[int, int]] = []
@@ -88,9 +94,6 @@ def _split_spans(text: str) -> list[tuple[int, int]]:
             piece = chunk[last:]
             if piece.strip():
                 new_spans.append((start + last, end))
-        # A pattern that matched nothing will not match on the next pass either.
-        if len(new_spans) <= len(spans):
-            break
         spans = new_spans
 
     return [(s, e) for s, e in spans if text[s:e].strip()]

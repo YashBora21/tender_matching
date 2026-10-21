@@ -201,59 +201,58 @@ def consolidate(attribute: str, evidence: list[Evidence]) -> Consolidation:
         else:
             groups.append([item])
 
-    for group in groups:
-        best_rank = _rank(group[0].document_class, order)
-        for item in group:
-            result.audit.append(
-                AuditEntry(
-                    evidence=item,
-                    disposition=(
-                        Disposition.SELECTED
-                        if item is group[0]
-                        else Disposition.EQUIVALENT_DUPLICATE
-                    ),
-                    priority_rank=best_rank,
-                )
-            )
+    # Every disposition is decided before any audit entry is written, so each
+    # fact appears in the audit exactly once. The list is parallel to
+    # `candidates`, which the audit is written in.
+    dispositions: list[Disposition] = [Disposition.CONFLICT] * len(candidates)
+    index_of = {id(item): position for position, item in enumerate(candidates)}
+
+    def mark(item: Evidence, disposition: Disposition) -> None:
+        dispositions[index_of[id(item)]] = disposition
 
     if len(groups) == 1:
-        result.selected = groups[0][0]
-        return result
-
-    # The groups disagree. The highest-priority class wins, but only if it is
-    # strictly higher than every other class involved.
-    best_group = groups[0]
-    best_rank = _rank(best_group[0].document_class, order)
-    other_ranks = [
-        _rank(group[0].document_class, order) for group in groups[1:]
-    ]
-    if all(best_rank < other for other in other_ranks):
-        result.selected = best_group[0]
-        for group in groups[1:]:
-            for item in group:
-                result.audit.append(
-                    AuditEntry(
-                        evidence=item,
-                        disposition=Disposition.LOWER_PRIORITY,
-                        priority_rank=best_rank,
-                    )
-                )
-        return result
-
-    # A disagreement inside the highest-priority class: a conflict, not a guess.
-    result.conflict = True
-    result.conflicting_values = [group[0].value for group in groups]
-    result.review_reason = (
-        "documents disagree about this attribute: "
-        + ", ".join(f"{group[0].value} ({group[0].document_class.value})" for group in groups)
-    )
-    for group in groups:
-        for item in group:
-            result.audit.append(
-                AuditEntry(
-                    evidence=item,
-                    disposition=Disposition.CONFLICT,
-                    priority_rank=_rank(item.document_class, order),
+        group = groups[0]
+        result.selected = group[0]
+        mark(group[0], Disposition.SELECTED)
+        for item in group[1:]:
+            mark(item, Disposition.EQUIVALENT_DUPLICATE)
+    else:
+        # The groups disagree. The highest-priority class wins, but only if it
+        # is strictly higher than every other class involved.
+        best_group = groups[0]
+        best_rank = _rank(best_group[0].document_class, order)
+        other_ranks = [
+            _rank(group[0].document_class, order) for group in groups[1:]
+        ]
+        if all(best_rank < other for other in other_ranks):
+            result.selected = best_group[0]
+            mark(best_group[0], Disposition.SELECTED)
+            for item in best_group[1:]:
+                mark(item, Disposition.EQUIVALENT_DUPLICATE)
+            for group in groups[1:]:
+                for item in group:
+                    mark(item, Disposition.LOWER_PRIORITY)
+        else:
+            # A disagreement inside the highest-priority class: a conflict,
+            # not a guess.
+            result.conflict = True
+            result.conflicting_values = [group[0].value for group in groups]
+            result.review_reason = (
+                "documents disagree about this attribute: "
+                + ", ".join(
+                    f"{group[0].value} ({group[0].document_class.value})" for group in groups
                 )
             )
+            for group in groups:
+                for item in group:
+                    mark(item, Disposition.CONFLICT)
+
+    for position, item in enumerate(candidates):
+        result.audit.append(
+            AuditEntry(
+                evidence=item,
+                disposition=dispositions[position],
+                priority_rank=_rank(item.document_class, order),
+            )
+        )
     return result

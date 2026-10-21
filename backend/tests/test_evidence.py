@@ -120,3 +120,31 @@ def test_an_ignored_document_is_never_evidence() -> None:
     )
     assert result.selected is not None
     assert result.selected.value == "1200"
+
+
+def test_every_fact_gets_exactly_one_audit_entry() -> None:
+    """The audit records each fact once.
+
+    A fact that is written twice - once claiming to have been selected and
+    once claiming to have lost - makes the record of how the outcome was
+    reached wrong, which is the one thing the audit exists to get right.
+    """
+    facts = [
+        fact("1500", DocumentClass.DATASHEET),
+        fact("1200", DocumentClass.COMPLIANCE_SCHEDULE),
+    ]
+    result = consolidate("rotational_speed", facts)
+    assert len(result.audit) == len(facts)
+    assert [entry.evidence.value for entry in result.audit] == ["1200", "1500"]
+    assert result.audit[0].disposition is Disposition.SELECTED
+    assert result.audit[1].disposition is Disposition.LOWER_PRIORITY
+
+
+def test_a_conflict_audits_every_fact_once() -> None:
+    facts = [
+        fact("1500", DocumentClass.DATASHEET),
+        fact("1200", DocumentClass.DATASHEET),
+    ]
+    result = consolidate("rotational_speed", facts)
+    assert len(result.audit) == len(facts)
+    assert all(entry.disposition is Disposition.CONFLICT for entry in result.audit)

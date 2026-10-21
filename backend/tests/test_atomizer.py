@@ -50,3 +50,35 @@ def test_the_parent_clause_is_carried_onto_every_part() -> None:
     parts = atomize("a) body SS316 b) trim 13Cr", parent_clause="3.2 Materials")
     assert parts
     assert all(part.parent_clause == "3.2 Materials" for part in parts)
+
+
+def test_a_semicolon_joined_line_is_split() -> None:
+    """A semicolon-joined clause is exactly the compound line FR-13 is for.
+
+    Every split rule in the list must be tried: a rule that comes after a
+    non-matching one is dead code if the list stops at the first miss.
+    """
+    parts = atomize("Valve shall be SS316; trim 13Cr; seal Viton")
+    texts = [part.text for part in parts]
+    assert len(texts) == 3
+    assert texts == ["Valve shall be SS316", "trim 13Cr", "seal Viton"]
+
+
+def test_a_numbered_sub_clause_does_not_hide_the_semicolon_rule() -> None:
+    parts = atomize("1) body SS316 2) trim 13Cr; seal Viton")
+    texts = [part.text for part in parts]
+    assert len(texts) == 3
+    assert "seal Viton" in texts
+
+
+def test_a_lettered_sub_clause_does_not_hide_the_semicolon_rule() -> None:
+    parts = atomize("a) body SS316 b) trim 13Cr; seal Viton")
+    texts = [part.text for part in parts]
+    assert len(texts) == 3
+    assert "seal Viton" in texts
+
+
+def test_splitting_does_not_explode_into_empty_pieces() -> None:
+    parts = atomize("; ".join(["trim 13Cr"] * 30))
+    assert len(parts) == 30
+    assert all(part.text.strip() for part in parts)

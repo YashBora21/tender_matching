@@ -106,9 +106,9 @@ the two deterministically.
 
 **Tested**
 
-- 118 unit tests pass, 1 integration test skipped without `TEST_DATABASE_URL`.
+- 124 unit tests pass, 1 integration test skipped without `TEST_DATABASE_URL`.
   With `TEST_DATABASE_URL` pointed at a disposable database the migration
-  integration test runs too: 119 pass.
+  integration test runs too: 125 pass.
 - Unit coverage: normalizer operators/units/ranges, atomizer splitting, the
   four verifier layers, every evaluator, scoring and coverage, the unit
   dimension rules, the vocabulary loader (including a custom vocabulary that
@@ -124,14 +124,24 @@ the two deterministically.
   parsed as `operating_pressure = 316 bar` and took the unit from the wrong
   word — a confident wrong answer on a requirement that was never about
   pressure. The number patterns now refuse a digit preceded by a letter, and
-  a prefixed nominal size ("DN50") is read as the value it is.
+  a prefixed nominal size ("DN50") is read as the value it is. (D-22)
 - **Units inside an override dimension did not convert.** `DIMENSION_OVERRIDES`
   labelled `kW` as `power` while `W` fell through to pint's raw
   dimensionality string, so `is_compatible("kW", "W")` was `False` even
   though the conversion is exact — and the PRD's own `power` attribute
   defaults to `kW`. Every member of a dimension group now carries that
   group's label. The deliberate separations (`kW` vs `kVA`, `Hz` vs `rpm`,
-  `psi` vs `psig`) are unchanged and are covered by tests.
+  `psi` vs `psig`) are unchanged and are covered by tests. (D-23)
+- **The atomizer's semicolon rule was dead code.** The split list stopped at
+  the first pattern that matched nothing, so every rule after the first miss
+  never ran: "Valve shall be SS316; trim 13Cr; seal Viton" stayed one atom
+  unless a lettered or numbered sub-clause happened to come first. The list
+  is now always run to completion. (D-24)
+- **A fact could get two audit entries, one claiming it was selected.** The
+  losing group was written as `selected` and then rewritten as
+  `lower-priority`, so a reviewer saw one fact listed twice, once claiming
+  to have won. The outcome was right; the record of it was not. Dispositions
+  are now decided before any entry is written. (D-25)
 
 **Left open**
 
@@ -148,3 +158,12 @@ the two deterministically.
   FR-34 to record.
 - The React frontend, the `eval/` harness and the gold labels do not exist.
 - `chunk.embedding` still has no dimension and no ANN index (D-6).
+- **The attribute vocabulary cannot yet tell a seal material from a seal
+  arrangement.** "Seal shall be Viton" resolves to `seal_arrangement`
+  (categorical) rather than `material_grade`, because `seal` is a synonym of
+  `seal_arrangement` and matches before the material pattern is consulted. The
+  requirement is not mis-scored — it comes out unusable and routes to review,
+  which is the correct failure mode — but it is a real coverage gap. The fix
+  is in the vocabulary data: a way for a material pattern to outrank an
+  attribute synonym, so the catalogue can say "seal" means a material when
+  the value is a grade.
