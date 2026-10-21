@@ -97,6 +97,9 @@ class Evidence:
     quote: Optional[str] = None
     model: Optional[str] = None
     family: Optional[str] = None
+    # A distributor or reseller document. It never overrides a manufacturer
+    # document of the same class (FR-7).
+    is_secondary: bool = False
 
     @property
     def is_evidence(self) -> bool:
@@ -176,6 +179,16 @@ def _rank(document_class: DocumentClass, order: list[DocumentClass]) -> int:
     return len(order)
 
 
+def _sort_key(item: Evidence, order: list[DocumentClass]) -> tuple[int, int]:
+    """Class first, then a manufacturer document ahead of a distributor one.
+
+    The secondary flag only separates documents of the *same* class: a
+    distributor datasheet does not outrank a manufacturer specification
+    (FR-7). Within a class, the manufacturer's own document wins.
+    """
+    return (_rank(item.document_class, order), 1 if item.is_secondary else 0)
+
+
 def consolidate(attribute: str, evidence: list[Evidence]) -> Consolidation:
     """Consolidate the evidence for one attribute into a single outcome.
 
@@ -190,7 +203,7 @@ def consolidate(attribute: str, evidence: list[Evidence]) -> Consolidation:
         return result
 
     # Sort by priority, then by document order so the outcome is deterministic.
-    candidates.sort(key=lambda item: _rank(item.document_class, order))
+    candidates.sort(key=lambda item: _sort_key(item, order))
 
     groups: list[list[Evidence]] = []
     for item in candidates:
@@ -220,10 +233,8 @@ def consolidate(attribute: str, evidence: list[Evidence]) -> Consolidation:
         # The groups disagree. The highest-priority class wins, but only if it
         # is strictly higher than every other class involved.
         best_group = groups[0]
-        best_rank = _rank(best_group[0].document_class, order)
-        other_ranks = [
-            _rank(group[0].document_class, order) for group in groups[1:]
-        ]
+        best_rank = _sort_key(best_group[0], order)
+        other_ranks = [_sort_key(group[0], order) for group in groups[1:]]
         if all(best_rank < other for other in other_ranks):
             result.selected = best_group[0]
             mark(best_group[0], Disposition.SELECTED)

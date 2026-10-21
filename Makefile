@@ -8,7 +8,7 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev migrate downgrade run test test-unit test-integration \
-        docker-build docker-up docker-down docker-logs clean
+        test-collect collect docker-build docker-up docker-down docker-logs clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -31,12 +31,20 @@ run: ## Start the API locally
 
 test: ## Run all tests (integration tests skip without TEST_DATABASE_URL)
 	cd backend && ../$(VENV)/Scripts/python.exe -m pytest
+	$(VENV)/Scripts/python.exe -m pytest collect
 
 test-unit: ## Run only tests that need no database
 	cd backend && ../$(VENV)/Scripts/python.exe -m pytest -m "not integration"
+	$(VENV)/Scripts/python.exe -m pytest collect
 
 test-integration: ## Run only database-backed tests (needs TEST_DATABASE_URL)
 	cd backend && ../$(VENV)/Scripts/python.exe -m pytest -m integration
+
+test-collect: ## Run only the collector tests
+	$(VENV)/Scripts/python.exe -m pytest collect
+
+collect: ## Collect the manufacturer corpus (writes the manifest)
+	$(VENV)/Scripts/python.exe collect/collect.py
 
 docker-build: ## Build the backend image
 	$(COMPOSE) build backend
