@@ -83,6 +83,31 @@ class Settings(BaseSettings):
     # conflict and goes to review (FR-25).
     evidence_priority: str = "compliance_schedule,technical_offer,datasheet"
 
+    # --- document ingestion ---
+    # A page with less text than this has no usable text layer and is read
+    # through OCR instead (FR-9). Kept low: a scanned page yields almost
+    # nothing, while a short page of real prose is still a text page.
+    ingest_min_chars_for_text: int = 10
+    # The confidence of a chunk read through OCR. OCR can be wrong, so the
+    # evidence carries a lower confidence and is flagged for review.
+    ingest_ocr_confidence: float = 0.5
+    # Where Tesseract keeps its language data. PyMuPDF's OCR needs it to find
+    # the trained data, and it is not on the default search path on Windows.
+    tessdata_prefix: Optional[str] = None
+    # The OCR language and resolution. A non-English tender needs its own
+    # language, and the resolution is a quality/speed trade-off.
+    ingest_ocr_language: str = "eng"
+    ingest_ocr_dpi: int = 200
+    # A page with less text than this ends a chunk; a header or footer sits
+    # in the top or bottom band of the page, this far from the edge.
+    ingest_min_chunk_chars: int = 80
+    ingest_header_band_fraction: float = 0.12
+
+    # --- aliases (FR-20) ---
+    # An alias below this confidence does not resolve a name: the requirement
+    # goes to review instead of being matched on a weak mapping.
+    alias_confidence_threshold: float = 0.8
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

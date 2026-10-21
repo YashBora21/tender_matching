@@ -18,6 +18,7 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     Column,
+    Computed,
     DateTime,
     Enum,
     Float,
@@ -32,7 +33,7 @@ from sqlalchemy import (
     Uuid,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 
 from app.schemas.enums import (
     AliasSource,
@@ -111,8 +112,18 @@ document = Table(
     # manufacturer documents (FR-7).
     Column("is_secondary", Boolean, nullable=False, server_default="false"),
     Column("restriction_note", Text),
+    # The model or family the document covers, and the category it sits in.
+    # FR-10: a chunk carries the model/family, and FR-17 filters retrieval by
+    # category and model, so both live on the document the chunks belong to.
+    Column("model_or_family", String(255)),
+    Column("category", String(255)),
     Index("ix_document_sha256", "sha256"),
     Index("ix_document_manufacturer_id", "manufacturer_id"),
+    # One document per manufacturer per content: a distributor reselling the
+    # manufacturer's own file is the same document, not a second one.
+    UniqueConstraint(
+        "manufacturer_id", "sha256", name="uq_document_manufacturer_sha256"
+    ),
 )
 
 chunk = Table(
@@ -125,10 +136,22 @@ chunk = Table(
     Column("is_table", Boolean, nullable=False, server_default="false"),
     Column("ocr", Boolean, nullable=False, server_default="false"),
     Column("text", Text, nullable=False),
+    # FR-9: OCR text can be wrong, so the chunk carries the lower confidence
+    # it was read with.
+    Column("confidence", Float, nullable=False, server_default="1.0"),
+    # FR-11: keyword search. The column is generated from the text, so it can
+    # never drift from it. The vector column and its ANN index wait for the
+    # embedding model to be chosen (D-6).
+    Column(
+        "search_vector",
+        TSVECTOR,
+        Computed("to_tsvector('english', text)", persisted=True),
+    ),
     # Dimension is left unset until EMBEDDING_MODEL is chosen; the ANN index is
     # added in the retrieval phase, once the dimension is fixed.
     Column("embedding", Vector()),
     Index("ix_chunk_document_id", "document_id"),
+    Index("ix_chunk_search_vector", "search_vector", postgresql_using="gin"),
 )
 
 attribute = Table(

@@ -8,7 +8,7 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev migrate downgrade run test test-unit test-integration \
-        test-collect collect docker-build docker-up docker-down docker-logs clean
+        test-collect collect ingest docker-build docker-up docker-down docker-logs clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | \
@@ -45,6 +45,9 @@ test-collect: ## Run only the collector tests
 
 collect: ## Collect the manufacturer corpus (writes the manifest)
 	$(VENV)/Scripts/python.exe collect/collect.py
+
+ingest: ## Parse the collected corpus into the database
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.ingestion
 
 docker-build: ## Build the backend image
 	$(COMPOSE) build backend

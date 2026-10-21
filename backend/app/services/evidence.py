@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import StrEnum
+from functools import lru_cache
+from pathlib import Path
 from typing import Optional
 
 from app.comparison.units import convert, is_compatible
@@ -34,34 +36,65 @@ class DocumentClass(StrEnum):
     IGNORED = "ignored"
 
 
-# Markers recognised in a filename, longest first so "compliance" wins over
-# "commercial".
-_CLASS_MARKERS: tuple[tuple[str, DocumentClass], ...] = (
-    ("compliance-schedule", DocumentClass.COMPLIANCE_SCHEDULE),
-    ("compliance_schedule", DocumentClass.COMPLIANCE_SCHEDULE),
-    ("compliance", DocumentClass.COMPLIANCE_SCHEDULE),
-    ("technical-offer", DocumentClass.TECHNICAL_OFFER),
-    ("technical_offer", DocumentClass.TECHNICAL_OFFER),
-    ("technical-offering", DocumentClass.TECHNICAL_OFFER),
-    ("offer", DocumentClass.TECHNICAL_OFFER),
-    ("proposal", DocumentClass.TECHNICAL_OFFER),
-    ("specification", DocumentClass.SPECIFICATION),
-    ("spec", DocumentClass.SPECIFICATION),
-    ("datasheet", DocumentClass.DATASHEET),
-    ("data-sheet", DocumentClass.DATASHEET),
-    ("catalogue", DocumentClass.DATASHEET),
-    ("catalog", DocumentClass.DATASHEET),
-    # Commercial and pricing documents are not technical evidence.
-    ("commercial", DocumentClass.IGNORED),
-    ("pricing", DocumentClass.IGNORED),
-    ("price", DocumentClass.IGNORED),
-    ("quotation", DocumentClass.IGNORED),
-    ("quote", DocumentClass.IGNORED),
-    ("invoice", DocumentClass.IGNORED),
-)
+DOC_TYPES_PATH = Path(__file__).resolve().parents[2] / "data" / "doc_types.json"
 
-# File types that can hold technical evidence at all.
-EVIDENCE_EXTENSIONS = frozenset({".pdf", ".xlsx", ".ifc"})
+
+@dataclass(frozen=True)
+class DocTypeVocabulary:
+    """The document-type vocabulary, loaded from the data file.
+
+    The classes, the filename markers and the file extensions live in one
+    file, so the collector and the evidence layer cannot disagree about what
+    a document type is.
+    """
+
+    doc_types: tuple[str, ...] = ()
+    class_markers: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    evidence_extensions: frozenset[str] = frozenset()
+    corpus_extensions: frozenset[str] = frozenset()
+    extension_classes: dict[str, str] = field(default_factory=dict)
+
+    @property
+    def markers(self) -> tuple[tuple[str, str], ...]:
+        """Every filename marker with its class, longest marker first.
+
+        Longest first so "compliance" wins over "commercial": a document
+        named "compliance-schedule-commercial-terms" is a compliance
+        schedule.
+        """
+        pairs = [
+            (marker, class_name)
+            for class_name, markers in self.class_markers.items()
+            for marker in markers
+        ]
+        return tuple(sorted(pairs, key=lambda pair: len(pair[0]), reverse=True))
+
+
+@lru_cache(maxsize=4)
+def load_doc_types(path: Optional[str] = None) -> DocTypeVocabulary:
+    """Load the document-type vocabulary. A missing or broken file gives an
+    empty vocabulary rather than a crash: the corpus is still readable, the
+    documents are just not classified."""
+    import json
+
+    target = Path(path) if path else DOC_TYPES_PATH
+    if not target.exists():
+        return DocTypeVocabulary()
+    try:
+        data = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return DocTypeVocabulary()
+
+    return DocTypeVocabulary(
+        doc_types=tuple(data.get("doc_types", ())),
+        class_markers={
+            class_name: tuple(markers)
+            for class_name, markers in data.get("class_markers", {}).items()
+        },
+        evidence_extensions=frozenset(data.get("evidence_extensions", ())),
+        corpus_extensions=frozenset(data.get("corpus_extensions", ())),
+        extension_classes=dict(data.get("extension_classes", {})),
+    )
 
 
 def classify_document(filename: str) -> DocumentClass:
@@ -72,15 +105,21 @@ def classify_document(filename: str) -> DocumentClass:
     checked - and an ignored document is never evidence.
     """
     lowered = filename.lower()
-    for marker, document_class in _CLASS_MARKERS:
+    vocabulary = load_doc_types()
+    for marker, class_name in vocabulary.markers:
         if marker in lowered:
-            return document_class
+            try:
+                return DocumentClass(class_name)
+            except ValueError:
+                continue
 
     extension = "." + lowered.rsplit(".", 1)[-1] if "." in lowered else ""
-    if extension == ".xlsx":
-        return DocumentClass.COMPLIANCE_SCHEDULE
-    if extension in {".pdf", ".ifc"}:
-        return DocumentClass.TECHNICAL_OFFER
+    class_name = vocabulary.extension_classes.get(extension)
+    if class_name:
+        try:
+            return DocumentClass(class_name)
+        except ValueError:
+            pass
     return DocumentClass.IGNORED
 
 

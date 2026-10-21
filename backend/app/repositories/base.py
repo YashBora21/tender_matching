@@ -1,7 +1,7 @@
 """Repository interfaces (PRD 6.1).
 
-Phase 0 ships the protocols and the Postgres connection layer only. Concrete CRUD
-lands in the phase that needs it, so nothing here is dead code.
+The protocols describe what the services need; the SQLAlchemy implementation
+lives in `repositories/postgres.py`.
 """
 
 from __future__ import annotations
@@ -11,9 +11,13 @@ from typing import Protocol, runtime_checkable
 
 @runtime_checkable
 class DocumentRepo(Protocol):
-    """Read access to the frozen manufacturer corpus and its chunks."""
+    """The corpus: documents, their chunks and the products they cover."""
 
     def exists_by_sha256(self, sha256: str) -> bool: ...
+
+    def upsert_document(self, record: dict) -> str: ...
+
+    def insert_chunks(self, document_id: str, chunks: list[dict]) -> int: ...
 
 
 @runtime_checkable

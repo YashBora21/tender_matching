@@ -15,10 +15,14 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# Corpus / uploads (large binaries live outside git; manifest.json is tracked)
+# Corpus / uploads (large binaries live outside git; manifests are tracked)
 backend/data/manufacturers/*/raw/
 backend/data/uploads/
 backend/data/tmp/
+# The test corpus: real catalogue PDFs and GeM tenders, far too large for git.
+# The manifest that describes them is tracked, so the corpus stays auditable.
+backend/data/catalogue/*/
+backend/data/tenders/
 
 # Editors / OS
 .idea/

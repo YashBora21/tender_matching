@@ -15,6 +15,7 @@ from typing import Optional
 
 from app.comparison import attributes as attrs
 from app.comparison.units import parse_unit
+from app.comparison.vocabulary import load_vocabulary
 from app.schemas.enums import Operator, ValueType
 
 # Words that mark a requirement as optional, per attributes.OPTIONAL_MARKERS.
@@ -55,11 +56,19 @@ _BETWEEN_PATTERNS = (
     r"(-?\d+(?:\.\d+)?)\s*(?:to|–|-)\s*(-?\d+(?:\.\d+)?)",
 )
 
-# A nominal size written with its prefix: "DN50", "NPS 2". The number is
-# preceded by a letter, so the plain patterns skip it - the size is the value.
-_PREFIXED_SIZE = re.compile(
-    r"(?<![A-Za-z0-9.])(?:DN|NPS)\s?-?\s?(\d+(?:\.\d+)?)"
-)
+
+def _prefixed_size() -> Optional[re.Pattern]:
+    """A nominal size written with its prefix: "DN50", "NPS 2".
+
+    The prefixes live in the vocabulary file's `dn_pattern`, so a size prefix
+    added there is read here too. The number is preceded by a letter, so the
+    plain patterns skip it - the size is the value.
+    """
+    pattern = attrs.dn_pattern()
+    if not pattern:
+        return None
+    # The vocabulary pattern matches the whole size; the number is the value.
+    return re.compile(rf"(?<![A-Za-z0-9.])(?:{pattern.pattern})")
 
 
 @dataclass
@@ -117,10 +126,16 @@ def _numeric(text: str) -> Optional[tuple[str, Operator, str, Optional[str]]]:
     """Find (value, operator, unit) for a numeric requirement, if there is one."""
     # A prefixed size ("DN50") is the value itself, and its digits are preceded
     # by a letter, so it is read before the general patterns.
-    prefixed = _PREFIXED_SIZE.search(text)
-    if prefixed:
-        value = prefixed.group(1)
-        return (value, Operator.EQ, value, _extract_unit(text, value))
+    size_pattern = _prefixed_size()
+    if size_pattern is not None:
+        prefixed = size_pattern.search(text)
+        if prefixed:
+            # The size pattern matches "DN50" or "DN50x25"; the value is the
+            # first number in it.
+            number = re.search(r"\d+(?:\.\d+)?", prefixed.group(0))
+            if number:
+                value = number.group(0)
+                return (value, Operator.EQ, value, _extract_unit(text, value))
 
     match = _first_match(text, _BETWEEN_PATTERNS)
     if match:
@@ -152,21 +167,26 @@ def _numeric(text: str) -> Optional[tuple[str, Operator, str, Optional[str]]]:
 
 
 def _categorical_value(text: str, spec: attrs.AttributeSpec) -> Optional[str]:
-    """Pull the comparable token out of a categorical requirement."""
-    if spec.canonical_term == "ip_rating":
+    """Pull the comparable token out of a categorical requirement.
+
+    Which shape a value has is read from the vocabulary file, so the code
+    does not name the attributes.
+    """
+    shapes = load_vocabulary().value_shapes
+    if spec.canonical_term == shapes.get("ip_rating"):
         pattern = attrs.ip_pattern()
         match = pattern.search(text) if pattern else None
         return match.group(0).upper().replace(" ", "") if match else None
-    if spec.canonical_term == "nominal_size":
+    if spec.canonical_term == shapes.get("nominal_size"):
         pattern = attrs.dn_pattern()
         match = pattern.search(text) if pattern else None
         if match:
             return match.group(0).upper().replace(" ", "")
-    if spec.canonical_term == "certification":
+    if spec.canonical_term == shapes.get("certification"):
         pattern = attrs.certification_pattern()
         match = pattern.search(text) if pattern else None
         return match.group(0).upper().replace(" ", "") if match else None
-    if spec.canonical_term == "material_grade":
+    if spec.canonical_term == shapes.get("material_grade"):
         pattern = attrs.material_pattern()
         match = pattern.search(text) if pattern else None
         return match.group(0).lower() if match else None
@@ -177,6 +197,24 @@ def _categorical_value(text: str, spec: attrs.AttributeSpec) -> Optional[str]:
             if tail:
                 return tail
     return None
+
+
+def _boolean_value(text: str) -> str:
+    """True or false for a yes/no requirement.
+
+    The words live in the vocabulary file, so the normalizer and the boolean
+    evaluator read the same list. They used to have separate lists, and they
+    disagreed: a word could be true in one and false in the other.
+    """
+    vocabulary = load_vocabulary()
+    lowered = text.lower()
+    for word in vocabulary.boolean_truthy:
+        if re.search(rf"\b{re.escape(word)}\b", lowered):
+            return "true"
+    for word in vocabulary.boolean_falsy:
+        if re.search(rf"\b{re.escape(word)}\b", lowered):
+            return "false"
+    return "true"
 
 
 def normalize(text: str, *, default_unit: Optional[str] = None) -> NormalizedRequirement:
@@ -212,7 +250,7 @@ def normalize(text: str, *, default_unit: Optional[str] = None) -> NormalizedReq
     # Boolean requirements: "shall be X" where the attribute is a yes/no.
     if spec.value_type is ValueType.BOOLEAN:
         result.operator = Operator.EQ
-        result.text_value = "true" if re.search(r"\b(shall\s+be\s+provided|required|with|yes)\b", text, re.I) else "false"
+        result.text_value = _boolean_value(text)
         return result
 
     value = _categorical_value(text, spec)
