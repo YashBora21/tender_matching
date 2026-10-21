@@ -1,0 +1,10 @@
+{
+  "doc_types": [
+    "datasheet",
+    "specification",
+    "catalogue",
+    "compliance_schedule",
+    "technical_offer",
+    "manual"
+  ]
+}

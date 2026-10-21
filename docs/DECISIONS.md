@@ -347,3 +347,68 @@ offering a *larger* valve graded higher than offering a smaller one.
 whole token — rejected, it needed a separate parse for each identifier
 family, and the boundary rule already distinguishes the cases that matter
 without naming any of them.
+
+---
+
+**D-28 — The collector runs offline and the corpus is a file, not a table.**
+*Decision:* `collect/collect.py` downloads only what a source config lists,
+writes the files under `backend/data/manufacturers/<slug>/raw/` and records
+each one in that manufacturer's `manifest.json`. The manifest is the hand-off
+to the ingestion phase, which turns it into `document` rows.
+*Why:* PRD §2 makes runtime scraping a non-goal: the corpus is collected
+offline and frozen. A manifest that names the source URL, the SHA-256 and the
+retrieval date is what makes a result reproducible and auditable, and it is
+the artifact FR-34 records as the corpus hash.
+*Alternatives:* Writing straight into the database from the collector —
+rejected, it would make the corpus a function of a live database and lose
+the file-level record of what was fetched. Running the collector as a service
+— rejected, the PRD rules it out.
+
+---
+
+**D-29 — A restriction is recorded, never worked around.**
+*Decision:* A `robots.txt` that disallows the path stops the fetch and the
+document is recorded with status `restricted` and a `restriction_note`. A
+`robots.txt` that cannot be read is *not* a restriction: a 5xx is a broken
+site, not a policy, and the fetch proceeds with the failure recorded as a
+note. A 401 or 403 on `robots.txt` is a policy and is treated as disallow-all.
+*Why:* FR-4 says restrictions are logged, not bypassed. The wrong side of
+this error is silent: refusing to fetch on a 500 would mean one bad day at a
+host emptied the corpus with no error anywhere, and no document would be
+missing from the report — it would just be absent.
+*Alternatives:* Treating every unreadable `robots.txt` as disallow-all —
+rejected, a transient 500 would empty the corpus. Ignoring `robots.txt`
+entirely — rejected, that is the bypass FR-4 rules out.
+
+---
+
+**D-30 — A document type outside the vocabulary is not collected.**
+*Decision:* An entry whose `doc_type` is not in `backend/data/doc_types.json`
+is skipped and the run reports it as a failure.
+*Why:* The ingestion phase maps a `doc_type` to a document class, and the
+class decides the document's priority when two documents disagree. A
+document with an unmapped type would land in the corpus as a document nobody
+can classify, and the classification rules are exactly what a reviewer checks
+when two documents disagree. The vocabulary is a data file so adding a type
+is not a code change.
+*Alternatives:* Collecting it and letting the ingestion phase deal with it —
+rejected, the failure would surface much later and further from its cause.
+
+---
+
+**D-31 — A distributor document never overrides a manufacturer document.**
+*Decision:* `Evidence` carries an `is_secondary` flag. In consolidation, the
+sort key is `(class rank, secondary flag)`: a manufacturer's own document
+outranks a distributor's *of the same class*, and a distributor's document
+does not outrank a higher class. Two distributor documents that disagree are
+still a conflict, not a silent winner.
+*Why:* FR-7 says a distributor or reseller document is marked secondary and
+never overrides a manufacturer document. The collector recorded the flag but
+nothing read it, so the rule was not actually enforced anywhere: the
+conflict resolver picked on document class alone, and a distributor's
+datasheet would have won against the manufacturer's own datasheet.
+*Alternatives:* Dropping distributor documents entirely — rejected, FR-7
+marks them rather than excludes them, and they are legitimate evidence when
+the manufacturer has said nothing. Giving secondary documents their own
+priority class — rejected, it would make a distributor's datasheet outrank a
+manufacturer's compliance schedule, which is the opposite of the rule.

@@ -187,3 +187,87 @@ the two deterministically.
   identifier, and one identifier is not a prefix of another; the substring
   rule still applies to free text, where "swing check" genuinely includes
   "swing". (D-27)
+
+---
+
+## Phase 2 — The collector (FR-1 to FR-7)
+
+Phase 2 collects the manufacturer corpus offline. It has no LLM and no
+database: it fetches the documents a source config lists and records each one
+in a per-manufacturer manifest, which the ingestion phase turns into
+`document` rows.
+
+**Built**
+
+- `collect/collect.py` — the collector. Reads one JSON config per category
+  from `collect/sources/`, downloads each listed document, and writes it under
+  `backend/data/manufacturers/<slug>/raw/` with a per-manufacturer
+  `manifest.json` (FR-1, FR-2, FR-6).
+- A source config is one file per category; adding a category is adding a
+  file, with no code change (FR-6). `collect/sources/*.example.json` are
+  templates and are skipped.
+- Robots.txt is respected. A disallowed path stops the fetch and the document
+  is recorded as `restricted` with a note; it is never worked around (FR-4).
+- Manual documents — a gated catalogue, a JS-only page — are recorded in the
+  manifest with a note and never downloaded (FR-3).
+- Re-running is idempotent: a hash match is `unchanged`, a different hash is
+  `changed` with the previous hash recorded for re-ingestion, and a missing
+  file on disk is fetched again (FR-5).
+- Distributor and reseller documents are recorded with `is_secondary` (FR-7).
+- `backend/data/doc_types.json` — the document-type vocabulary, as data.
+- `Makefile`: `make collect`, `make test-collect`; `make test` now runs the
+  collector tests too, which it did not before.
+- `collect/sources/README.md` — the config format and the entry fields.
+
+**Tested**
+
+- 14 collector tests and 137 backend unit tests pass, 1 integration test
+  skipped without `TEST_DATABASE_URL`.
+- The collector tests run against a local HTTP server, so no test touches the
+  internet. The two that used to reach `example.com` now use the server.
+- End-to-end against a local server: `new` → `unchanged` → `changed` across
+  three runs, with the previous hash recorded on the change (FR-5).
+
+**Defects found and fixed after the phase was written**
+
+- **The robots.txt rule was never tested.** The test set the server to
+  `"forbid"` and the server answered to `"forbidden"`, so the 403 path never
+  ran and the test passed against the *allow* path — the assertion failed
+  loudly, but a real `Disallow:` rule had never been exercised at all. Both
+  are now tested: a 403 on `robots.txt`, and an actual `Disallow: /a/` rule
+  that must leave `/b/` fetchable.
+- **A document with an unknown `doc_type` was collected anyway.** The run
+  printed "skipped" and then collected the document, so a document nothing
+  could classify landed in the corpus. It is now actually skipped (D-30).
+- **An empty response was recorded as a document.** A `200` with no body was
+  hashed and written, putting a zero-byte file in the corpus. It is now a
+  failure.
+- **The manifest stored the slug as the manufacturer's name.** The
+  configured name was never recorded, so the manifest said `"acme-valves"`
+  where it should have said "Acme Valves". The name is now recorded; the
+  slug stays the stable key.
+- **FR-7 was not enforced anywhere.** The collector recorded `is_secondary`
+  and the evidence layer never read it, so a distributor's datasheet would
+  have won against the manufacturer's own datasheet. The consolidation sort
+  key is now `(class rank, secondary flag)` (D-31).
+
+**Left open**
+
+- **The corpus is still empty.** There are no real source configs and no
+  manufacturer documents; the collector has only ever run against a local
+  test server. The first real source config is the next thing to write, and
+  it needs the manufacturer list from PRD §19.1.
+- The manifest is not yet read by anything. Turning a manifest into
+  `document` rows is the ingestion phase (FR-8 to FR-11), which does not
+  exist yet.
+- `document.doc_type` and the app's `DocumentClass` are two vocabularies
+  with no mapping between them. The mapping lands with the ingestion phase.
+- The `document` table has no `notes` column, but the manifest records
+  notes. Either the table gains one or the ingestion phase has to fold them
+  into `restriction_note`.
+- No OCR, no PDF parsing, no chunking: FR-8 to FR-11 are all unbuilt.
+- The frontend, the `eval/` harness and the gold labels do not exist.
+- `chunk.embedding` still has no dimension and no ANN index (D-6).
+- The Phase 1 open item about a clause carrying only one attribute is
+  unchanged: "Material of body shall be SS316 with pressure rating 16 bar"
+  still yields the pressure and not the grade.

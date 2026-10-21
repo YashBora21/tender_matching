@@ -15,6 +15,7 @@ def fact(
     value: str,
     document_class: DocumentClass = DocumentClass.DATASHEET,
     unit: str | None = None,
+    is_secondary: bool = False,
 ) -> Evidence:
     return Evidence(
         attribute="rotational_speed",
@@ -22,6 +23,7 @@ def fact(
         unit=unit,
         document_class=document_class,
         document_id=f"doc-{value}",
+        is_secondary=is_secondary,
     )
 
 
@@ -91,6 +93,49 @@ def test_a_conflict_inside_the_top_class_is_not_resolved() -> None:
         [
             fact("1500", DocumentClass.COMPLIANCE_SCHEDULE),
             fact("1200", DocumentClass.COMPLIANCE_SCHEDULE),
+        ],
+    )
+    assert result.conflict is True
+    assert result.selected is None
+
+
+def test_a_secondary_document_never_overrides_the_manufacturer() -> None:
+    """A distributor's datasheet disagrees with the manufacturer's. The
+    manufacturer's own document wins (FR-7)."""
+    result = consolidate(
+        "rotational_speed",
+        [
+            fact("1200", DocumentClass.DATASHEET, is_secondary=True),
+            fact("1500", DocumentClass.DATASHEET),
+        ],
+    )
+    assert result.conflict is False
+    assert result.selected is not None
+    assert result.selected.value == "1500"
+    assert result.selected.is_secondary is False
+
+
+def test_a_secondary_document_does_not_outrank_a_higher_class() -> None:
+    """The secondary flag separates documents of the *same* class only."""
+    result = consolidate(
+        "rotational_speed",
+        [
+            fact("1500", DocumentClass.DATASHEET, is_secondary=True),
+            fact("1200", DocumentClass.COMPLIANCE_SCHEDULE),
+        ],
+    )
+    assert result.conflict is False
+    assert result.selected is not None
+    assert result.selected.value == "1200"
+
+
+def test_two_secondary_documents_that_disagree_still_conflict() -> None:
+    """Two distributors disagreeing is a conflict, not a guess."""
+    result = consolidate(
+        "rotational_speed",
+        [
+            fact("1500", DocumentClass.DATASHEET, is_secondary=True),
+            fact("1200", DocumentClass.DATASHEET, is_secondary=True),
         ],
     )
     assert result.conflict is True

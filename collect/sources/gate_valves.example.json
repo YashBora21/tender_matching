@@ -1,0 +1,26 @@
+{
+  "category": "gate_valves",
+  "entries": [
+    {
+      "manufacturer": "Acme Valves",
+      "url": "https://acme.example/gv-datasheet.pdf",
+      "doc_type": "datasheet",
+      "model_or_family": "GV series",
+      "models": ["GV-100", "GV-200"]
+    },
+    {
+      "manufacturer": "Acme Valves",
+      "url": "https://acme.example/gv-catalogue.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "GV series",
+      "note": "obtained by hand, gated catalogue"
+    },
+    {
+      "manufacturer": "Example Distributors",
+      "url": "https://distributor.example/acme-gv.pdf",
+      "doc_type": "datasheet",
+      "model_or_family": "GV series",
+      "secondary": true
+    }
+  ]
+}
