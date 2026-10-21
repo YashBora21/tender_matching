@@ -20,6 +20,7 @@ from typing import Callable, Optional
 
 from app.comparison import attributes as attrs
 from app.comparison.units import convert, is_compatible
+from app.comparison.vocabulary import load_vocabulary
 from app.core.config import ComparisonPolicy, get_settings
 from app.schemas.enums import Operator, RequirementStatus, ValueType
 
@@ -434,8 +435,9 @@ def evaluate_boolean(request: ComparisonRequest) -> Evaluation:
             "boolean comparison needs a value on both sides",
             needs_review=True,
         )
-    truthy = {"true", "yes", "provided", "with", "included", "available", "offered"}
-    falsy = {"false", "no", "not provided", "without", "excluded", "unavailable"}
+    vocabulary = load_vocabulary()
+    truthy = vocabulary.boolean_truthy
+    falsy = vocabulary.boolean_falsy
     req_bool = required in truthy if required in truthy else required not in falsy
     off_bool = offered in truthy if offered in truthy else offered not in falsy
     if req_bool == off_bool:

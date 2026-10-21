@@ -59,9 +59,9 @@ TIMEOUT_SECONDS = int(os.getenv("COLLECT_TIMEOUT_SECONDS", "30"))
 def load_doc_types() -> list[str]:
     """The document-type vocabulary the manifest uses.
 
-    The app side has its own classification (`DocumentClass`) for the priority
-    a document carries; the mapping between the two lands with the ingestion
-    phase, which is where a manifest becomes a `document` row.
+    The same file carries the document classes, the filename markers and the
+    file extensions the app side reads, so the collector and the app cannot
+    disagree about what a document type is.
     """
     data = json.loads(DOC_TYPES_PATH.read_text(encoding="utf-8"))
     return list(data["doc_types"])

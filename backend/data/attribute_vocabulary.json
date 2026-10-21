@@ -156,5 +156,63 @@
   "material_pattern": "\\b(?:SS\\s?\\d{3}[L]?|CF\\s?8[MC]?|AISI\\s?\\d{3,4}|WCB|WCC|CF8|1\\.4408|1\\.4301|\\d{1,2}Cr\\b|\\d{1,2}-\\d{1,2}PH\\b|stainless\\s+steel|carbon\\s+steel|ductile\\s+iron|cast\\s+iron|grey\\s+iron|gun\\s*metal|bronze|brass|monel|hastelloy|ptfe|epdm|nbr|viton)\\b",
   "certification_pattern": "\\b(?:IS|ISO|ASTM|API|BS|DIN|JIS|GB|AIS|NACE|ANSI|AWWA|EN)\\s?-?\\s?\\d[\\w.-]*",
   "ip_pattern": "\\bIP\\s?-?\\s?\\d{1,2}[A-Z]?\\b",
-  "dn_pattern": "\\b(?:DN|NPS)\\s?-?\\s?\\d+(?:\\s?(?:x\\s?\\d+))?\\b"
+  "dn_pattern": "\\b(?:DN|NPS)\\s?-?\\s?\\d+(?:\\s?(?:x\\s?\\d+))?\\b",
+
+  "requirement_language": {
+    "_comment": "The wording a requirement uses to state its obligation. One list, used by the atomizer, the normalizer and the document parser, so a phrase is not mandatory in one place and informative in another.",
+    "mandatory_markers": [
+      "shall",
+      "must",
+      "mandatory",
+      "is required to",
+      "required",
+      "compulsory",
+      "it is necessary"
+    ],
+    "optional_markers": [
+      "may",
+      "optional",
+      "preferably",
+      "if possible",
+      "recommended",
+      "desirable",
+      "it is preferable"
+    ],
+    "clause_markers": [
+      "shall",
+      "must",
+      "should",
+      "be",
+      "not less",
+      "not more",
+      "min",
+      "minimum",
+      "max",
+      "maximum",
+      "at least",
+      "at most",
+      ">=",
+      "<=",
+      "≥",
+      "≤",
+      "%",
+      "rated",
+      "providing",
+      "having"
+    ]
+  },
+
+  "boolean_words": {
+    "_comment": "The words that state a yes/no. Shared by the normalizer and the boolean evaluator, so a word is never true in one and false in the other.",
+    "truthy": ["true", "yes", "provided", "included", "available", "offered", "required", "with"],
+    "falsy": ["false", "no", "not provided", "without", "excluded", "unavailable"]
+  },
+
+  "value_shapes": {
+    "_comment": "Which value shape identifies which attribute. A code that names one of these shapes reads the shape from here, so renaming an attribute in the vocabulary does not break the code that recognises it.",
+    "certification": "certification",
+    "ip_rating": "ip_rating",
+    "nominal_size": "nominal_size",
+    "material_grade": "material_grade"
+  }
 }

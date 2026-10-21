@@ -1,10 +1,32 @@
 {
+  "_comment": "The document-type vocabulary. The collector validates a manifest entry's doc_type against this list, and the evidence layer maps a document's class from it, so the two cannot disagree.",
   "doc_types": [
     "datasheet",
     "specification",
     "catalogue",
     "compliance_schedule",
     "technical_offer",
-    "manual"
-  ]
+    "manual",
+    "brochure",
+    "other"
+  ],
+
+  "class_markers": {
+    "_comment": "Filename markers that give a document its class, longest first so 'compliance' wins over 'commercial'. The class decides the document's authority when two documents disagree.",
+    "compliance_schedule": ["compliance-schedule", "compliance_schedule", "compliance"],
+    "technical_offer": ["technical-offer", "technical_offer", "technical-offering", "offer", "proposal"],
+    "specification": ["specification", "spec"],
+    "datasheet": ["datasheet", "data-sheet", "catalogue", "catalog", "brochure", "bulletin"],
+    "ignored": ["commercial", "pricing", "price", "quotation", "quote", "invoice"]
+  },
+
+  "evidence_extensions": [".pdf", ".xlsx", ".ifc"],
+  "corpus_extensions": [".pdf", ".docx"],
+
+  "extension_classes": {
+    "_comment": "The class a file gets when its name says nothing. A document with no marker in its name is classified by what it is.",
+    ".xlsx": "compliance_schedule",
+    ".pdf": "technical_offer",
+    ".ifc": "technical_offer"
+  }
 }

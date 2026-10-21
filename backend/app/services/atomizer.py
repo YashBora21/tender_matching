@@ -29,13 +29,6 @@ _SPLIT_PATTERNS = (
     re.compile(r"\s*;\s*"),
 )
 
-# A clause that carries its own comparison is atomic on its own.
-_CLAUSE_HINT = re.compile(
-    r"\b(?:shall|must|should|be|not\s+less|not\s+more|min(?:imum)?|max(?:imum)?|"
-    r"at\s+least|at\s+most|>=|<=|≥|≤|%|rated|providing|having|with)\b",
-    re.IGNORECASE,
-)
-
 # A requirement with two or more measurable values is compound.
 _MULTIPLE_VALUES = re.compile(
     r"(?:\d+(?:\.\d+)?\s*[A-Za-zµ°%][A-Za-z0-9µ°\^/·\-\.\*]*)"
@@ -44,12 +37,31 @@ _MULTIPLE_VALUES = re.compile(
     re.IGNORECASE,
 )
 
-# A bare material grade next to another specification.
-_MATERIAL_ADJUNCT = re.compile(
-    r",\s*(?:SS\s?\d{3}[L]?|CF8M|CF8|AISI\s?\d{3,4}|stainless\s+steel|"
-    r"carbon\s+steel|bronze|brass|monel|ptfe|epdm|nbr|viton)\b",
-    re.IGNORECASE,
-)
+
+def _clause_hint() -> re.Pattern:
+    """The words that mark a clause as carrying its own specification.
+
+    The words live in the vocabulary file, so the atomizer and the normalizer
+    agree on what a requirement sounds like.
+    """
+    markers = attrs.clause_markers()
+    if not markers:
+        return re.compile(r"\b(?:shall|must|should|be)\b", re.IGNORECASE)
+    source = "|".join(re.escape(marker) for marker in markers)
+    return re.compile(rf"\b(?:{source})\b", re.IGNORECASE)
+
+
+def _material_adjunct() -> Optional[re.Pattern]:
+    """A bare material grade next to another specification.
+
+    The grades live in the vocabulary file. A second copy of them here would
+    be narrower than the vocabulary and would silently miss the grades it
+    does not list.
+    """
+    pattern = attrs.material_pattern()
+    if not pattern:
+        return None
+    return re.compile(rf",\s*(?:{pattern.pattern})", re.IGNORECASE)
 
 
 @dataclass
@@ -109,7 +121,8 @@ def _is_compound(piece: str) -> bool:
     """
     if _MULTIPLE_VALUES.search(piece):
         return True
-    if _MATERIAL_ADJUNCT.search(piece):
+    adjunct = _material_adjunct()
+    if adjunct is not None and adjunct.search(piece):
         return True
 
     parts = [part.strip() for part in piece.split(",") if part.strip()]
@@ -122,7 +135,7 @@ def _is_compound(piece: str) -> bool:
 
 def _carries_specification(part: str) -> bool:
     """True when a clause states a value, a grade or a standard."""
-    if _CLAUSE_HINT.search(part):
+    if _clause_hint().search(part):
         return True
     if re.search(r"\d", part):
         return True

@@ -412,3 +412,97 @@ marks them rather than excludes them, and they are legitimate evidence when
 the manufacturer has said nothing. Giving secondary documents their own
 priority class — rejected, it would make a distributor's datasheet outrank a
 manufacturer's compliance schedule, which is the opposite of the rule.
+
+---
+
+**D-32 — pdfplumber reads the tables, PyMuPDF decides which pages have them.**
+*Decision:* PyMuPDF's `find_tables()` gates the pages; pdfplumber extracts
+the tables on the gated pages only.
+*Why:* pdfplumber reads a ruled table's cells far better than PyMuPDF, which
+drops the spaces inside a cell ("Maxoperatingpressure"). But pdfplumber spent
+26 seconds on one brochure page hunting for lines that were not there, and
+found nothing. PyMuPDF's finder is fast (~1s a page) and correct about
+*whether* a table is there. The two together are faster and better than
+either alone.
+*Alternatives:* pdfplumber for everything — rejected, 26 seconds a page on
+pages with no table, and the corpus is mostly pages without tables. PyMuPDF
+for everything — rejected, it mangles cells.
+
+---
+
+**D-33 — A running header is found by position, not by comparison.**
+*Decision:* A line is a header or footer when it sits in the top or bottom
+band of the page and the same line (ignoring its digits) appears on most
+pages. It is dropped from every page but the first.
+*Why:* A manufacturer's header ("F-EDD-035_REV.0 Date 30.07.2020 Page 1 of 2
+Technical Bulletin") repeats on every page and says nothing about the valve.
+Comparing the *text* looked obvious and was wrong: the header carries the
+page number, so it is never literally the same line, and the digit-stripped
+comparison then also matched body lines that merely enumerated something.
+Comparing the *text* to other pages also matched repeated content, which is
+the one thing a corpus must not drop. Position is the signal: a header is at
+the top, and a body line is not.
+*Alternatives:* Dropping any line that repeats on most pages — rejected, it
+drops repeated specifications, which are exactly what a corpus is for.
+Dropping lines by font size — rejected, the header was set in a *larger*
+size than the body in the bulletins that were measured.
+
+---
+
+**D-34 — A document on disk that no manifest lists is still a document.**
+*Decision:* The ingester reads the manifest, and then also picks up every
+corpus file the manifest does not list, hashing it and recording it with the
+note "not in the manifest".
+*Why:* The corpus is the set of files that exist. Leaving the unlisted ones
+out would make the corpus quietly incomplete - and a manifest that lists 25
+of 59 files is a manifest that is behind, not a corpus that is 25 files.
+*Alternatives:* Only ingesting what the manifest lists — rejected, a document
+the reviewer can see in the folder but the system cannot see is a gap that
+shows up as a missing capability in the report, which is the one thing the
+system must never do.
+
+---
+
+**D-35 — The attribute name is resolved through the alias table.**
+*Decision:* The LLM extracts the attribute name; the alias table maps it to a
+canonical term; the canonical term's value type selects the evaluator. A
+name that does not resolve goes to review.
+*Why:* FR-20 wants an editable alias table and FR-27 wants the evaluator
+chosen by value type, and the two are the same decision: what makes an
+attribute comparable is the *shape of its value*, not the product category.
+Resolving through a table means a new attribute is a row, not a code change,
+and an unknown attribute is a review rather than a guess (FR-29).
+*Alternatives:* Keeping the fixed vocabulary as the only mapping — rejected,
+it is what made the vocabulary a hardcoded valve-and-pump list. Choosing the
+evaluator from the requirement's wording — rejected, the same requirement can
+be stated in many ways and the evaluator must not depend on the phrasing.
+
+---
+
+**D-36 — One vocabulary of requirement words, one of boolean words.**
+*Decision:* The wording that marks a clause as carrying its own
+specification, and the words that state a yes/no, live in
+`attribute_vocabulary.json` and are read by the atomizer, the normalizer, the
+evaluators and the document parser.
+*Why:* There were four copies of the requirement words and three of the
+boolean words, and they did not agree: a word could be mandatory to the
+atomizer and informative to the normalizer, and truthy to the evaluator and
+falsy to the normalizer. A duplicated word list is a list that will drift.
+*Alternatives:* Leaving each module with its own list — rejected, that is how
+they came to disagree.
+
+---
+
+**D-37 — The document-type vocabulary is one file.**
+*Decision:* The document classes, the filename markers that give a document
+its class, the file extensions and the extension-to-class defaults live in
+`backend/data/doc_types.json`, and the collector and the evidence layer both
+read it.
+*Why:* There were three document-type vocabularies that did not agree:
+`doc_types.json`, the `DocumentClass` enum and the filename marker list. A
+manifest entry with `doc_type: "catalogue"` was collected by one and could
+not be classified by the other, so a collected document could have no class
+at all.
+*Alternatives:* Deriving the enum from the file — rejected, the class is a
+state the code branches on and a StrEnum is the honest expression of that.
+Keeping the markers in Python — rejected, that is the copy that drifted.

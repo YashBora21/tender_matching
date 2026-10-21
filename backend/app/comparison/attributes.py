@@ -30,39 +30,35 @@ __all__ = [
     "Vocabulary",
     "attribute_by_term",
     "certification_pattern",
+    "clause_markers",
     "dn_pattern",
     "find_attribute",
     "ip_pattern",
     "is_mandatory",
     "load_vocabulary",
+    "mandatory_markers",
     "material_group",
     "material_is_family_level",
     "material_pattern",
     "material_satisfies",
     "normalise_token",
+    "optional_markers",
 ]
 
-# Mandatory and optional wording.
-MANDATORY_MARKERS = (
-    "shall",
-    "must",
-    "mandatory",
-    "is required to",
-    "shall be",
-    "required",
-    "compulsory",
-    "it is necessary",
-)
-OPTIONAL_MARKERS = (
-    "may",
-    "optional",
-    "preferably",
-    "preferably,",
-    "if possible",
-    "recommended",
-    "desirable",
-    "it is preferable",
-)
+# Mandatory and optional wording. The lists live in the vocabulary file, so
+# the atomizer, the normalizer and the document parser all read the same
+# words: a phrase is not mandatory in one place and informative in another.
+def mandatory_markers() -> tuple[str, ...]:
+    return load_vocabulary(vocabulary_path()).mandatory_markers
+
+
+def optional_markers() -> tuple[str, ...]:
+    return load_vocabulary(vocabulary_path()).optional_markers
+
+
+def clause_markers() -> tuple[str, ...]:
+    """The words that mark a clause as carrying its own specification."""
+    return load_vocabulary(vocabulary_path()).clause_markers
 
 
 @lru_cache(maxsize=4)
@@ -133,18 +129,45 @@ def _value_shaped_attribute(text: str) -> Optional[AttributeSpec]:
     have a shape that can be recognised in the text itself. This is the
     attribute the text can actually be *about*, independently of which
     attribute word it happens to contain.
+
+    Which attribute a shape identifies is read from the vocabulary file, so
+    renaming an attribute there does not break this.
     """
     vocabulary = load_vocabulary()
     material_pattern, certification_pattern, ip_pattern, dn_pattern = _patterns(vocabulary_path())
+    shapes = vocabulary.value_shapes
     if certification_pattern and certification_pattern.search(text):
-        return vocabulary.by_term.get("certification")
+        return vocabulary.by_term.get(shapes.get("certification", ""))
     if ip_pattern and ip_pattern.search(text):
-        return vocabulary.by_term.get("ip_rating")
+        return vocabulary.by_term.get(shapes.get("ip_rating", ""))
     if dn_pattern and dn_pattern.search(text):
-        return vocabulary.by_term.get("nominal_size")
+        return vocabulary.by_term.get(shapes.get("nominal_size", ""))
     if material_pattern and material_pattern.search(text):
-        return vocabulary.by_term.get("material_grade")
+        return vocabulary.by_term.get(shapes.get("material_grade", ""))
     return None
+
+
+def has_value_shape(spec: AttributeSpec, text: str) -> bool:
+    """True when the text carries a value of this attribute's shape.
+
+    The shape is named by the vocabulary file, so the code does not have to
+    know which attribute is which.
+    """
+    vocabulary = load_vocabulary()
+    shapes = vocabulary.value_shapes
+    if spec.value_type is ValueType.MATERIAL:
+        pattern = material_pattern()
+        return bool(pattern and pattern.search(text))
+    if spec.value_type is ValueType.CERTIFICATION:
+        pattern = certification_pattern()
+        return bool(pattern and pattern.search(text))
+    if spec.canonical_term == shapes.get("ip_rating"):
+        pattern = ip_pattern()
+        return bool(pattern and pattern.search(text))
+    if spec.canonical_term == shapes.get("nominal_size"):
+        pattern = dn_pattern()
+        return bool(pattern and pattern.search(text))
+    return False
 
 
 def _can_extract(spec: AttributeSpec, text: str) -> bool:
@@ -153,18 +176,8 @@ def _can_extract(spec: AttributeSpec, text: str) -> bool:
     An attribute word alone is not evidence of what the text is about: "Seal
     shall be Viton" contains the word "seal" but states a material.
     """
-    if spec.value_type is ValueType.MATERIAL:
-        pattern = material_pattern()
-        return bool(pattern and pattern.search(text))
-    if spec.value_type is ValueType.CERTIFICATION:
-        pattern = certification_pattern()
-        return bool(pattern and pattern.search(text))
-    if spec.canonical_term == "ip_rating":
-        pattern = ip_pattern()
-        return bool(pattern and pattern.search(text))
-    if spec.canonical_term == "nominal_size":
-        pattern = dn_pattern()
-        return bool(pattern and pattern.search(text))
+    if has_value_shape(spec, text):
+        return True
     if spec.value_type is ValueType.CATEGORICAL:
         # A categorical attribute needs a value word after the attribute word.
         return bool(re.search(r"[:=]\s*\S", text))
@@ -243,10 +256,10 @@ def material_is_family_level(requirement: str, capability: str) -> bool:
 def is_mandatory(text: str) -> bool:
     """True when the wording makes the requirement mandatory (default)."""
     lowered = text.lower()
-    for marker in OPTIONAL_MARKERS:
+    for marker in optional_markers():
         if re.search(rf"\b{re.escape(marker)}", lowered):
             return False
-    for marker in MANDATORY_MARKERS:
+    for marker in mandatory_markers():
         if re.search(rf"\b{re.escape(marker)}", lowered):
             return True
     return True

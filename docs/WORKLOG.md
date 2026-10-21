@@ -271,3 +271,131 @@ in a per-manufacturer manifest, which the ingestion phase turns into
 - The Phase 1 open item about a clause carrying only one attribute is
   unchanged: "Material of body shall be SS316 with pressure rating 16 bar"
   still yields the pressure and not the grade.
+
+---
+
+## Phase 3 — Document ingestion (FR-8 to FR-11)
+
+Phase 3 turns a collected document into searchable chunks, and it is the phase
+where the corpus stops being a folder of PDFs. It has no LLM: everything here
+is local parsing.
+
+**Built**
+
+- `app/services/docparser.py` (FR-8) — PDF and DOCX into chunks, each with its
+  page, its section heading and whether it is a table. Tables become one
+  chunk per row, carrying their column context and a row id (FR-T6). The
+  extension-to-parser map is a registry, so a new format is a new entry.
+- OCR fallback (FR-9) — a page with no usable text layer is read through
+  Tesseract, tagged `ocr=true` and given a lower confidence. A page that
+  cannot be read is reported as failed, never as processed.
+- Chunk metadata (FR-10) — page, section, table flag, OCR flag, confidence.
+  The document-level metadata (manufacturer, model/family, category) lives on
+  the `document` row the chunks belong to.
+- `app/services/ingestion.py` — reads the collector's manifest *and* a
+  catalogue's CSV manifest, and writes `document` and `chunk` rows.
+- `app/repositories/postgres.py` — the corpus writes. A document whose hash is
+  already stored is left alone; one whose content changed is re-ingested and
+  its chunks are replaced.
+- Migration `0002_document_ingestion` — `chunk.confidence`, `document.model_or_family`
+  and `document.category`, a generated `tsvector` on `chunk.text` with a GIN
+  index, and a unique constraint on (manufacturer, sha256).
+- FR-11's keyword half: the chunk text is searchable through the generated
+  `tsvector`. The semantic half waits for the embedding model (D-6).
+
+**Type-driven evaluation (the audit's finding, and the PRD's own rule)**
+
+The attribute list was a fixed valve-and-pump list living in a JSON file that
+the code read by name. It is now:
+
+- `app/repositories/aliases.py` — the `alias` table is live. It was dead
+  schema: nothing read or wrote it. It now resolves an attribute name to a
+  canonical term, and every row carries a confidence and an approval flag.
+- `app/services/resolution.py` — resolves an extracted `(attribute, operator,
+  value, unit)` into a typed requirement. The value type of the canonical
+  term selects the evaluator, so the comparison depends on the *shape of the
+  value* and not on the product category. An attribute that does not resolve
+  goes to review (FR-29).
+- The alias table is seeded from the vocabulary file, so it starts minimal and
+  a reviewer can change a row without a code edit (FR-20).
+
+**Hardcoded constants moved out of the code**
+
+- The material grades, the DN/NPS size prefixes, the requirement wording and
+  the boolean words now live in `attribute_vocabulary.json`. The atomizer
+  had its own copy of the material grades that was *narrower* than the
+  vocabulary's, and it was missing 1.4408, 13Cr, the PH grades, ductile iron
+  and Hastelloy.
+- The document classes, the filename markers and the file extensions moved
+  into `doc_types.json`. There were three document-type vocabularies that
+  did not agree, and a collected document could have no class at all.
+- The code no longer names a canonical attribute. It asks the vocabulary
+  which attribute a value shape identifies, so renaming one in the file does
+  not break the code.
+- The ingestion policy (OCR language and resolution, the chunk length, the
+  header band) moved into config.
+
+**Tested**
+
+- 163 backend unit tests and 14 collector tests pass, 6 integration tests
+  skipped without `TEST_DATABASE_URL`.
+- The parser is tested against synthetic PDFs and DOCX: pages, sections,
+  table rows, the OCR path, the failed-page path, the running-header
+  removal, the short-line joining and the empty-cell collapsing.
+- The ingestion is tested with a fake repository, and against a real
+  database with a rollback session: the insert, the re-ingest, the
+  manufacturer, and the keyword index.
+- The resolution is tested: a canonical attribute, an alias, an unknown
+  attribute, a low-confidence alias, an unapproved alias, and the evaluator
+  selection.
+
+**Against the real corpus**
+
+The 59 collected catalogues (Delval Flow, Sulzer, Valmatic, Wilo, Bharat
+Bijlee) parse to 726 chunks and 386 table rows with **zero failed pages**:
+the five image-only documents are read through OCR. Two catalogues had a
+running header on every page; it is now dropped from every page but the
+first, and the content under it is no longer hidden.
+
+**Defects found and fixed after the phase was written**
+
+- **pdfplumber spent 26 seconds a page on pages with no table.** It was
+  asked about every page and found nothing. PyMuPDF's finder now gates the
+  pages (D-32).
+- **A designed page's text layer became 263 chunks.** A brochure page is a
+  scatter of short fragments, and chunking on every newline produced one
+  chunk per fragment. Short lines are now joined.
+- **A running header was on every page of every bulletin.** It is dropped
+  from every page but the first, and it is found by position rather than by
+  comparing the text (D-33).
+- **An empty table cell became a column of separators.** A merged-cell table
+  gave nine columns where three held text. A run of empty cells is now one
+  separator.
+- **`insert(chunk)` with a list of values is not valid SQLAlchemy.** The
+  corpus write failed on the first live run. The integration test catches it
+  now.
+- **The manifest listed 25 of the 59 files.** The other 34 were silently
+  skipped. A document on disk that no manifest lists is now hashed and
+  ingested (D-34).
+
+**Left open**
+
+- **The embedding dimension and the ANN index are still unset** (D-6). They
+  need the embedding model, which is still PRD §19.2.
+- **FR-11's semantic half is unbuilt.** The keyword half works.
+- **The alias table is seeded but nothing proposes aliases yet.** The LLM
+  proposal path (FR-20) lands with the extractor.
+- **The `attribute` table is still empty.** The canonical terms live in the
+  vocabulary file; populating the table is a step the fact layer will need.
+- **`product` rows are not created.** A document names a model or family, but
+  the products the facts hang off are not built.
+- **The tenders in `backend/data/tenders/` are not ingested.** They are
+  tender documents, not corpus documents: they go through the tender
+  pipeline (FR-12 to FR-T16), which does not exist yet.
+- **One page of one catalogue failed to read.** The ingester reports it as
+  an incomplete document rather than counting it as processed.
+- The frontend, the `eval/` harness and the gold labels do not exist.
+- The Phase 1 open item about a clause carrying only one attribute is
+  unchanged: "Material of body shall be SS316 with pressure rating 16 bar"
+  still yields the pressure and not the grade. The LLM extractor is what
+  fixes that, because it extracts the two attributes as two facts.

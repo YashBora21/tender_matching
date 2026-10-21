@@ -54,6 +54,17 @@ class Vocabulary:
     certification_pattern: str = ""
     ip_pattern: str = ""
     dn_pattern: str = ""
+    # The wording a requirement uses to state its obligation. One list, so a
+    # phrase is not mandatory in one place and informative in another.
+    mandatory_markers: tuple[str, ...] = ()
+    optional_markers: tuple[str, ...] = ()
+    clause_markers: tuple[str, ...] = ()
+    # The words that state a yes/no.
+    boolean_truthy: frozenset[str] = frozenset()
+    boolean_falsy: frozenset[str] = frozenset()
+    # Which value shape identifies which attribute. The code reads the shape
+    # from here, so renaming an attribute in the file does not break it.
+    value_shapes: dict[str, str] = field(default_factory=dict)
 
     @property
     def by_term(self) -> dict[str, AttributeSpec]:
@@ -91,6 +102,9 @@ def load_vocabulary(path: Optional[str] = None) -> Vocabulary:
         for group, members in data.get("material_groups", {}).items()
     }
 
+    language = data.get("requirement_language", {})
+    boolean = data.get("boolean_words", {})
+
     return Vocabulary(
         attributes=attributes,
         material_groups=material_groups,
@@ -99,4 +113,10 @@ def load_vocabulary(path: Optional[str] = None) -> Vocabulary:
         certification_pattern=data.get("certification_pattern", ""),
         ip_pattern=data.get("ip_pattern", ""),
         dn_pattern=data.get("dn_pattern", ""),
+        mandatory_markers=tuple(language.get("mandatory_markers", ())),
+        optional_markers=tuple(language.get("optional_markers", ())),
+        clause_markers=tuple(language.get("clause_markers", ())),
+        boolean_truthy=frozenset(boolean.get("truthy", ())),
+        boolean_falsy=frozenset(boolean.get("falsy", ())),
+        value_shapes=dict(data.get("value_shapes", {})),
     )
