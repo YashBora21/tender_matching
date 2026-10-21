@@ -126,14 +126,15 @@ def dn_pattern() -> Optional[re.Pattern]:
     return _patterns(vocabulary_path())[3]
 
 
-def find_attribute(text: str) -> Optional[AttributeSpec]:
-    """Best attribute for a piece of requirement text, or None if unclear."""
-    vocabulary = load_vocabulary()
-    lowered = text.lower()
-    for synonym, spec in _matchers(vocabulary_path()):
-        if re.search(rf"\b{re.escape(synonym)}\b", lowered):
-            return spec
+def _value_shaped_attribute(text: str) -> Optional[AttributeSpec]:
+    """The attribute whose *value shape* the text contains, if any.
 
+    A material grade, a standard code, an IP rating or a nominal size each
+    have a shape that can be recognised in the text itself. This is the
+    attribute the text can actually be *about*, independently of which
+    attribute word it happens to contain.
+    """
+    vocabulary = load_vocabulary()
     material_pattern, certification_pattern, ip_pattern, dn_pattern = _patterns(vocabulary_path())
     if certification_pattern and certification_pattern.search(text):
         return vocabulary.by_term.get("certification")
@@ -144,6 +145,54 @@ def find_attribute(text: str) -> Optional[AttributeSpec]:
     if material_pattern and material_pattern.search(text):
         return vocabulary.by_term.get("material_grade")
     return None
+
+
+def _can_extract(spec: AttributeSpec, text: str) -> bool:
+    """True when the text carries a value this attribute can compare.
+
+    An attribute word alone is not evidence of what the text is about: "Seal
+    shall be Viton" contains the word "seal" but states a material.
+    """
+    if spec.value_type is ValueType.MATERIAL:
+        pattern = material_pattern()
+        return bool(pattern and pattern.search(text))
+    if spec.value_type is ValueType.CERTIFICATION:
+        pattern = certification_pattern()
+        return bool(pattern and pattern.search(text))
+    if spec.canonical_term == "ip_rating":
+        pattern = ip_pattern()
+        return bool(pattern and pattern.search(text))
+    if spec.canonical_term == "nominal_size":
+        pattern = dn_pattern()
+        return bool(pattern and pattern.search(text))
+    if spec.value_type is ValueType.CATEGORICAL:
+        # A categorical attribute needs a value word after the attribute word.
+        return bool(re.search(r"[:=]\s*\S", text))
+    # A numeric attribute needs a number, and a unit the value can carry.
+    return bool(re.search(r"-?\d+(?:\.\d+)?", text))
+
+
+def find_attribute(text: str) -> Optional[AttributeSpec]:
+    """Best attribute for a piece of requirement text, or None if unclear.
+
+    An attribute word in the text is the first candidate, but not the last
+    word on the matter: when the attribute word cannot extract a value from
+    this text and another attribute's value shape can, the value shape wins.
+    "Seal shall be Viton" names a seal but states a material, so it is a
+    material requirement, not a seal arrangement.
+    """
+    vocabulary = load_vocabulary()
+    lowered = text.lower()
+    for synonym, spec in _matchers(vocabulary_path()):
+        if re.search(rf"\b{re.escape(synonym)}\b", lowered):
+            if _can_extract(spec, text):
+                return spec
+            shaped = _value_shaped_attribute(text)
+            if shaped is not None and shaped.canonical_term != spec.canonical_term:
+                return shaped
+            return spec
+
+    return _value_shaped_attribute(text)
 
 
 def material_group(value: str) -> Optional[str]:

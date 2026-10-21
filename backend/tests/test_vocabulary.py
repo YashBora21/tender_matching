@@ -79,3 +79,49 @@ def test_the_shipped_vocabulary_is_the_default() -> None:
     terms = {spec.canonical_term for spec in vocabulary.attributes}
     assert "rotational_speed" in terms
     assert "material_grade" in terms
+
+
+def test_a_value_shape_beats_an_attribute_word_that_cannot_extract_a_value() -> None:
+    """"Seal shall be Viton" names a seal but states a material.
+
+    The attribute word is the first candidate, not the last word on the
+    matter: when it cannot pull a value out of this text and another
+    attribute's value shape can, the value shape wins.
+    """
+    result = normalize("Seal shall be Viton")
+    assert result.attribute == "material_grade"
+    assert result.text_value == "viton"
+    assert result.is_usable
+
+
+def test_an_attribute_word_that_can_extract_a_value_still_wins() -> None:
+    # "mechanical seal" is a seal arrangement, and no grade is stated.
+    result = normalize("Seal shall be a mechanical seal")
+    assert result.attribute == "seal_arrangement"
+
+    result = normalize("Mechanical seal shall be provided")
+    assert result.attribute == "seal_arrangement"
+
+
+def test_a_compound_requirement_keeps_the_attribute_it_carries_a_value_for() -> None:
+    """The value shape decides, so a compound line is not stolen by a grade.
+
+    "SS316 ... pressure rating 16 bar" contains a grade and a pressure. The
+    numeric attribute can extract the 16 bar; the material attribute would
+    take the grade, but the requirement is about the pressure.
+    """
+    result = normalize("Material of body shall be SS316 with pressure rating 16 bar")
+    assert result.attribute == "operating_pressure"
+    assert result.value == "16"
+    assert result.unit == "bar"
+
+
+def test_the_neighbouring_seal_elastomers_already_resolved_correctly() -> None:
+    # "seal" is the only word that names an arrangement and is also a
+    # plausible material word; "gasket" and "packing" are not synonyms.
+    for text, expected in (
+        ("Gasket shall be PTFE", "material_grade"),
+        ("Packing shall be Viton", "material_grade"),
+        ("Wetted parts shall be SS316", "material_grade"),
+    ):
+        assert normalize(text).attribute == expected

@@ -28,6 +28,20 @@ def numeric(
     )
 
 
+def categorical(required: str, offered: str) -> ComparisonRequest:
+    return ComparisonRequest(
+        requirement_value=required,
+        requirement_operator=Operator.EQ,
+        requirement_unit=None,
+        requirement_text_value=required,
+        requirement_range=None,
+        capability_value=offered,
+        capability_unit=None,
+        capability_text_value=offered,
+        capability_range=None,
+    )
+
+
 def test_a_value_meeting_a_minimum_is_a_full_match() -> None:
     result = evaluate(numeric("1500", Operator.GTE, "1800"), ValueType.NUMERIC)
     assert result.status is RequirementStatus.FULL_MATCH
@@ -119,6 +133,52 @@ def test_ip65_against_an_ip68_requirement_is_a_capability_failure() -> None:
     )
     result = evaluate(request, ValueType.CATEGORICAL)
     assert result.status is RequirementStatus.MISSING_CAPABILITY
+
+
+def test_a_larger_size_does_not_satisfy_a_smaller_size_requirement() -> None:
+    """DN50 is a substring of DN500, but a DN500 valve is not a DN50 valve.
+
+    This is a wrong Full match on a dimension that is about to be ordered,
+    and it would reach the compatibility score as a good result.
+    """
+    result = evaluate(categorical("DN50", "DN500"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.MISSING_CAPABILITY
+    assert result.score == 0.0
+
+
+def test_a_size_requirement_is_not_satisfied_by_a_different_size() -> None:
+    result = evaluate(categorical("PN16", "PN160"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.MISSING_CAPABILITY
+
+
+def test_a_bare_number_is_not_satisfied_by_an_identifier_containing_it() -> None:
+    result = evaluate(categorical("2", "DN250"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.MISSING_CAPABILITY
+
+
+def test_a_smaller_offered_size_is_partial_not_a_full_match() -> None:
+    result = evaluate(categorical("DN500", "DN50"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.PARTIAL_MATCH
+
+
+def test_the_same_size_still_matches() -> None:
+    result = evaluate(categorical("DN50", "DN50"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.FULL_MATCH
+
+
+def test_free_text_still_matches_by_substring() -> None:
+    """The substring rule is load-bearing for categorical text.
+
+    Only a token that ends in a number is an identifier, and only an
+    identifier is blocked from matching across a numeric boundary.
+    """
+    for required, offered in (
+        ("swing", "swing check"),
+        ("ball", "ball valve"),
+        ("pneumatic", "pneumatic actuator"),
+    ):
+        result = evaluate(categorical(required, offered), ValueType.CATEGORICAL)
+        assert result.status is RequirementStatus.FULL_MATCH
 
 
 def test_equivalent_material_grades_match() -> None:

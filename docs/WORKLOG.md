@@ -106,9 +106,9 @@ the two deterministically.
 
 **Tested**
 
-- 124 unit tests pass, 1 integration test skipped without `TEST_DATABASE_URL`.
+- 134 unit tests pass, 1 integration test skipped without `TEST_DATABASE_URL`.
   With `TEST_DATABASE_URL` pointed at a disposable database the migration
-  integration test runs too: 125 pass.
+  integration test runs too: 135 pass.
 - Unit coverage: normalizer operators/units/ranges, atomizer splitting, the
   four verifier layers, every evaluator, scoring and coverage, the unit
   dimension rules, the vocabulary loader (including a custom vocabulary that
@@ -158,12 +158,32 @@ the two deterministically.
   FR-34 to record.
 - The React frontend, the `eval/` harness and the gold labels do not exist.
 - `chunk.embedding` still has no dimension and no ANN index (D-6).
-- **The attribute vocabulary cannot yet tell a seal material from a seal
-  arrangement.** "Seal shall be Viton" resolves to `seal_arrangement`
-  (categorical) rather than `material_grade`, because `seal` is a synonym of
-  `seal_arrangement` and matches before the material pattern is consulted. The
-  requirement is not mis-scored — it comes out unusable and routes to review,
-  which is the correct failure mode — but it is a real coverage gap. The fix
-  is in the vocabulary data: a way for a material pattern to outrank an
-  attribute synonym, so the catalogue can say "seal" means a material when
-  the value is a grade.
+- **A clause can only carry one attribute, so a compound requirement is
+  still only partly read.** "Material of body shall be SS316 with pressure
+  rating 16 bar" names two attributes — a grade and a pressure — and the
+  normalizer returns one, the pressure. The grade is not lost (the verifier
+  still sees the whole text) but it is not compared. FR-13 wants the atomizer
+  to split compound lines and FR-30 wants compound requirements scored by
+  sub-requirement; the atomizer splits on commas, semicolons and lettered
+  sub-clauses, but not on the "with" that joins a material to its pressure
+  rating. Splitting there needs a rule that knows a "with" clause can carry
+  its own attribute, and that is a design decision for the retrieval phase
+  rather than a bug fix.
+- **The attribute lookup could not tell a seal material from a seal
+  arrangement.** "Seal shall be Viton" resolved to `seal_arrangement`
+  (categorical) rather than `material_grade`, because the lookup tried the
+  attribute synonyms before the value patterns and `seal` is a synonym of
+  `seal_arrangement`. The requirement was not mis-scored — it came out
+  unusable and routed to review, which is the correct failure mode — but it
+  was a coverage gap. The vocabulary data was already correct (`viton` is a
+  material group and the material pattern matches it), so the fix was in the
+  lookup, not the data. The scope was `seal` alone: `gasket`, `packing` and
+  `wetted parts` already resolved to `material_grade`. (D-26)
+- **A larger size satisfied a smaller size requirement.** The categorical
+  evaluator fell back on a substring test, and `dn50` is a substring of
+  `dn500`, so a required DN50 was a *full match* against a DN500 capability —
+  a score of 1.0 on a dimension that is about to be ordered. The same applied
+  to `PN16`/`PN160` and to `IP67`/`IP678`. A token that ends in a number is an
+  identifier, and one identifier is not a prefix of another; the substring
+  rule still applies to free text, where "swing check" genuinely includes
+  "swing". (D-27)

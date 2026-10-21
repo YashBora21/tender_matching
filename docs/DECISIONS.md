@@ -308,3 +308,42 @@ everything first is the same amount of code and cannot produce a fact with two
 dispositions.
 
 
+---
+
+**D-26 — The value shape decides the attribute, not the attribute word.**
+*Decision:* `find_attribute` treats an attribute word as the first candidate,
+not the last word on the matter. When the matched attribute cannot extract a
+value from the text and another attribute's value shape can, the value shape
+wins. "Seal shall be Viton" therefore resolves to `material_grade`, not
+`seal_arrangement`.
+*Why:* An attribute word says what the clause mentions; the value says what
+it is about. "Seal shall be Viton" mentions a seal and states a material, and
+routing it to `seal_arrangement` made the requirement unusable — a real
+coverage gap, though not a mis-scored one, since an unusable requirement goes
+to review rather than to a verdict.
+*Alternatives:* Reordering the lookup to try the value patterns first — the
+obvious fix, and it was tried. It is wrong: "Material of body shall be SS316
+with pressure rating 16 bar" contains both a grade and a pressure, and taking
+the first value shape present would return the grade and lose the pressure,
+undoing D-22. A special case for "mechanical seal" was also considered and
+rejected — the material pattern never matches "mechanical seal" in the first
+place, so it needed no special case at all.
+
+---
+
+**D-27 — An identifier is not a prefix of another identifier.**
+*Decision:* The categorical evaluator's substring fallback no longer applies
+across a numeric boundary. A token that ends in a number is an identifier,
+and one identifier is not a prefix of another: DN50 against DN500 is a
+capability failure, not a full match. The substring rule still applies to
+free text, where "swing check" genuinely includes "swing".
+*Why:* `dn50` is a literal substring of `dn500`, so a required DN50 was a
+*full match* against a DN500 capability, with a score of 1.0, on a dimension
+that is about to be ordered. It would propagate straight into the
+compatibility percentage as a good result. The comparison was also
+asymmetric: a required DN500 against an offered DN50 came out Partial, so
+offering a *larger* valve graded higher than offering a smaller one.
+*Alternatives:* Comparing the numeric part of size tokens instead of the
+whole token — rejected, it needed a separate parse for each identifier
+family, and the boundary rule already distinguishes the cases that matter
+without naming any of them.

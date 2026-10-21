@@ -14,6 +14,7 @@ and a report can record the policy it was assessed under (FR-34).
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Callable, Optional
 
@@ -307,6 +308,41 @@ def _categorical_key(text: Optional[str]) -> Optional[str]:
     return attrs.normalise_token(text)
 
 
+# A token that ends in a number: "dn50", "ip67", "2". A token that contains a
+# number but does not end in one is not a size: "10 bar rated" is a value with
+# a unit, not an identifier.
+_TRAILING_NUMBER = re.compile(r"^(.*?)(\d+)$")
+
+
+def _numeric_part(key: str) -> Optional[str]:
+    """The trailing number of a token, or None if it does not end in one."""
+    match = _TRAILING_NUMBER.match(key)
+    return match.group(2) if match else None
+
+
+def _same_size_family(req_key: str, off_key: str) -> bool:
+    """True when two tokens are identifiers of the same kind.
+
+    "dn50" and "dn500" are both nominal sizes, so one is not a prefix-match of
+    the other: they are different sizes. "swing" and "swingcheck" are both
+    free text, so a prefix match is a genuine "includes".
+
+    A bare number is treated as the same family as any identifier: a required
+    "2" is not satisfied by "dn250", whatever the identifier's prefix is.
+    """
+    req_digits = _numeric_part(req_key)
+    off_digits = _numeric_part(off_key)
+    if req_digits is None or off_digits is None:
+        return False
+    req_prefix = req_key[: len(req_key) - len(req_digits)]
+    off_prefix = off_key[: len(off_key) - len(off_digits)]
+    if not req_prefix or not off_prefix:
+        # One side is a bare number: a number is not a substring of an
+        # identifier that happens to contain it.
+        return True
+    return req_prefix == off_prefix
+
+
 def evaluate_categorical(request: ComparisonRequest) -> Evaluation:
     """Enum / IP rating / actuation comparison."""
     required = request.requirement_text_value or request.requirement_value
@@ -339,10 +375,25 @@ def evaluate_categorical(request: ComparisonRequest) -> Evaluation:
                 f"{offered} is one level below the required {required}",
             )
 
-    # A required value that appears in the capability text is still a match.
+    # A required value that appears in the capability text is still a match -
+    # but a token that ends in a number is an identifier, and one identifier
+    # is not a prefix of another. "dn50" is a substring of "dn500", and a
+    # DN500 valve does not satisfy a DN50 requirement.
     if req_key and req_key in off_key:
+        if _same_size_family(req_key, off_key):
+            return Evaluation(
+                RequirementStatus.MISSING_CAPABILITY,
+                0.0,
+                f"{offered} is a different size from the required {required}",
+            )
         return Evaluation(RequirementStatus.FULL_MATCH, 1.0, f"{offered} includes the required {required}")
     if off_key and off_key in req_key:
+        if _same_size_family(req_key, off_key):
+            return Evaluation(
+                RequirementStatus.PARTIAL_MATCH,
+                request.rules.family_level_score,
+                f"{offered} is a smaller size than the required {required}",
+            )
         return Evaluation(
             RequirementStatus.PARTIAL_MATCH,
             request.rules.family_level_score,
