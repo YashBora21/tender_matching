@@ -506,3 +506,91 @@ at all.
 *Alternatives:* Deriving the enum from the file — rejected, the class is a
 state the code branches on and a StrEnum is the honest expression of that.
 Keeping the markers in Python — rejected, that is the copy that drifted.
+
+---
+
+**D-38 — A tender is fetched through a fence.**
+*Decision:* `app/core/fetching.py` fetches a document only when the host is on
+`FETCH_ALLOWED_DOMAINS`, the host does not resolve to a private address, the
+scheme is http or https, the size is within `FETCH_MAX_BYTES` and the time is
+within `FETCH_TIMEOUT_SECONDS`. A redirect is refused, not followed.
+*Why:* A tender PDF is a document that says where its requirements are, and
+the collector follows what it says. That makes the collector a fetcher of
+URLs it did not choose, so the URLs it will follow have to be bounded. The
+private-address check is the one that matters most: "http://127.0.0.1/" and
+"http://169.254.169.254/" are documents too, and a link in a document is not
+trusted. A redirect is a fresh URL and gets a fresh decision, so the
+simplest way to hold that line is not to follow one.
+*Alternatives:* Checking the host against the allowlist only — rejected, an
+allowlisted host can still resolve to a private address, and a name can say
+anything. Following redirects and checking each hop — rejected, it is more
+code for the same guarantee: refusing the redirect is a guarantee too.
+
+---
+
+**D-39 — A document that cannot be fetched is failed, and can be uploaded.**
+*Decision:* A failed fetch is recorded in the manifest with the reason, and
+`POST /api/tenders/{id}/attachments` accepts the file instead. An upload
+replaces the failed record for the same URL.
+*Why:* "The tender has no requirements" and "the tender's requirements could
+not be fetched" are different facts, and only one of them is a fact about the
+tender. Collapsing them turns a broken link into a missing capability, which
+is the one thing the system must never report. Replacing rather than adding
+keeps the report's list of attachments to one row per document.
+*Alternatives:* Marking the tender incomplete and moving on — rejected, the
+reviewer already has the file and the system should be able to take it. A
+second record for the upload — rejected, the report would list the same
+document twice.
+
+---
+
+**D-40 — A frozen attachment is the cache.**
+*Decision:* A document already on disk with the hash the manifest records is
+not fetched again. A changed document is fetched, and its previous hash is
+kept.
+*Why:* The frozen copy and its hash are the same thing: if the file on disk
+still hashes to what the manifest says, the document has not changed, and
+fetching it again costs a round trip to learn nothing. This is the same rule
+the corpus collector follows (FR-5).
+*Alternatives:* Always fetching and comparing — rejected, it spends a request
+on every document on every run to learn what the file's hash already says.
+
+---
+
+**D-41 — The LLM is reached over an OpenAI-compatible API.**
+*Decision:* The provider is a base URL, not a library: `LLM_BASE_URL` and
+`EMBEDDING_BASE_URL`. The client is `app/services/llm.py`.
+*Why:* The LLM and the embedding model are served by different providers
+today — Groq for the LLM, a local Ollama for the embedding model — and the
+HuggingFace router can serve either once the account has credits. A library
+per provider would be three clients; one OpenAI-compatible client is one.
+*Alternatives:* A library per provider — rejected, it is more code for the
+same calls, and the providers are converging on the same API shape.
+
+---
+
+**D-42 — gpt-oss is a reasoning model, and the answer is not the reasoning.**
+*Decision:* The client reads `message.content` and keeps `message.reasoning`
+apart, and asks for at least 512 tokens.
+*Why:* gpt-oss spends its tokens on reasoning first. A 32-token budget
+returned an empty answer with 30 reasoning tokens spent: the model had not
+reached the answer yet. The reasoning is not a requirement and is never
+treated as one.
+*Alternatives:* Reading the reasoning when the content is empty — rejected,
+the reasoning is the model thinking aloud, not a statement the tender made.
+
+---
+
+**D-43 — The English half of a line is the requirement.**
+*Decision:* `english_half()` takes the text after the last run of Devanagari.
+A line whose characters no font could have produced is flagged as mangled
+and counted, not read as an absent requirement.
+*Why:* The tenders are bilingual, and the Devanagari is sometimes mangled by
+the PDF's encoding ("बड ववरण/Bid Details"). Reading the Devanagari would
+give the model noise it cannot read, and a mangled line that was counted as
+"no requirement" would look exactly like a tender that did not ask for
+anything.
+*Alternatives:* Reading the whole line — rejected, the Devanagari half is
+noise for the model and a source of false readings. Dropping a mangled line
+silently — rejected, a line that cannot be read is a gap, and a gap has to
+be visible.
