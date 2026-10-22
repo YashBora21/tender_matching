@@ -1,151 +1,529 @@
 {
-  "_comment": "The canonical attribute vocabulary. Adding an attribute or a synonym is an edit here, not a code change. A deployment can point ATTRIBUTE_VOCABULARY_PATH at its own copy of this file.",
+  "_comment": "The canonical attribute vocabulary. Adding an attribute or a synonym is an edit here, not a code change. A deployment can point ATTRIBUTE_VOCABULARY_PATH at its own copy of this file. A synonym is only approved if it says so: an alias that is not approved does not resolve a name, and the requirement goes to review instead (FR-20).",
   "attributes": [
     {
       "canonical_term": "rotational_speed",
       "value_type": "numeric",
-      "synonyms": ["rotational speed", "speed", "rpm", "spindle speed"],
-      "default_unit": "rpm"
+      "synonyms": [
+        {
+          "term": "rotational speed",
+          "approved": true
+        },
+        {
+          "term": "speed",
+          "approved": true
+        },
+        {
+          "term": "rpm",
+          "approved": true
+        },
+        {
+          "term": "spindle speed",
+          "approved": true
+        }
+      ],
+      "default_unit": "rpm",
+      "approved": true
     },
     {
       "canonical_term": "operating_temperature",
       "value_type": "numeric",
-      "synonyms": ["operating temperature", "service temperature", "temperature", "temp"],
-      "default_unit": "degC"
+      "synonyms": [
+        {
+          "term": "operating temperature",
+          "approved": true
+        },
+        {
+          "term": "service temperature",
+          "approved": true
+        },
+        {
+          "term": "temperature",
+          "approved": true
+        },
+        {
+          "term": "temp",
+          "approved": true
+        }
+      ],
+      "default_unit": "degC",
+      "approved": true
     },
     {
       "canonical_term": "ambient_temperature",
       "value_type": "numeric",
-      "synonyms": ["ambient temperature", "ambient"],
-      "default_unit": "degC"
+      "synonyms": [
+        {
+          "term": "ambient temperature",
+          "approved": true
+        },
+        {
+          "term": "ambient",
+          "approved": true
+        }
+      ],
+      "default_unit": "degC",
+      "approved": true
     },
     {
       "canonical_term": "design_pressure",
       "value_type": "numeric",
-      "synonyms": ["design pressure"],
-      "default_unit": "bar"
+      "synonyms": [
+        {
+          "term": "design pressure",
+          "approved": true
+        }
+      ],
+      "default_unit": "bar",
+      "approved": true
     },
     {
       "canonical_term": "operating_pressure",
       "value_type": "numeric",
-      "synonyms": ["operating pressure", "working pressure", "pressure"],
-      "default_unit": "bar"
+      "synonyms": [
+        {
+          "term": "operating pressure",
+          "approved": true
+        },
+        {
+          "term": "working pressure",
+          "approved": true
+        },
+        {
+          "term": "pressure",
+          "approved": true
+        }
+      ],
+      "default_unit": "bar",
+      "approved": true
     },
     {
       "canonical_term": "differential_pressure",
       "value_type": "numeric",
-      "synonyms": ["differential pressure", "diff pressure"],
-      "default_unit": "bar"
+      "synonyms": [
+        {
+          "term": "differential pressure",
+          "approved": true
+        },
+        {
+          "term": "diff pressure",
+          "approved": true
+        }
+      ],
+      "default_unit": "bar",
+      "approved": true
     },
     {
       "canonical_term": "nominal_size",
       "value_type": "numeric",
-      "synonyms": ["nominal size", "nominal bore", "bore diameter", "bore", "diameter", "size"],
-      "default_unit": "mm"
+      "synonyms": [
+        {
+          "term": "nominal size",
+          "approved": true
+        },
+        {
+          "term": "nominal bore",
+          "approved": true
+        },
+        {
+          "term": "bore diameter",
+          "approved": true
+        },
+        {
+          "term": "bore",
+          "approved": true
+        },
+        {
+          "term": "diameter",
+          "approved": true
+        },
+        {
+          "term": "size",
+          "approved": true
+        }
+      ],
+      "default_unit": "mm",
+      "approved": true
     },
     {
       "canonical_term": "wall_thickness",
       "value_type": "numeric",
-      "synonyms": ["wall thickness", "thickness"],
-      "default_unit": "mm"
+      "synonyms": [
+        {
+          "term": "wall thickness",
+          "approved": true
+        },
+        {
+          "term": "thickness",
+          "approved": true
+        }
+      ],
+      "default_unit": "mm",
+      "approved": true
     },
     {
       "canonical_term": "flow_rate",
       "value_type": "numeric",
-      "synonyms": ["flow rate", "discharge", "capacity", "flow"],
-      "default_unit": "m**3/hour"
+      "synonyms": [
+        {
+          "term": "flow rate",
+          "approved": true
+        },
+        {
+          "term": "discharge",
+          "approved": true
+        },
+        {
+          "term": "capacity",
+          "approved": true
+        },
+        {
+          "term": "flow",
+          "approved": true
+        }
+      ],
+      "default_unit": "m**3/hour",
+      "approved": true
     },
     {
       "canonical_term": "total_head",
       "value_type": "numeric",
-      "synonyms": ["total head", "pump head", "head"],
-      "default_unit": "m"
+      "synonyms": [
+        {
+          "term": "total head",
+          "approved": true
+        },
+        {
+          "term": "pump head",
+          "approved": true
+        },
+        {
+          "term": "head",
+          "approved": true
+        }
+      ],
+      "default_unit": "m",
+      "approved": true
     },
     {
       "canonical_term": "power",
       "value_type": "numeric",
-      "synonyms": ["motor power", "power rating", "power"],
-      "default_unit": "kW"
+      "synonyms": [
+        {
+          "term": "motor power",
+          "approved": true
+        },
+        {
+          "term": "power rating",
+          "approved": true
+        },
+        {
+          "term": "power",
+          "approved": true
+        }
+      ],
+      "default_unit": "kW",
+      "approved": true
     },
     {
       "canonical_term": "torque",
       "value_type": "numeric",
-      "synonyms": ["output torque", "torque"],
-      "default_unit": "N*m"
+      "synonyms": [
+        {
+          "term": "output torque",
+          "approved": true
+        },
+        {
+          "term": "torque",
+          "approved": true
+        }
+      ],
+      "default_unit": "N*m",
+      "approved": true
     },
     {
       "canonical_term": "supply_voltage",
       "value_type": "numeric",
-      "synonyms": ["supply voltage", "rated voltage", "voltage"],
-      "default_unit": "V"
+      "synonyms": [
+        {
+          "term": "supply voltage",
+          "approved": true
+        },
+        {
+          "term": "rated voltage",
+          "approved": true
+        },
+        {
+          "term": "voltage",
+          "approved": true
+        }
+      ],
+      "default_unit": "V",
+      "approved": true
     },
     {
       "canonical_term": "rated_current",
       "value_type": "numeric",
-      "synonyms": ["rated current", "current"],
-      "default_unit": "A"
+      "synonyms": [
+        {
+          "term": "rated current",
+          "approved": true
+        },
+        {
+          "term": "current",
+          "approved": true
+        }
+      ],
+      "default_unit": "A",
+      "approved": true
     },
     {
       "canonical_term": "supply_frequency",
       "value_type": "numeric",
-      "synonyms": ["supply frequency", "frequency"],
-      "default_unit": "Hz"
+      "synonyms": [
+        {
+          "term": "supply frequency",
+          "approved": true
+        },
+        {
+          "term": "frequency",
+          "approved": true
+        }
+      ],
+      "default_unit": "Hz",
+      "approved": true
     },
     {
       "canonical_term": "efficiency",
       "value_type": "numeric",
-      "synonyms": ["efficiency"],
-      "default_unit": "percent"
+      "synonyms": [
+        {
+          "term": "efficiency",
+          "approved": true
+        }
+      ],
+      "default_unit": "percent",
+      "approved": true
     },
     {
       "canonical_term": "noise_level",
       "value_type": "numeric",
-      "synonyms": ["noise level", "sound pressure", "noise"],
-      "default_unit": "decibel"
+      "synonyms": [
+        {
+          "term": "noise level",
+          "approved": true
+        },
+        {
+          "term": "sound pressure",
+          "approved": true
+        },
+        {
+          "term": "noise",
+          "approved": true
+        }
+      ],
+      "default_unit": "decibel",
+      "approved": true
     },
     {
       "canonical_term": "ip_rating",
       "value_type": "categorical",
-      "synonyms": ["ip rating", "ingress protection"]
+      "synonyms": [
+        {
+          "term": "ip rating",
+          "approved": true
+        },
+        {
+          "term": "ingress protection",
+          "approved": true
+        }
+      ],
+      "approved": true
     },
     {
       "canonical_term": "material_grade",
       "value_type": "material",
-      "synonyms": ["body material", "wetted parts", "trim material", "material", "materials", "body"]
+      "synonyms": [
+        {
+          "term": "body material",
+          "approved": true
+        },
+        {
+          "term": "wetted parts",
+          "approved": true
+        },
+        {
+          "term": "trim material",
+          "approved": true
+        },
+        {
+          "term": "material",
+          "approved": true
+        },
+        {
+          "term": "materials",
+          "approved": true
+        },
+        {
+          "term": "body",
+          "approved": true
+        }
+      ],
+      "approved": true
     },
     {
       "canonical_term": "seal_arrangement",
       "value_type": "categorical",
-      "synonyms": ["seal arrangement", "mechanical seal", "sealing", "seal"]
+      "synonyms": [
+        {
+          "term": "seal arrangement",
+          "approved": true
+        },
+        {
+          "term": "mechanical seal",
+          "approved": true
+        },
+        {
+          "term": "sealing",
+          "approved": true
+        },
+        {
+          "term": "seal",
+          "approved": true
+        }
+      ],
+      "approved": true
     },
     {
       "canonical_term": "actuation",
       "value_type": "categorical",
-      "synonyms": ["actuation", "actuator", "operation"]
+      "synonyms": [
+        {
+          "term": "actuation",
+          "approved": true
+        },
+        {
+          "term": "actuator",
+          "approved": true
+        },
+        {
+          "term": "operation",
+          "approved": true
+        }
+      ],
+      "approved": true
     },
     {
       "canonical_term": "certification",
       "value_type": "certification",
-      "synonyms": ["certification", "standards", "standard", "compliance"]
+      "synonyms": [
+        {
+          "term": "certification",
+          "approved": true
+        },
+        {
+          "term": "standards",
+          "approved": true
+        },
+        {
+          "term": "standard",
+          "approved": true
+        },
+        {
+          "term": "compliance",
+          "approved": true
+        }
+      ],
+      "approved": true
     }
   ],
   "material_groups": {
-    "ss316": ["ss316", "316", "aisi316", "cf8m", "1.4408", "s31603", "316l", "ss316l"],
-    "ss304": ["ss304", "304", "aisi304", "cf8", "1.4301", "s30403", "304l", "ss304l"],
-    "ss316l": ["ss316l", "316l", "s31603"],
-    "ss304l": ["ss304l", "304l", "s30403"],
-    "carbon_steel": ["carbon steel", "wcb", "wcc", "cast steel", "mild steel"],
-    "stainless_steel": ["stainless steel", "stainless"],
-    "ductile_iron": ["ductile iron", "sg iron", "ductile"],
-    "cast_iron": ["cast iron", "grey iron", "ci"],
-    "bronze": ["bronze", "gunmetal", "cun bronze", "gun metal"],
-    "brass": ["brass", "cun zn", "gun metal brass"],
-    "monel": ["monel", "alloy 400"],
-    "hastelloy": ["hastelloy", "alloy c276"],
-    "ptfe": ["ptfe", "teflon"],
-    "epdm": ["epdm", "eptd"],
-    "nbr": ["nbr", "nitrile"],
-    "viton": ["viton", "fkm"]
+    "ss316": [
+      "ss316",
+      "316",
+      "aisi316",
+      "cf8m",
+      "1.4408",
+      "s31603",
+      "316l",
+      "ss316l"
+    ],
+    "ss304": [
+      "ss304",
+      "304",
+      "aisi304",
+      "cf8",
+      "1.4301",
+      "s30403",
+      "304l",
+      "ss304l"
+    ],
+    "ss316l": [
+      "ss316l",
+      "316l",
+      "s31603"
+    ],
+    "ss304l": [
+      "ss304l",
+      "304l",
+      "s30403"
+    ],
+    "carbon_steel": [
+      "carbon steel",
+      "wcb",
+      "wcc",
+      "cast steel",
+      "mild steel"
+    ],
+    "stainless_steel": [
+      "stainless steel",
+      "stainless"
+    ],
+    "ductile_iron": [
+      "ductile iron",
+      "sg iron",
+      "ductile"
+    ],
+    "cast_iron": [
+      "cast iron",
+      "grey iron",
+      "ci"
+    ],
+    "bronze": [
+      "bronze",
+      "gunmetal",
+      "cun bronze",
+      "gun metal"
+    ],
+    "brass": [
+      "brass",
+      "cun zn",
+      "gun metal brass"
+    ],
+    "monel": [
+      "monel",
+      "alloy 400"
+    ],
+    "hastelloy": [
+      "hastelloy",
+      "alloy c276"
+    ],
+    "ptfe": [
+      "ptfe",
+      "teflon"
+    ],
+    "epdm": [
+      "epdm",
+      "eptd"
+    ],
+    "nbr": [
+      "nbr",
+      "nitrile"
+    ],
+    "viton": [
+      "viton",
+      "fkm"
+    ]
   },
   "material_parents": {
     "ss316": "stainless_steel",
@@ -157,7 +535,6 @@
   "certification_pattern": "\\b(?:IS|ISO|ASTM|API|BS|DIN|JIS|GB|AIS|NACE|ANSI|AWWA|EN)\\s?-?\\s?\\d[\\w.-]*",
   "ip_pattern": "\\bIP\\s?-?\\s?\\d{1,2}[A-Z]?\\b",
   "dn_pattern": "\\b(?:DN|NPS)\\s?-?\\s?\\d+(?:\\s?(?:x\\s?\\d+))?\\b",
-
   "requirement_language": {
     "_comment": "The wording a requirement uses to state its obligation. One list, used by the atomizer, the normalizer and the document parser, so a phrase is not mandatory in one place and informative in another.",
     "mandatory_markers": [
@@ -193,21 +570,35 @@
       "at most",
       ">=",
       "<=",
-      "≥",
-      "≤",
+      "\u2265",
+      "\u2264",
       "%",
       "rated",
       "providing",
       "having"
     ]
   },
-
   "boolean_words": {
     "_comment": "The words that state a yes/no. Shared by the normalizer and the boolean evaluator, so a word is never true in one and false in the other.",
-    "truthy": ["true", "yes", "provided", "included", "available", "offered", "required", "with"],
-    "falsy": ["false", "no", "not provided", "without", "excluded", "unavailable"]
+    "truthy": [
+      "true",
+      "yes",
+      "provided",
+      "included",
+      "available",
+      "offered",
+      "required",
+      "with"
+    ],
+    "falsy": [
+      "false",
+      "no",
+      "not provided",
+      "without",
+      "excluded",
+      "unavailable"
+    ]
   },
-
   "value_shapes": {
     "_comment": "Which value shape identifies which attribute. A code that names one of these shapes reads the shape from here, so renaming an attribute in the vocabulary does not break the code that recognises it.",
     "certification": "certification",

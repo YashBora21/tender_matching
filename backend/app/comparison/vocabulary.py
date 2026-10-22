@@ -39,6 +39,14 @@ class AttributeSpec:
     value_type: ValueType
     synonyms: tuple[str, ...] = ()
     default_unit: Optional[str] = None
+    # True when the mapping has been reviewed and may resolve a name. An
+    # attribute that is not approved does not resolve a name: the requirement
+    # goes to review instead (FR-20).
+    approved: bool = False
+    # The synonyms that have been approved. A synonym can be approved on its
+    # own without approving the rest, so a name that is only a guess does not
+    # resolve a requirement.
+    approved_synonyms: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -76,6 +84,29 @@ def normalise_token(text: str) -> str:
     return re.sub(r"[^a-z0-9.]+", "", text.lower().replace(" ", ""))
 
 
+def _synonym_pairs(synonyms) -> list[tuple[str, bool]]:
+    """The synonyms of an attribute, with whether each is approved.
+
+    A synonym is written as a plain string or as an object with a `term` and
+    an `approved` flag. A plain string is not approved: only a row that says
+    so may resolve a name (FR-20).
+    """
+    pairs: list[tuple[str, bool]] = []
+    for synonym in synonyms or ():
+        if isinstance(synonym, str):
+            pairs.append((synonym, False))
+        elif isinstance(synonym, dict):
+            term = synonym.get("term")
+            if term:
+                pairs.append((str(term), bool(synonym.get("approved", False))))
+    return pairs
+
+
+def _terms(synonyms) -> list[str]:
+    """The synonym terms, whatever form they are written in."""
+    return [term for term, _ in _synonym_pairs(synonyms)]
+
+
 @lru_cache(maxsize=4)
 def load_vocabulary(path: Optional[str] = None) -> Vocabulary:
     """Load the vocabulary from disk. Missing or broken file gives an empty vocabulary."""
@@ -91,8 +122,14 @@ def load_vocabulary(path: Optional[str] = None) -> Vocabulary:
         AttributeSpec(
             canonical_term=item["canonical_term"],
             value_type=ValueType(item["value_type"]),
-            synonyms=tuple(item.get("synonyms", ())),
+            synonyms=tuple(_terms(item.get("synonyms", ()))),
             default_unit=item.get("default_unit"),
+            approved=bool(item.get("approved", False)),
+            approved_synonyms=frozenset(
+                term
+                for term, approved in _synonym_pairs(item.get("synonyms", ()))
+                if approved
+            ),
         )
         for item in data.get("attributes", ())
     )

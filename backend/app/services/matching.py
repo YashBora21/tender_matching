@@ -31,7 +31,9 @@ from app.core.logging import get_logger
 from app.schemas.enums import (
     Applicability,
     ConfidenceLevel,
+    FactVerificationStatus,
     RequirementStatus,
+    ValueType,
     VerificationOutcome,
 )
 from app.services.facts import extract_fact
@@ -57,6 +59,11 @@ class MatchResult:
     document_id: Optional[str] = None
     manufacturer: Optional[str] = None
     model: Optional[str] = None
+    # What the passage stated, for the fact row.
+    attribute: Optional[str] = None
+    fact_value: Optional[str] = None
+    fact_unit: Optional[str] = None
+    value_type: Optional[ValueType] = None
     review_required: bool = False
     review_reason: Optional[str] = None
     confidence: ConfidenceLevel = ConfidenceLevel.LOW
@@ -228,6 +235,8 @@ def _match_candidate(
         result.confidence = ConfidenceLevel.LOW
         return result
 
+    value_type = _value_type(fact.attribute)
+    result.value_type = value_type
     evaluation = evaluate(
         ComparisonRequest(
             requirement_value=requirement_value,
@@ -241,7 +250,7 @@ def _match_candidate(
             capability_range=None,
             capability_is_family_level=report.applicability is Applicability.FAMILY_LEVEL,
         ),
-        _value_type(fact.attribute),
+        value_type,
     )
 
     result.status = evaluation.status
@@ -251,6 +260,9 @@ def _match_candidate(
         result.review_required = True
         result.review_reason = evaluation.reason
     result.confidence = _confidence(report.borderline, candidate.ocr, evaluation.score)
+    result.attribute = fact.attribute
+    result.fact_value = fact.value
+    result.fact_unit = fact.unit
     return result
 
 
@@ -263,6 +275,72 @@ def _operator(value: Optional[str]):
         return Operator(value)
     except ValueError:
         return Operator.UNKNOWN
+
+
+def store_match(
+    session,
+    match: MatchResult,
+    *,
+    run_id: str,
+    requirement_id: str,
+    manufacturer_id: str,
+    extractor_version: Optional[str] = None,
+) -> Optional[str]:
+    """Write what a match found: the fact, and the result that points at it.
+
+    The fact is written first, because the result carries its id: a reviewer
+    who reads "full match" can get back to the sentence that said so.
+    """
+    from app.services.findings import (
+        StoredFact,
+        _attribute_id,
+        product_id_for,
+        store_fact,
+        store_result,
+    )
+
+    fact_id: Optional[str] = None
+    if match.document_id and match.manufacturer and match.model:
+        product_id = product_id_for(session, match.manufacturer, match.model)
+        if product_id:
+            fact_id = store_fact(
+                session,
+                StoredFact(
+                    product_id=product_id,
+                    document_id=match.document_id,
+                    attribute_id=_attribute_id(session, match.attribute),
+                    original_name=match.attribute,
+                    value=match.fact_value,
+                    unit=match.fact_unit,
+                    value_type=match.value_type,
+                    conditions=match.model,
+                    page=match.page,
+                    quote=match.quote,
+                    verification_status=(
+                        FactVerificationStatus.VERIFIED
+                        if match.verification_outcome
+                        in (VerificationOutcome.PASSED, VerificationOutcome.FAMILY_LEVEL)
+                        else FactVerificationStatus.NEEDS_REVIEW
+                    ),
+                    extractor_version=extractor_version,
+                ),
+            )
+
+    return store_result(
+        session,
+        run_id=run_id,
+        requirement_id=requirement_id,
+        manufacturer_id=manufacturer_id,
+        status=match.status,
+        score=match.score,
+        verification_outcome=match.verification_outcome,
+        applicability=match.applicability,
+        capability_text=match.capability_text,
+        evidence_ref=fact_id,
+        confidence=match.confidence,
+        review_required=match.review_required,
+        review_reason=match.review_reason,
+    )
 
 
 def _value_type(attribute: Optional[str]):

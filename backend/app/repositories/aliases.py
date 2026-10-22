@@ -20,12 +20,15 @@ import uuid
 from dataclasses import dataclass
 from typing import Optional
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.orm import Session
 
 from app.comparison.vocabulary import normalise_token
+from app.core.logging import get_logger
 from app.repositories.schema import alias as alias_table
 from app.schemas.enums import AliasSource
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -150,6 +153,22 @@ class AliasRepo:
             )
         )
 
+    def set_approval(self, alias: str, approved: bool) -> None:
+        """Mark an alias approved or not.
+
+        The confidence follows the approval: a row that may resolve a name is
+        a row that is sure of it, and a row that may not is a row that says
+        nothing.
+        """
+        self.session.execute(
+            update(alias_table)
+            .where(alias_table.c.alias == alias)
+            .values(
+                approved=approved,
+                confidence=1.0 if approved else 0.0,
+            )
+        )
+
     def list_all(self) -> list[dict]:
         """Every alias, for a reviewer to look at."""
         rows = self.session.execute(
@@ -176,31 +195,46 @@ class AliasRepo:
 def seed_aliases(session: Session) -> int:
     """Fill the alias table from the vocabulary file.
 
-    The table starts minimal: every synonym of a shipped attribute is a row,
-    approved and confident, because the vocabulary file is the reviewed
-    source of those mappings. Anything an LLM proposes later is a row too,
-    but unapproved and less confident, and it waits for a human.
+    A row is approved only when the file says so. A synonym the file does
+    not approve is written unapproved: it does not resolve a name, and the
+    requirement that named it goes to review instead (FR-20, PRD 9).
 
-    Seeding is idempotent: a synonym that is already there is left alone, so
-    a reviewer's decision about a row is not overwritten.
+    Seeding is idempotent. A synonym that is already there keeps its
+    approval, because a reviewer's decision about a row is not the
+    seeder's to overwrite. A row that came from the vocabulary file is
+    brought back in line with the file, because the file is where those
+    decisions are recorded.
     """
     from app.comparison.vocabulary import load_vocabulary
 
     repo = AliasRepo(session)
-    existing = {row["alias"] for row in repo.list_all()}
+    existing = {row["alias"]: row for row in repo.list_all()}
     added = 0
+    updated = 0
     for spec in load_vocabulary().attributes:
-        for synonym in spec.synonyms:
-            if synonym in existing:
+        for term in spec.synonyms:
+            approved = term in spec.approved_synonyms
+            row = existing.get(term)
+            if row is None:
+                repo.add(
+                    spec.canonical_term,
+                    term,
+                    confidence=1.0 if approved else 0.0,
+                    source=AliasSource.MANUAL,
+                    approved=approved,
+                )
+                added += 1
                 continue
-            repo.add(
-                spec.canonical_term,
-                synonym,
-                confidence=1.0,
-                source=AliasSource.MANUAL,
-                approved=True,
-            )
-            added += 1
+            if (
+                row["source"] == AliasSource.MANUAL.value
+                and row["canonical_term"] == spec.canonical_term
+                and bool(row["approved"]) != approved
+            ):
+                # The row came from the vocabulary file, so the file decides.
+                repo.set_approval(term, approved)
+                updated += 1
+    if updated:
+        logger.info("%d alias rows brought in line with the vocabulary file", updated)
     return added
 
 

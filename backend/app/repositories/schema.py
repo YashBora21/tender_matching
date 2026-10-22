@@ -93,6 +93,10 @@ product = Table(
     Column("model", String(255), nullable=False),
     Column("family", String(255)),
     Column("category", String(255)),
+    # True when the product stands for a family of products rather than one
+    # model. A fact about a family is family-level evidence: uncertain
+    # applicability, capped and flagged for review (PRD 4).
+    Column("is_family_level", Boolean, nullable=False, server_default="false"),
     UniqueConstraint("manufacturer_id", "model", name="uq_product_manufacturer_model"),
     # The table cannot be referenced by name while it is being defined.
     Index("ix_product_manufacturer_id", "manufacturer_id"),
