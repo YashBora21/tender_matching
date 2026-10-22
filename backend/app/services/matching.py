@@ -23,6 +23,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.comparison.registry import ComparisonRequest, evaluate
@@ -367,7 +368,9 @@ def _page_text(session: Session, candidate: Candidate) -> Optional[str]:
     from app.repositories.schema import document as document_table
 
     row = session.execute(
-        document_table.c.path.where(document_table.c.id == candidate.document_id)
+        select(document_table.c.path).where(
+            document_table.c.id == candidate.document_id
+        )
     ).first()
     if row is None or not row[0]:
         return None
