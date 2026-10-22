@@ -264,6 +264,48 @@ def test_a_changed_attachment_re_reads_the_items_and_the_requirements(tmp_path, 
     assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
 
 
+def test_a_changed_reader_re_reads_the_items_and_the_requirements(tmp_path, monkeypatch):
+    """A change to the code that reads a bill of quantities is a change to
+    what the stage produces, so the stage runs again."""
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
+    repo = FakeRepo()
+    client = CountingClient()
+
+    repo.stages = _stage_keys_for(attachments)
+
+    # The reader changed.
+    import app.services.tenderingest as reader
+
+    monkeypatch.setattr(reader, "READER_VERSION", "changed")
+    result = run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=client
+    )
+
+    assert result.stages[STAGE_ITEMS].status == pipeline.STATUS_DONE
+    assert result.stages[STAGE_REQUIREMENTS].status == pipeline.STATUS_DONE
+
+
+def test_a_changed_classifier_re_reads_the_attachments(tmp_path, monkeypatch):
+    """A change to the code that recognises a document is a change to what
+    the attachment stage produces."""
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
+    repo = FakeRepo()
+
+    repo.stages = _stage_keys_for(attachments)
+
+    import app.services.tendercollect as collector
+
+    monkeypatch.setattr(collector, "CLASSIFIER_VERSION", "changed")
+    result = run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient()
+    )
+
+    assert result.stages[STAGE_ATTACHMENTS].status == pipeline.STATUS_DONE
+    assert result.stages[STAGE_ITEMS].status == pipeline.STATUS_DONE
+
+
 def test_a_changed_prompt_re_extracts_but_does_not_re_read_the_items(tmp_path, monkeypatch):
     """The chain: a change to the prompt re-extracts, and the stages before it
     do not move."""
@@ -275,10 +317,10 @@ def test_a_changed_prompt_re_extracts_but_does_not_re_read_the_items(tmp_path, m
     repo.stages = _stage_keys_for(attachments)
 
     # The prompt version changed: the extraction key changes, the item key
-    # does not.
-    import app.services.pipeline as module
+    # does not. It is read from the extractor, which owns the prompt.
+    import app.services.extractor as extractor
 
-    monkeypatch.setattr(module, "PROMPT_VERSION", "2")
+    monkeypatch.setattr(extractor, "PROMPT_VERSION", "2")
     result = run_pipeline(
         "T1", directory, attachments, repo=repo, cache=FakeCache(), client=client
     )

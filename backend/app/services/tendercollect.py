@@ -62,6 +62,12 @@ FORM_MARKERS = (
 _SCANNED_PAGE_RATIO = 0.5
 
 
+# The version of the classifier below. A change to how a document is
+# recognised is a change to what the stage produces, so it is part of the
+# stage's key: the stage runs again, and only that stage.
+CLASSIFIER_VERSION = "2"
+
+
 @dataclass
 class TenderDocument:
     """One document a tender links to, as it was fetched."""

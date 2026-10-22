@@ -81,6 +81,42 @@ def test_a_boq_table_gives_the_items_whatever_the_header_says():
         assert items[0].title
 
 
+def test_the_item_column_is_not_mistaken_for_the_description():
+    """A table with "Item" and "Descriptions" has an item column and a
+    description column, and "description" must not be taken for the item."""
+    rows = [
+        ["Sr. No.", "Item", "Descriptions", "Qty", "Unit"],
+        ["1", "GATE VALVE, SIZE-150 MM, CLASS-150", "Flanged Gate valve 6 inch", "13", "Nos."],
+    ]
+    items = read_boq_table(rows, "T1")
+
+    assert len(items) == 1
+    assert items[0].title == "GATE VALVE, SIZE-150 MM, CLASS-150"
+    assert items[0].description == "Flanged Gate valve 6 inch"
+
+
+def test_a_table_that_runs_over_a_page_break_keeps_its_columns():
+    """A table that continues onto the next page does not repeat its
+    header, so the columns are carried over."""
+    from app.services.tenderingest import _find_header_row, read_boq_table
+
+    first = [
+        ["BOQ", "", "", ""],
+        ["Sr. No.", "Item", "Descriptions", "Qty"],
+        ["1", "GATE VALVE 150 MM", "Flanged Gate valve 6 inch", "13"],
+    ]
+    second = [["2", "CHECK VALVE 100 MM", "Wafer check valve", "4"]]
+
+    header_row, columns = _find_header_row(first)
+    assert columns is not None
+
+    items = read_boq_table(first[header_row + 1:], "T1", columns=columns)
+    items += read_boq_table(second, "T1", columns=columns)
+
+    assert [item.item_id for item in items] == ["1", "2"]
+    assert items[1].title == "CHECK VALVE 100 MM"
+
+
 def test_a_row_without_a_number_is_not_an_item():
     rows = [["Item No", "Item Title"], ["", "no number"], ["2", "GATE VALVE"]]
     items = read_boq_table(rows, "GEM_1")

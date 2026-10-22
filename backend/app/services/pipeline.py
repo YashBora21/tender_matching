@@ -28,7 +28,6 @@ from app.core.logging import get_logger
 from app.repositories.tender import LLMCache, StoredRequirement, TenderRepo
 from app.schemas.enums import RequirementType
 from app.services.extractor import (
-    PROMPT_VERSION,
     ExtractedRequirement,
     extract_requirements,
 )
@@ -64,6 +63,35 @@ STATUS_DONE = "done"
 STATUS_FAILED = "failed"
 STATUS_RATE_LIMITED = "rate_limited"
 STATUS_SKIPPED = "skipped"
+
+
+def _reader_version() -> str:
+    """The version of the reader, read where it is used.
+
+    A change to the reader is a change to what the stage produces, so it
+    is part of the stage's key.
+    """
+    from app.services.tenderingest import READER_VERSION
+
+    return READER_VERSION
+
+
+def _classifier_version() -> str:
+    """The version of the classifier, read where it is used."""
+    from app.services.tendercollect import CLASSIFIER_VERSION
+
+    return CLASSIFIER_VERSION
+
+
+def _prompt_version() -> str:
+    """The version of the extraction prompt.
+
+    It is read from the extractor at the moment it is used, so the key of a
+    stage always names the prompt that produced it.
+    """
+    from app.services.extractor import PROMPT_VERSION
+
+    return PROMPT_VERSION
 
 
 def content_hash(*parts) -> str:
@@ -194,18 +222,25 @@ def stage_keys(
         (record.get("kind") or "", record.get("sha256") or "", record.get("status") or "")
         for record in attachments
     )
-    attachments_key = content_hash("attachments", fetch_config, attachment_parts)
+    attachments_key = content_hash(
+        "attachments", fetch_config, attachment_parts, _classifier_version()
+    )
 
     roles = resolve_roles(attachments)
 
-    # The items: the bill of quantities and how it is read.
+    # The items: the bill of quantities, how it is read, and the version of
+    # the reader. The version is part of the key because a change to the
+    # reader changes what the stage produces.
     boq = roles.boq
-    items_key = content_hash("items", attachments_key, boq.get("sha256") if boq else "")
+    items_key = content_hash(
+        "items", attachments_key, boq.get("sha256") if boq else "", _reader_version()
+    )
 
-    # The requirements: the specification and the items they hang from.
+    # The requirements: the specification, the items they hang from, and the
+    # version of the reader.
     spec = roles.specification
     requirements_key = content_hash(
-        "requirements", items_key, spec.get("sha256") if spec else ""
+        "requirements", items_key, spec.get("sha256") if spec else "", _reader_version()
     )
 
     # The extraction: the requirements, and what read them.
@@ -214,7 +249,9 @@ def stage_keys(
     )
 
     # The resolution: what was extracted, and the vocabulary that reads it.
-    resolution_key = content_hash("resolution", extraction_key, vocabulary_hash)
+    resolution_key = content_hash(
+        "resolution", extraction_key, vocabulary_hash, RESOLVER_VERSION
+    )
 
     return {
         STAGE_ATTACHMENTS: attachments_key,
@@ -223,6 +260,11 @@ def stage_keys(
         STAGE_EXTRACTION: extraction_key,
         STAGE_RESOLUTION: resolution_key,
     }
+
+
+# The version of the resolution below. A change to the normalizer or the
+# alias table changes what the stage produces, so it is part of its key.
+RESOLVER_VERSION = "1"
 
 
 def _vocabulary_hash() -> str:
@@ -259,7 +301,7 @@ def run_pipeline(
 
     keys = stage_keys(
         attachments,
-        prompt_version=PROMPT_VERSION,
+        prompt_version=_prompt_version(),
         schema_version=settings.schema_version,
         model=settings.llm_model or "",
         vocabulary_hash=_vocabulary_hash(),
@@ -410,7 +452,7 @@ def _save_failed(repo, result: PipelineResult, settings) -> None:
             status=state.status,
             key=state.key,
             extractor_version=settings.schema_version,
-            prompt_version=PROMPT_VERSION,
+            prompt_version=_prompt_version(),
         )
 
 
@@ -428,7 +470,7 @@ def _persist(repo, result: PipelineResult, settings) -> None:
                 requirement,
                 result.tender_id,
                 model=settings.llm_model,
-                prompt_version=PROMPT_VERSION,
+                prompt_version=_prompt_version(),
                 schema_version=settings.schema_version,
             )
             for requirement in result.requirements
@@ -442,7 +484,7 @@ def _persist(repo, result: PipelineResult, settings) -> None:
             status=state.status,
             key=state.key,
             extractor_version=settings.schema_version,
-            prompt_version=PROMPT_VERSION,
+            prompt_version=_prompt_version(),
         )
 
 
@@ -554,7 +596,7 @@ def _extract_one(
     """
     settings = get_settings()
     model = settings.llm_model or ""
-    prompt_version = PROMPT_VERSION
+    prompt_version = _prompt_version()
     schema_version = settings.schema_version
     input_hash = content_hash(readable, model, prompt_version, schema_version)
 

@@ -62,6 +62,12 @@ def is_mangled(text: str) -> bool:
     return bool(_MANGLED.search(text))
 
 
+# The version of the readers below. A change to how a bill of quantities or
+# a specification is read is a change to what the stage produces, so it is
+# part of the stage's key: the stage runs again, and only that stage.
+READER_VERSION = "2"
+
+
 @dataclass
 class TenderItem:
     """One row of the bill of quantities (FR-T9)."""
@@ -185,11 +191,26 @@ def read_boq_items(path: Path, tender_id: str, category: str = "unknown") -> lis
     import pdfplumber
 
     items: list[TenderItem] = []
+    columns: Optional[dict] = None
     try:
         with pdfplumber.open(path) as pdf:
             for page in pdf.pages:
                 for table in page.extract_tables() or []:
-                    items.extend(read_boq_table(table, tender_id, category))
+                    header_row, found = _find_header_row(table)
+                    if found:
+                        columns = found
+                    if columns is None:
+                        # No header yet: the rows cannot be read.
+                        continue
+                    start = header_row + 1 if found else 0
+                    items.extend(
+                        read_boq_table(
+                            table[start:],
+                            tender_id,
+                            category,
+                            columns=columns,
+                        )
+                    )
     except Exception:  # noqa: BLE001 - a file that cannot be read gives no items
         items = []
 
@@ -327,45 +348,38 @@ def read_boq_table(
     rows: list[list[Optional[str]]],
     tender_id: str,
     category: str = "unknown",
+    columns: Optional[dict] = None,
 ) -> list[TenderItem]:
     """The items of a bill of quantities, from its table.
 
-    The header is found by its words, because the buyers write it four
-    different ways: "BOQ Item Title", "Brief Description", "Item Title",
-    "Material Description".
+    The columns come from the header, which the caller may have found
+    already: a table that runs over a page break does not repeat its header,
+    so the columns are carried to the next page.
     """
     if not rows:
         return []
 
-    header = [(_clean_cell(cell) or "").lower() for cell in rows[0]]
-    number_col = _find_column(
-        header, ("item number", "item no", "sr. no", "sr no", "s.no", "s.n", "serial")
-    )
-    title_col = _find_column(
-        header,
-        (
-            "item title",
-            "brief description",
-            "item description",
-            "material description",
-            "description",
-        ),
-    )
-    quantity_col = _find_column(header, ("quantity", "qty", "quantiry"))
-    unit_col = _find_column(header, ("unit",))
+    if columns is None:
+        # The header is in the rows: find it and read the rows below it.
+        header_row, found = _find_header_row(rows)
+        if found is None:
+            return []
+        columns = found
+        rows = rows[header_row + 1:]
 
     items: list[TenderItem] = []
-    for index, row in enumerate(rows[1:], start=1):
-        number = _clean_cell(_cell(row, number_col))
+    for index, row in enumerate(rows, start=1):
+        number = _clean_cell(_cell(row, columns.get("number")))
         if not number or not number[0].isdigit():
             continue
+        title = _clean_cell(_cell(row, columns.get("title")))
         items.append(
             TenderItem(
                 item_id=item_id_for(tender_id, number),
-                title=_clean_cell(_cell(row, title_col)),
-                description=_clean_cell(_cell(row, title_col)),
-                quantity=_clean_cell(_cell(row, quantity_col)),
-                unit=_clean_cell(_cell(row, unit_col)),
+                title=title,
+                description=_clean_cell(_cell(row, columns.get("description"))) or title,
+                quantity=_clean_cell(_cell(row, columns.get("quantity"))),
+                unit=_clean_cell(_cell(row, columns.get("unit"))),
                 category=category,
                 source_row=str(index),
             )
@@ -373,18 +387,53 @@ def read_boq_table(
     return items
 
 
-def _find_column(header: list[str], names: tuple[str, ...]) -> Optional[int]:
-    """The column whose header says one of these things.
+# The words a column's header may say, by the role the column plays. The
+# buyers write the same column several ways, so the header is matched on the
+# words it uses, not on its position.
+_COLUMN_WORDS: dict[str, tuple[str, ...]] = {
+    "number": ("itemnumber", "itemno", "srno", "sno", "serial", "snonumber"),
+    "title": ("itemtitle", "itemname", "item", "briefdescription", "descriptionofitem"),
+    "description": (
+        "itemdescription",
+        "itemdescriptions",
+        "descriptions",
+        "particulars",
+        "description",
+    ),
+    "quantity": ("quantity", "qty", "quantiry", "quantite"),
+    "unit": ("unit", "uom", "unitofmeasure"),
+}
 
-    The header is compared without its punctuation, because the buyers write
-    "Sr. No.", "SR.NO" and "S.N" for the same column.
+
+def find_columns(header: list[str]) -> dict[str, Optional[int]]:
+    """The column that plays each role, from the header's words.
+
+    A column that is named exactly wins over one that merely contains the
+    word: a table with "Item" and "Descriptions" has an item column and a
+    description column, and "description" must not be taken for the item.
     """
-    for index, cell in enumerate(header):
-        squashed = re.sub(r"[^a-z0-9]", "", cell)
-        for name in names:
-            if re.sub(r"[^a-z0-9]", "", name) in squashed:
-                return index
-    return None
+    squashed = [re.sub(r"[^a-z0-9]", "", cell) for cell in header]
+    found: dict[str, Optional[int]] = {}
+
+    for role, words in _COLUMN_WORDS.items():
+        chosen: Optional[int] = None
+        for word in words:
+            for index, cell in enumerate(squashed):
+                if cell == word:
+                    chosen = index
+                    break
+            if chosen is not None:
+                break
+        if chosen is None:
+            for word in words:
+                for index, cell in enumerate(squashed):
+                    if word in cell:
+                        chosen = index
+                        break
+                if chosen is not None:
+                    break
+        found[role] = chosen
+    return found
 
 
 def _cell(row: list[Optional[str]], index: Optional[int]) -> Optional[str]:
@@ -514,22 +563,13 @@ def _find_header_row(table: list[list[Optional[str]]]) -> tuple[int, Optional[di
     caller carries the columns over.
     """
     for index, row in enumerate(table[:5]):
-        header = [(_clean_cell(cell) or "").lower() for cell in row]
-        description_col = _find_column(
-            header,
-            ("item description", "descriptions", "description", "brief description", "particulars"),
-        )
-        if description_col is None:
+        columns = find_columns([(_clean_cell(cell) or "").lower() for cell in row])
+        # A table is a bill of quantities when it names the items. A table
+        # with only a description column is one too: some buyers write the
+        # description and the number and nothing else.
+        if columns.get("description") is None and columns.get("title") is None:
             continue
-        return index, {
-            "number": _find_column(
-                header, ("sr. no", "sr no", "s.no", "s.n", "item number", "item no", "serial")
-            ),
-            "title": _find_column(header, ("item title", "item name", "item")),
-            "description": description_col,
-            "quantity": _find_column(header, ("quantity", "qty", "quantiry")),
-            "unit": _find_column(header, ("unit",)),
-        }
+        return index, columns
     return -1, None
 
 
