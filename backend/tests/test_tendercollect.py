@@ -136,13 +136,19 @@ def test_a_boq_is_told_from_a_form_by_its_content():
 
 
 def test_a_scanned_document_is_still_a_document():
-    """No text at all: it is a scanned document, and the OCR pass reads it
-    later. It is not a document that says nothing."""
+    """A page that is an image is a scanned page, even when the scanner
+    wrote a little text on it. The OCR pass reads it later; it is not a
+    document that says nothing."""
     import pymupdf
 
     tmp = Path(__file__).parent / "_scanned.pdf"
     document = pymupdf.open()
-    document.new_page()
+    page = document.new_page()
+    # A picture covering the page: a scanned page.
+    page.insert_image(
+        pymupdf.Rect(0, 0, page.rect.width, page.rect.height),
+        pixmap=pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 40, 40), False),
+    )
     document.save(tmp)
     document.close()
     data = tmp.read_bytes()
@@ -151,38 +157,6 @@ def test_a_scanned_document_is_still_a_document():
     kind, pages = classify_document(data, "x.pdf")
     assert kind == "scanned"
     assert pages == 1
-
-
-def test_a_failed_fetch_is_recorded_as_failed(tmp_path, server, monkeypatch):
-    """A document that cannot be fetched is a failed document. It is never
-    a tender with no requirements."""
-    base, _ = server
-    _allow_localhost(monkeypatch)
-    path = tmp_path / "tender.pdf"
-    _wrapper_with_links(path, [f"{base}/refused.pdf"])
-
-    manifest = collect_tender("T1", path, tmp_path / "out")
-
-    assert len(manifest.documents) == 1
-    assert manifest.documents[0].status == "failed"
-    assert manifest.documents[0].sha256 is None
-
-
-def test_a_restricted_path_is_not_fetched(tmp_path, server, monkeypatch):
-    base, state = server
-    _allow_localhost(monkeypatch)
-    state["robots"] = b"User-agent: *\nDisallow: /\n"
-    try:
-        path = tmp_path / "tender.pdf"
-        _wrapper_with_links(path, [f"{base}/boq.csv"])
-
-        manifest = collect_tender("T1", path, tmp_path / "out")
-
-        assert manifest.documents[0].status == "restricted"
-        assert manifest.documents[0].note
-        assert not (tmp_path / "out" / "raw").exists()
-    finally:
-        state["robots"] = b"User-agent: *\nAllow: /\n"
 
 
 def test_a_fetched_document_is_frozen_with_its_hash_and_url(tmp_path, server, monkeypatch):

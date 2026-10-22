@@ -167,7 +167,7 @@ def _rows_to_markdown(rows: list[list[Optional[str]]]) -> list[tuple[str, str, s
     return out
 
 
-def _ocr_page(pymupdf_page) -> Optional[str]:
+def ocr_page(pymupdf_page) -> Optional[str]:
     """Read a page through OCR, when Tesseract is available.
 
     Tesseract is an external program, not a Python package, so it may not be
@@ -216,7 +216,7 @@ def _parse_pdf(path: Path) -> ParsedDocument:
         text = page.get_text() or ""
         if len(text.strip()) < _min_chars_for_text():
             # No usable text layer: this page is scanned (FR-9).
-            ocr_text = _ocr_page(page)
+            ocr_text = ocr_page(page)
             if ocr_text and ocr_text.strip():
                 ocr_pages.add(number)
                 parsed.ocr_pages.append(number)

@@ -629,3 +629,86 @@ and 46 requirements with no failed quote and no bad page. The rest are
 image-only documents that need the OCR path, and two produce specification
 rows that name no item in their bill of quantities (233 and 9 rows), which
 is the ambiguity FR-T9 says to flag rather than guess at.
+
+---
+
+## Phase 5 — A reusable, incremental tender pipeline
+
+Phase 5 makes the tender pipeline reusable: it takes a directory of tenders
+and treats every one of them the same way, it does the same work twice only
+when something changed, and it reports what it did.
+
+**The stages**
+
+    attachments -> items -> requirements -> extraction -> resolution
+
+Each stage is keyed by a hash of everything that can change its output,
+including the key of the stage before it. A stage whose key has not changed
+is not run, and neither are the stages after it. The checkpoints live in
+`extraction_batch`, which the PRD gives for exactly this.
+
+**The invalidation chain**, and what each change moves:
+
+| Changed | Re-read | Re-extract | Re-download |
+| --- | --- | --- | --- |
+| An attachment's hash | items, requirements | yes | no |
+| The prompt, model or schema version | no | yes | no |
+| The attribute vocabulary | no | no | no |
+| The fetch configuration | attachments | yes | yes |
+
+**The LLM cache** is keyed by the hash of the input plus the model, the
+prompt version and the schema version, and every stored requirement records
+all four. A rate-limited run is recorded as `rate_limited`, which is
+resumable: the next run picks it up where it stopped.
+
+**The database** gained what the PRD's schema did not have: the attachments
+of a tender (`tender_attachment`), the LLM cache (`llm_cache`), the model,
+prompt version and input hash on a requirement, and the attachment a page
+came from. An item is identified by its tender and its number within it,
+because two tenders both have an item "1" - so `tender_item`'s key is the
+pair, and a requirement points at the pair.
+
+**No tender is named in the code.** The pipeline takes a directory, and a
+test reads the corpus and checks the application code against it: no tender
+id, no file name, no attachment URL appears in `app/`.
+
+**Tested**
+
+231 backend tests and 14 collector tests pass. The pipeline tests cover a
+tender that works, a changed attachment, a changed prompt, a changed model, a
+changed vocabulary, a cached rerun, a malformed attachment, an ambiguous
+item mapping, a line that cannot be read, and a tender with no bill of
+quantities.
+
+**Defects the audit found**
+
+- **A scanned page was read as a readable one.** A scanner writes whatever
+  the page had on it - a file number, a date - so a scanned technical
+  specification carried 214 characters per page and was classified as a
+  readable specification, read as if it had a table, and produced no
+  requirements at all. A page is now scanned when its images cover it, not
+  when its text is short (D-47).
+- **A bill of quantities that was scanned was never read.** The OCR path
+  existed for the corpus and not for the tender, so a scanned bill of
+  quantities gave no items. It is read now, and the item number is taken
+  from the line that names it whether the scanner put the number on its own
+  line or with the words.
+- **One tender's failure broke every tender after it.** The error arrived
+  when the work was written, after the savepoint had closed, and the whole
+  transaction was then unusable. Each tender now runs in a transaction of
+  its own (D-49).
+- **The two stages disagreed about which file was the bill of
+  quantities.** Each stage looked for what it needed, so a scanned document
+  was the bill of quantities in one stage and nothing in the other, and the
+  tender was reported as having no items when it had them. The roles are
+  resolved once now (D-48).
+- **A manifest written before the wrapper was recorded could not be
+  resolved.** The hash of the wrapper is now taken from the wrapper file
+  beside the manifest, so an older manifest still identifies its tender.
+
+**The corpus audit**
+
+The audit reports, per tender, whether its specification and its bill of
+quantities were found, how many items and requirements it produced, and why
+it failed if it did - and then ranks the failure causes, so the thing that
+goes wrong most often is the thing that is looked at first.

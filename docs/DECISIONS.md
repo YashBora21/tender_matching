@@ -594,3 +594,85 @@ anything.
 noise for the model and a source of false readings. Dropping a mangled line
 silently — rejected, a line that cannot be read is a gap, and a gap has to
 be visible.
+
+---
+
+**D-44 — The pipeline is keyed by what it read, not by what it is.**
+*Decision:* Every stage has a key: a hash of the inputs it read and the key of
+the stage before it. A stage whose key has not changed is not run, and
+neither are the stages after it. The checkpoints live in `extraction_batch`,
+which the PRD gives for exactly this.
+*Why:* A corpus is re-read often and a tender is rarely different. Without a
+key, every run re-downloads and re-extracts everything, which costs money
+and wears out the provider's rate limit. The key makes the run incremental by
+construction rather than by a flag someone has to remember to set.
+*Alternatives:* A "skip if the file hash matches" rule per stage — rejected,
+it cannot express "the items changed but the specification did not", which is
+the common case. A run id compared to the last run — rejected, it says
+whether *something* changed, not *what*.
+
+---
+
+**D-45 — The item is identified by its tender and its number within it.**
+*Decision:* `tender_item`'s key is `(tender_id, item_id)`, and a requirement
+points at that pair.
+*Why:* Two tenders both have an item "1". A single-column key either
+collides or has to be a concatenation, and a concatenation hides the fact
+that the two things are different. The PRD's table list has `tender_item`
+with `item_id` and `tender_id` as separate columns, and the requirement
+table has both, so the pair is what the PRD's own shape means.
+*Alternatives:* A concatenated string key ("tender:1") — rejected, it is the
+pair wearing a disguise, and the database cannot enforce it.
+
+---
+
+**D-46 — An LLM answer is cached by its input and by everything that read
+it.**
+*Decision:* The cache key is the hash of the input plus the model, the prompt
+version and the schema version. Every stored requirement records all four.
+*Why:* A cached answer is only an answer to the question that was asked. If
+the prompt changes, the same question is a different question, and reusing
+the old answer would put a requirement in the report that no prompt ever
+produced. The PRD says it twice: the cache key is "document hash, extractor
+version and prompt/schema version" (FR-12) and every report records the
+model, prompt and schema versions (FR-34).
+*Alternatives:* Caching on the input alone — rejected, a prompt change
+would be invisible. Caching on the tender — rejected, the same line in two
+tenders would be read twice.
+
+---
+
+**D-47 — A scanned page is one whose images cover it.**
+*Decision:* A document is scanned when its images cover more than half of a
+page. The amount of text on the page is not the test.
+*Why:* A scanner writes whatever the page had on it — a file number, a date,
+a name — so a scanned page often carries a couple of hundred characters. The
+tender corpus proved it: a scanned technical specification with 214
+characters on every page was classified as a readable specification, read as
+if it had a table, and produced no requirements at all.
+*Alternatives:* The amount of text — rejected, as above. The file name —
+rejected, the name says where the file came from, not what is in it.
+
+---
+
+**D-48 — One resolution of the roles, shared by the stages.**
+*Decision:* `resolve_roles` decides which attachment is the bill of
+quantities and which is the specification, once, and both stages use it.
+*Why:* The two stages read different files and must agree on what is what.
+Resolving the roles twice let a scanned document be the bill of quantities
+in one stage and nothing in the other, and the tender was then reported as
+having no items when it had them.
+*Alternatives:* Each stage looking for what it needs — rejected, that is how
+the two stages came to disagree.
+
+---
+
+**D-49 — A failed tender is reported, and the audit carries on.**
+*Decision:* Each tender runs in a savepoint, so its failure is rolled back
+alone, and the audit reports the failure and moves to the next tender.
+*Why:* A tender that fails aborts the transaction, and every tender after it
+is then reported as broken too. One unreadable PDF turned 24 tenders into 24
+failures, and the report said nothing about the real cause.
+*Alternatives:* One transaction for the whole corpus — rejected, a single
+bad tender costs the whole run. A transaction per tender without a
+savepoint — rejected, the abort still poisons the session.

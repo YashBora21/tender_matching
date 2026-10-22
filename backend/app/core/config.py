@@ -146,6 +146,14 @@ class Settings(BaseSettings):
     # goes to review instead of being matched on a weak mapping.
     alias_confidence_threshold: float = 0.8
 
+    # --- pipeline ---
+    # The version of the stored record's shape. A change to it invalidates
+    # the records that were written with the old one.
+    schema_version: str = "1"
+    # How many tenders are processed at once. The LLM's rate limit is shared,
+    # so this is the knob that keeps a run inside it.
+    pipeline_concurrency: int = 4
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

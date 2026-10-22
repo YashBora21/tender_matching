@@ -58,6 +58,15 @@ FORM_MARKERS = (
     "price bid evaluation",
 )
 
+# A page whose images cover more of it than this is a scanned page.
+_SCANNED_PAGE_RATIO = 0.5
+
+
+# The version of the classifier below. A change to how a document is
+# recognised is a change to what the stage produces, so it is part of the
+# stage's key: the stage runs again, and only that stage.
+CLASSIFIER_VERSION = "2"
+
 
 @dataclass
 class TenderDocument:
@@ -87,8 +96,10 @@ class TenderManifest:
 
     tender_id: str
     category: str = "unknown"
+    filename: Optional[str] = None
     wrapper_path: Optional[str] = None
     wrapper_sha256: Optional[str] = None
+    page_count: Optional[int] = None
     retrieved_at: Optional[str] = None
     documents: list[TenderDocument] = field(default_factory=list)
 
@@ -145,10 +156,13 @@ def classify_document(data: bytes, filename: str) -> tuple[str, Optional[int]]:
     PDF splits them across lines, so a phrase search misses them. The header
     is read from the table, and the prose is only the second opinion.
 
-    A scanned document has no text at all: it is classified by its first
-    text, and when it has none it is still a document - the OCR pass reads
-    it later. A document that cannot be opened is unknown, and the fetch is
-    recorded as failed rather than as a document that says nothing.
+    A scanned document is one whose pages are images. A scanned page often
+    carries a little text - a file number, a date - so the amount of text is
+    not the test: the *ratio* of page area covered by images is. A document
+    that is mostly images is scanned, and the OCR pass reads it later.
+
+    A document that cannot be opened is unknown, and the fetch is recorded as
+    failed rather than as a document that says nothing.
     """
     if filename.lower().endswith(".csv"):
         text = data.decode("utf-8", "replace").lower()
@@ -166,6 +180,12 @@ def classify_document(data: bytes, filename: str) -> tuple[str, Optional[int]]:
     document.close()
     low = body.lower()
 
+    if _is_scanned(data):
+        # The pages are images. A scanner writes a little text on them - a
+        # file number, a date - and that text must not decide what the
+        # document is. It is still a document, and the OCR pass reads it
+        # later.
+        return "scanned", pages
     if _has_boq_header(data):
         return "boq-pdf", pages
     if any(marker in low for marker in BOQ_MARKERS) and any(
@@ -176,10 +196,37 @@ def classify_document(data: bytes, filename: str) -> tuple[str, Optional[int]]:
         return "spec", pages
     if any(marker in low for marker in FORM_MARKERS):
         return "form", pages
-    if not body.strip():
-        # No text at all: a scanned document. It is still a document.
-        return "scanned", pages
     return "other", pages
+
+
+def _is_scanned(data: bytes) -> bool:
+    """True when the document's pages are images rather than text.
+
+    A scanned page keeps whatever text the scanner's software wrote on it -
+    a file number, a date - so the amount of text says nothing. The area
+    the images cover does.
+    """
+    import pymupdf
+
+    try:
+        document = pymupdf.open(stream=data, filetype="pdf")
+    except Exception:
+        return False
+    try:
+        for index in range(min(document.page_count, 3)):
+            page = document[index]
+            area = page.rect.get_area()
+            if not area:
+                continue
+            covered = 0.0
+            for image in page.get_image_info():
+                bbox = image["bbox"]
+                covered = max(covered, (bbox[2] - bbox[0]) * (bbox[3] - bbox[1]))
+            if covered / area > _SCANNED_PAGE_RATIO:
+                return True
+    finally:
+        document.close()
+    return False
 
 
 def _has_boq_header(data: bytes) -> bool:
@@ -216,6 +263,20 @@ def _filename_for(url: str, index: int) -> str:
     return name
 
 
+def _page_count(path: Path) -> Optional[int]:
+    """How many pages the wrapper has, or None when it cannot be opened."""
+    import pymupdf
+
+    try:
+        document = pymupdf.open(path)
+    except Exception:  # noqa: BLE001 - a file that cannot be opened has no pages
+        return None
+    try:
+        return document.page_count
+    finally:
+        document.close()
+
+
 def collect_tender(
     tender_id: str,
     wrapper_path: Path,
@@ -233,8 +294,10 @@ def collect_tender(
     manifest = TenderManifest(
         tender_id=tender_id,
         category=category,
+        filename=wrapper_path.name,
         wrapper_path=str(wrapper_path),
         wrapper_sha256=sha256_file(wrapper_path),
+        page_count=_page_count(wrapper_path),
         retrieved_at=now_iso(),
     )
     raw_dir = output_dir / "raw"
@@ -320,8 +383,10 @@ def write_manifest(manifest: TenderManifest, output_dir: Path) -> Path:
     payload = {
         "tender_id": manifest.tender_id,
         "category": manifest.category,
+        "filename": manifest.filename,
         "wrapper_path": manifest.wrapper_path,
         "wrapper_sha256": manifest.wrapper_sha256,
+        "page_count": manifest.page_count,
         "retrieved_at": manifest.retrieved_at,
         "documents": [doc.to_dict() for doc in manifest.documents],
     }
@@ -341,3 +406,28 @@ def read_manifest(path: Path) -> dict:
         return {"documents": []}
     data.setdefault("documents", [])
     return data
+
+
+def manifest_identity(manifest: dict, tender_dir: Path) -> tuple[Optional[str], Optional[str]]:
+    """The hash and the name of a tender, from its manifest.
+
+    A manifest written before the wrapper was recorded has no hash of its
+    own, so it is taken from the wrapper file beside it. The tender is
+    identified by what it contains, and the wrapper is what it contains.
+    """
+    sha256 = manifest.get("wrapper_sha256")
+    filename = manifest.get("filename")
+    if not sha256:
+        wrapper = manifest.get("wrapper_path")
+        if wrapper and Path(wrapper).exists():
+            sha256 = sha256_file(Path(wrapper))
+        else:
+            # The wrapper sits beside the manifest it describes.
+            for candidate in sorted(tender_dir.glob("*.pdf")):
+                sha256 = sha256_file(candidate)
+                filename = filename or candidate.name
+                break
+    if not filename:
+        candidate = manifest.get("tender_id")
+        filename = f"{candidate}.pdf" if candidate else None
+    return sha256, filename
