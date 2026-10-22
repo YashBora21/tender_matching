@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -30,6 +31,10 @@ _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 class LLMError(Exception):
     """The LLM could not be used. The reason is reported, not raised past."""
+
+
+class _RateLimited(Exception):
+    """The provider's limit was hit. Worth retrying."""
 
 
 @dataclass
@@ -83,7 +88,45 @@ class LLMClient:
             raise LLMError("no LLM api key is configured")
 
     def chat(self, system: str, user: str, *, max_tokens: Optional[int] = None) -> LLMResult:
-        """Ask the model one question and get one answer."""
+        """Ask the model one question and get one answer.
+
+        A rate-limited call is retried: the provider's limit is per minute
+        and per day, and a burst of calls is a normal way to hit it (PRD 13).
+        """
+        settings = get_settings()
+        last_error: Optional[str] = None
+        budget = max_tokens or settings.llm_max_tokens
+        for attempt in range(settings.llm_max_retries + 1):
+            try:
+                result = self._chat_once(system, user, max_tokens=budget)
+            except _RateLimited as exc:
+                last_error = str(exc)
+                if attempt >= settings.llm_max_retries:
+                    break
+                wait = settings.llm_retry_seconds * (attempt + 1)
+                logger.warning(
+                    "the model is rate limited, retrying in %.0fs (%d/%d)",
+                    wait,
+                    attempt + 1,
+                    settings.llm_max_retries,
+                )
+                time.sleep(wait)
+                continue
+            if not result.content.strip() and result.reasoning:
+                # The model thought and never answered: it ran out of budget
+                # before it got to the answer. A bigger budget is the fix.
+                last_error = "the model spent its whole budget reasoning"
+                if attempt >= settings.llm_max_retries:
+                    break
+                budget = int(budget * 2)
+                logger.warning(
+                    "the model answered nothing, retrying with %d tokens", budget
+                )
+                continue
+            return result
+        raise LLMError(last_error or "the model did not answer")
+
+    def _chat_once(self, system: str, user: str, *, max_tokens: Optional[int] = None) -> LLMResult:
         settings = get_settings()
         body = json.dumps(
             {
@@ -111,7 +154,9 @@ class LLMClient:
             with urllib.request.urlopen(request, timeout=settings.llm_timeout_seconds) as response:
                 data = json.loads(response.read())
         except urllib.error.HTTPError as exc:
-            detail = exc.read()[:200].decode("utf-8", "replace")
+            detail = exc.read()[:300].decode("utf-8", "replace")
+            if exc.code == 429:
+                raise _RateLimited(f"the model is rate limited: {detail}") from exc
             raise LLMError(f"the model returned HTTP {exc.code}: {detail}") from exc
         except Exception as exc:  # noqa: BLE001 - the reason is reported, not raised past
             raise LLMError(f"{type(exc).__name__}: {exc}") from exc

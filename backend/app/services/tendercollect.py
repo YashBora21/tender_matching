@@ -17,6 +17,7 @@ import json
 import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from typing import Optional
 
@@ -139,6 +140,11 @@ def discover_links(pdf_path: Path) -> list[str]:
 def classify_document(data: bytes, filename: str) -> tuple[str, Optional[int]]:
     """What a document is, from its content, and how many pages it has.
 
+    A bill of quantities is recognised by its *header*, not by its prose: the
+    words "Item", "Descriptions", "Qty" and "Unit" sit in a table, and the
+    PDF splits them across lines, so a phrase search misses them. The header
+    is read from the table, and the prose is only the second opinion.
+
     A scanned document has no text at all: it is classified by its first
     text, and when it has none it is still a document - the OCR pass reads
     it later. A document that cannot be opened is unknown, and the fetch is
@@ -146,7 +152,7 @@ def classify_document(data: bytes, filename: str) -> tuple[str, Optional[int]]:
     """
     if filename.lower().endswith(".csv"):
         text = data.decode("utf-8", "replace").lower()
-        kind = "boq" if ("item number" in text or "item title" in text) else "csv"
+        kind = "boq-csv" if ("item number" in text or "item title" in text) else "csv"
         return kind, None
 
     import pymupdf
@@ -159,10 +165,13 @@ def classify_document(data: bytes, filename: str) -> tuple[str, Optional[int]]:
     body = " ".join((document[index].get_text() or "") for index in range(min(pages, 2)))
     document.close()
     low = body.lower()
+
+    if _has_boq_header(data):
+        return "boq-pdf", pages
     if any(marker in low for marker in BOQ_MARKERS) and any(
         marker in low for marker in QUANTITY_MARKERS
     ):
-        return "boq", pages
+        return "boq-pdf", pages
     if any(marker in low for marker in SPEC_MARKERS):
         return "spec", pages
     if any(marker in low for marker in FORM_MARKERS):
@@ -171,6 +180,30 @@ def classify_document(data: bytes, filename: str) -> tuple[str, Optional[int]]:
         # No text at all: a scanned document. It is still a document.
         return "scanned", pages
     return "other", pages
+
+
+def _has_boq_header(data: bytes) -> bool:
+    """True when the first pages hold a table with a bill-of-quantities header.
+
+    Only the first two pages are read: pdfplumber is slow on a long
+    document, and the header is at the front.
+    """
+    import pdfplumber
+
+    try:
+        with pdfplumber.open(BytesIO(data)) as pdf:
+            for page in pdf.pages[:2]:
+                for table in page.extract_tables() or []:
+                    for row in table[:4]:
+                        header = " ".join(str(cell or "").lower() for cell in row)
+                        if (
+                            ("description" in header or "particulars" in header)
+                            and ("qty" in header or "quantity" in header)
+                        ):
+                            return True
+    except Exception as exc:  # noqa: BLE001 - a table that cannot be read is not a table
+        logger.debug("could not read the table header: %s", exc)
+    return False
 
 
 def _filename_for(url: str, index: int) -> str:
@@ -223,37 +256,31 @@ def collect_tender(
         old = known.get(url)
         # The frozen copy is the cache: a document that is already on disk
         # with the same hash is not fetched again.
+        data: Optional[bytes] = None
+        filename = _filename_for(url, index)
+        target = raw_dir / filename
         if cache_enabled and old and old.get("sha256"):
             frozen = raw_dir / (old.get("filename") or "")
             if frozen.exists() and sha256_file(frozen) == old["sha256"]:
+                data = frozen.read_bytes()
+                filename = old.get("filename") or filename
+                target = frozen
+
+        if data is None:
+            try:
+                got = fetch(url)
+            except FetchRefused as exc:
                 manifest.documents.append(
-                    TenderDocument(
-                        url=url,
-                        status="unchanged",
-                        kind=old.get("kind", "unknown"),
-                        filename=old.get("filename"),
-                        path=old.get("path"),
-                        sha256=old["sha256"],
-                        retrieved_at=old.get("retrieved_at"),
-                        bytes=old.get("bytes"),
-                        pages=old.get("pages"),
-                        note=note,
-                    )
+                    TenderDocument(url=url, status="failed", note=str(exc))
                 )
                 continue
+            data = got.data
 
-        try:
-            got = fetch(url)
-        except FetchRefused as exc:
-            manifest.documents.append(
-                TenderDocument(url=url, status="failed", note=str(exc))
-            )
-            continue
-
-        digest = sha256_bytes(got.data)
-        filename = _filename_for(url, index)
-        target = raw_dir / filename
-        kind, pages = classify_document(got.data, filename)
+        digest = sha256_bytes(data)
+        # The document is classified from the file on disk, every time: a
+        # change to the classifier has to take effect without fetching
+        # everything again.
+        kind, pages = classify_document(data, filename)
 
         status = "new"
         previous_sha = None
@@ -265,7 +292,7 @@ def collect_tender(
                 previous_sha = old.get("sha256")
 
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(got.data)
+        target.write_bytes(data)
 
         manifest.documents.append(
             TenderDocument(
@@ -277,7 +304,7 @@ def collect_tender(
                 sha256=digest,
                 previous_sha256=previous_sha,
                 retrieved_at=now_iso(),
-                bytes=len(got.data),
+                bytes=len(data),
                 pages=pages,
                 note=note,
             )

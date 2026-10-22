@@ -494,3 +494,69 @@ page. Without OCR the phase would have found nothing in them.
 - The item identity is read from the BOQ; where the BOQ and the
   specification disagree about which item a requirement belongs to, the
   requirement is not yet flagged as ambiguous (FR-T9).
+
+### The vertical slice — one tender, end to end
+
+The milestone was a narrow slice: one tender, from its attachments to its
+requirements, with the checks that make the result worth having.
+
+**GEM_9671792_Valve** — a GeM valve tender with both a specification PDF and
+a bill of quantities CSV.
+
+| | |
+| --- | --- |
+| Attachments fetched | 2 (the specification PDF and the BOQ CSV), plus 2 more |
+| Attachments failed | 0 |
+| Items | 11, keyed `GEM_9671792_Valve:1` … `:11` |
+| Requirements | 11, each carrying its item |
+| Failed quotes | 0 |
+| Bad pages | 0 |
+| Unassigned | 0 |
+| Requirements the LLM extracted | 31, from the 11 descriptions |
+
+The LLM turns one bill-of-quantities description into the atomic
+requirements inside it, each with its attribute, operator, value and unit:
+
+    [technical] size                  eq  6    inch  :: Size 6 inch
+    [technical] class                 eq  150  None  :: Class 150
+    [technical] body material         eq  cast carbon steel None
+    [technical] face to face distance eq  267  mm    :: Face to face distance 267 mm
+
+**The checks**
+
+- **The quote check.** A requirement has to be found in the text of the page
+  it names. 0 of 11 failed. One requirement the LLM produced was *rejected*
+  because its span did not hold what the model said it held — the model
+  rewrote the text instead of quoting it, and the code caught it.
+- **The page check.** A requirement has to name a page the document has. 0
+  of 11 failed.
+- **The type check.** Every requirement is classified; only `technical` and
+  `certification` go to matching, and the commercial and eligibility ones
+  are listed separately (FR-14).
+- **The recall check.** The lines the specification stated that produced no
+  requirement are listed, so a missed requirement is not invisible (FR-T14).
+
+**The tests** cover the four outcomes: a tender that works, a tender whose
+attachments are missing, a tender with a malformed file, and a requirement
+that was never extracted.
+
+**Three defects the slice found**
+
+- **A malformed attachment stopped the run.** A PDF that is not a PDF raised
+  out of the reader. One broken file is a file that cannot be read, and the
+  tender is still read from the other attachment.
+- **A classification change never took effect.** The frozen copy was the
+  cache, and the cached record kept the kind it was first given, so a better
+  classifier could not be applied without fetching everything again. The
+  document is now classified from the file on disk every time: the download
+  is the expensive part, the classification is local.
+- **The rate limit is per model, not per organisation.** `gpt-oss-120b` was
+  exhausted for the day while `gpt-oss-20b` answered normally. The default
+  is now 20b, which is also the cheaper and faster of the two.
+
+**The rest of the corpus.** All 24 tenders' attachments are fetched and
+frozen — 82 attachments, 211.8 MB, 0 failed. Six of the tenders yield items
+and 46 requirements with no failed quote and no bad page. The rest are
+image-only documents that need the OCR path, and two produce specification
+rows that name no item in their bill of quantities (233 and 9 rows), which
+is the ambiguity FR-T9 says to flag rather than guess at.

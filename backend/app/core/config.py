@@ -52,8 +52,13 @@ class Settings(BaseSettings):
     # gpt-oss; a local Ollama serves the embedding model; the HuggingFace
     # router serves both if the account has credits.
     llm_api_key: Optional[str] = None
-    llm_model: Optional[str] = None
+    # gpt-oss-20b over gpt-oss-120b: the provider's daily token limit is
+    # per model, and 20b is the cheaper and faster of the two.
+    llm_model: Optional[str] = "openai/gpt-oss-20b"
     llm_base_url: str = "https://api.groq.com/openai/v1"
+    # How many times a rate-limited call is retried, and how long it waits.
+    llm_max_retries: int = 3
+    llm_retry_seconds: float = 5.0
     # gpt-oss is a reasoning model: the answer comes after the reasoning, and
     # a small budget is spent entirely on reasoning.
     llm_max_tokens: int = 2048

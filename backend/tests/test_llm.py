@@ -105,3 +105,81 @@ def test_a_model_error_is_reported_not_raised_past(monkeypatch):
     with pytest.raises(LLMError) as caught:
         LLMClient().chat("system", "user")
     assert "connection reset" in str(caught.value)
+
+
+def test_a_rate_limited_call_is_retried(monkeypatch):
+    """The provider's limit is per minute and per day, and a burst of calls
+    is a normal way to hit it."""
+    import urllib.error
+
+    calls = []
+
+    def fake_urlopen(request, timeout=None):
+        calls.append(json.loads(request.data))
+        if len(calls) == 1:
+            raise urllib.error.HTTPError(
+                request.full_url, 429, "rate limited", {}, None
+            )
+        return _FakeResponse(
+            {"choices": [{"message": {"content": '{"ok": true}'}}], "usage": {}}
+        )
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "openai/gpt-oss-20b")
+    monkeypatch.setenv("LLM_RETRY_SECONDS", "0")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    answer = LLMClient().complete_json("system", "user")
+
+    assert answer == {"ok": True}
+    assert len(calls) == 2
+
+
+def test_a_model_that_only_thinks_is_retried_with_a_bigger_budget(monkeypatch):
+    """gpt-oss spends its tokens on reasoning first. A model that thought and
+    never answered ran out of budget, and a bigger budget is the fix."""
+    calls = []
+
+    def fake_urlopen(request, timeout=None):
+        body = json.loads(request.data)
+        calls.append(body)
+        if len(calls) == 1:
+            return _FakeResponse(
+                {
+                    "choices": [{"message": {"content": "", "reasoning": "thinking"}}],
+                    "usage": {},
+                }
+            )
+        return _FakeResponse(
+            {"choices": [{"message": {"content": '{"ok": true}'}}], "usage": {}}
+        )
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "openai/gpt-oss-20b")
+    monkeypatch.setenv("LLM_MAX_TOKENS", "1000")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    answer = LLMClient().complete_json("system", "user")
+
+    assert answer == {"ok": True}
+    assert calls[1]["max_tokens"] == 2000
+
+
+class _FakeResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def read(self):
+        return json.dumps(self._payload).encode("utf-8")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False

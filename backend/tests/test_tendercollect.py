@@ -129,7 +129,7 @@ def test_a_boq_is_told_from_a_form_by_its_content():
     )
     form = make_pdf("Declaration regarding conflict of interest", tmp / "_form.pdf")
 
-    assert classify_document(boq, "x.pdf")[0] == "boq"
+    assert classify_document(boq, "x.pdf")[0] == "boq-pdf"
     assert classify_document(form, "x.pdf")[0] == "form"
     for name in ("_boq.pdf", "_form.pdf"):
         (tmp / name).unlink(missing_ok=True)
@@ -195,7 +195,7 @@ def test_a_fetched_document_is_frozen_with_its_hash_and_url(tmp_path, server, mo
 
     document = manifest.documents[0]
     assert document.status == "new"
-    assert document.kind == "boq"
+    assert document.kind == "boq-csv"
     assert document.sha256 and len(document.sha256) == 64
     assert document.retrieved_at
     frozen = tmp_path / "out" / "raw" / document.filename
@@ -215,5 +215,5 @@ def test_the_manifest_records_the_tender_and_its_documents(tmp_path, server, mon
     data = read_manifest(written)
     assert data["tender_id"] == "T1"
     assert data["category"] == "valve"
-    assert data["documents"][0]["kind"] == "boq"
+    assert data["documents"][0]["kind"] == "boq-csv"
     assert data["documents"][0]["sha256"]

@@ -231,3 +231,131 @@ def _cell(row: list[Optional[str]], index: Optional[int]) -> Optional[str]:
     if index is None or index >= len(row):
         return None
     return row[index]
+
+
+def read_specification(path: Path) -> list[dict]:
+    """The specification's rows, with the page each is on.
+
+    A specification is a table: "Sr. No. | Item | Descriptions | Qty | Unit".
+    The description column holds the requirement, and the row is what it
+    belongs to.
+
+    The header is not always the first row: a page opens with the title
+    ("BOQ", "Name of Supply") and the header is below it. And a table that
+    runs over a page break is not repeated, so the columns found on one
+    page are carried to the next (FR-T6).
+    """
+    import pdfplumber
+
+    rows: list[dict] = []
+    columns: Optional[dict] = None
+    with pdfplumber.open(path) as pdf:
+        for page_number, page in enumerate(pdf.pages, start=1):
+            for table in page.extract_tables() or []:
+                if not table:
+                    continue
+                header_row, found = _find_header_row(table)
+                if found:
+                    columns = found
+                if columns is None:
+                    # No header yet: the rows cannot be read as a table.
+                    continue
+                start = header_row + 1 if found else 0
+                for index, row in enumerate(table[start:], start=start):
+                    description = _clean_cell(_cell(row, columns.get("description")))
+                    if not description:
+                        continue
+                    rows.append(
+                        {
+                            "row": index,
+                            "page": page_number,
+                            "number": _clean_cell(_cell(row, columns.get("number"))),
+                            "title": _clean_cell(_cell(row, columns.get("title"))),
+                            "description": description,
+                            "quantity": _clean_cell(_cell(row, columns.get("quantity"))),
+                            "unit": _clean_cell(_cell(row, columns.get("unit"))),
+                            "row_text": " ".join(
+                                _clean_cell(cell) for cell in row if _clean_cell(cell)
+                            ),
+                        }
+                    )
+    return rows
+
+
+def _find_header_row(table: list[list[Optional[str]]]) -> tuple[int, Optional[dict]]:
+    """The row of a table that is its header, and the columns it names.
+
+    A table that opens with a title has its header further down, and a table
+    that continues from the previous page has none at all - which is why the
+    caller carries the columns over.
+    """
+    for index, row in enumerate(table[:5]):
+        header = [(_clean_cell(cell) or "").lower() for cell in row]
+        description_col = _find_column(
+            header,
+            ("item description", "descriptions", "description", "brief description", "particulars"),
+        )
+        if description_col is None:
+            continue
+        return index, {
+            "number": _find_column(
+                header, ("sr. no", "sr no", "s.no", "s.n", "item number", "item no", "serial")
+            ),
+            "title": _find_column(header, ("item title", "item name", "item")),
+            "description": description_col,
+            "quantity": _find_column(header, ("quantity", "qty", "quantiry")),
+            "unit": _find_column(header, ("unit",)),
+        }
+    return -1, None
+
+
+def assign_to_items(
+    rows: list[dict],
+    items: list[TenderItem],
+) -> tuple[list[RequirementRecord], list[dict]]:
+    """Attach a specification's requirements to the bill of quantities.
+
+    A requirement belongs to the item it names. The item is found by the
+    number the row carries; when the row has no number, the description is
+    matched against the item titles. A requirement that matches no item is
+    **not** guessed at: it is returned separately, so the ambiguity is
+    visible (FR-T9).
+    """
+    by_number = {item.item_id.rsplit(":", 1)[-1]: item for item in items}
+    by_title = {_title_key(item.title): item for item in items if item.title}
+
+    assigned: list[RequirementRecord] = []
+    unassigned: list[dict] = []
+
+    for row in rows:
+        number = (row.get("number") or "").strip()
+        item = by_number.get(number)
+        if item is None:
+            # The specification names the item in its own words, and the bill
+            # of quantities names it in the buyer's words. The two are the
+            # same item when they say the same thing.
+            item = by_title.get(_title_key(row.get("title") or ""))
+        if item is None:
+            item = by_title.get(_title_key(row.get("description") or ""))
+        if item is None:
+            unassigned.append(row)
+            continue
+        assigned.append(
+            RequirementRecord(
+                text=row["description"],
+                item_id=item.item_id,
+                extraction_method="table",
+                page=row.get("page"),
+                source_section=item.title or None,
+            )
+        )
+    return assigned, unassigned
+
+
+def _title_key(text: str) -> str:
+    """A title reduced to the words that identify it.
+
+    "GATE VALVE SIZE 150 MM CLASS 150" and "Gate Valve Size 150mm Class 150"
+    are the same item, and the sizes and classes are what say so.
+    """
+    return re.sub(r"[^a-z0-9]+", "", text.lower())
