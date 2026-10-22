@@ -46,10 +46,43 @@ class Settings(BaseSettings):
     # can point this at its own copy without touching the app.
     attribute_vocabulary_path: Optional[str] = None
 
-    # --- llm / embeddings (unused until the retrieval phase) ---
+    # --- llm / embeddings ---
+    # The LLM and the embedding model are reached over an OpenAI-compatible
+    # API, so the provider is a base URL and not a library. Groq serves
+    # gpt-oss; a local Ollama serves the embedding model; the HuggingFace
+    # router serves both if the account has credits.
     llm_api_key: Optional[str] = None
     llm_model: Optional[str] = None
-    embedding_model: Optional[str] = None
+    llm_base_url: str = "https://api.groq.com/openai/v1"
+    # gpt-oss is a reasoning model: the answer comes after the reasoning, and
+    # a small budget is spent entirely on reasoning.
+    llm_max_tokens: int = 2048
+    llm_timeout_seconds: int = 120
+    llm_temperature: float = 0.0
+    embedding_model: Optional[str] = "nomic-embed-text"
+    embedding_base_url: str = "http://localhost:11434"
+    # The dimension of the embedding model's vectors. It is a property of the
+    # model, so changing the model means a migration (D-6).
+    embedding_dimension: int = 768
+
+    # --- fetching attachments ---
+    # A tender links to documents on other hosts, and the collector follows
+    # those links. It only follows them on the hosts it is allowed to, and
+    # never to a private address.
+    fetch_allowed_domains: str = (
+        "gem.gov.in,bidplus.gem.gov.in,mkp.gem.gov.in,admin.gem.gov.in,"
+        "fulfilment.gem.gov.in,bidplus.gem.gov.in"
+    )
+    # The largest a fetched document may be. A tender attachment is a
+    # specification, not a dataset.
+    fetch_max_bytes: int = 50 * 1024 * 1024
+    fetch_timeout_seconds: int = 60
+    # A document already frozen, with this hash, is not fetched again.
+    fetch_cache_enabled: bool = True
+    # Hosts that are allowed to be private. A local server is on the loopback
+    # address, and a test needs to reach it. The default is empty: a
+    # production fetch reaches nothing on the machine's own network.
+    fetch_allowed_private_hosts: str = ""
 
     # --- api ---
     # Comma separated; kept as a string because pydantic-settings would try to

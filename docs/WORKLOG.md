@@ -399,3 +399,98 @@ first, and the content under it is no longer hidden.
   unchanged: "Material of body shall be SS316 with pressure rating 16 bar"
   still yields the pressure and not the grade. The LLM extractor is what
   fixes that, because it extracts the two attributes as two facts.
+
+---
+
+## Phase 4 — Tender ingestion (FR-12, FR-T1 to FR-T14)
+
+Phase 4 turns a tender into requirements. It starts with a survey, because
+the PRD says to measure the tenders before building for them, and the
+measurement changed the design.
+
+**The survey**
+
+24 GeM tender PDFs, 266 pages, 99.2% with a text layer, 59% holding a table.
+Every tender is a **wrapper**: it links to its bill of quantities and its
+specification and embeds nothing. The attachments are reachable, and they
+are what the phase reads.
+
+A link's file name says nothing. The same URL shape carries the BOQ in one
+tender, a checklist in another and a declaration in a third, so a document
+can only be identified by its content, and the buyers write the BOQ header
+four different ways.
+
+10 of the 24 tenders are **image-only** - no text on any page. OCR reads
+them: a scanned pump specification gives "The total range of pump speed
+shall be given by a RPM gauge ranging from 0-2000 RPM" in 0.7 seconds a
+page. Without OCR the phase would have found nothing in them.
+
+**Built**
+
+- `app/core/fetching.py` — the fetch fence: an allowlist of hosts, a
+  private-address check, no redirects, a size limit and a timeout (D-38).
+- `app/services/tendercollect.py` — finds the links, fetches what is
+  allowed, classifies each document by its content, and freezes it with its
+  URL, its hash and the date it was taken. A refused or failed fetch is
+  recorded as failed, with the reason (D-39, D-40).
+- `app/services/tenderingest.py` — the bilingual lines, the items, and the
+  requirement records. The item key is the composite `(tender_id, item_id)`
+  (FR-T9).
+- `app/services/llm.py` — the client: an OpenAI-compatible API, strict JSON,
+  and the reasoning model handled (D-41, D-42).
+- `app/api/tenders.py` — `GET /api/tenders/{id}/attachments` lists every
+  attachment with its name, URL and hash, and names the ones that are
+  missing; `POST` uploads the file a failed fetch could not get.
+- `requirements.txt` — `python-multipart` (D-14, the upload), PyMuPDF,
+  pdfplumber and python-docx (FR-8).
+
+**Tested**
+
+- 204 backend tests and 14 collector tests pass, 6 integration tests skipped
+  without `TEST_DATABASE_URL`.
+- The fetch fence is tested against a local server: a host off the
+  allowlist, a private address, a loopback address, a `file://` URL, a
+  redirect, a document over the size limit, and a server that lies about
+  its size.
+- The collection is tested: the links found, a refused fetch, a restricted
+  path, a frozen document with its hash, and the manifest.
+- The upload is tested: the listing, the missing attachments, an upload
+  that replaces the record it stands in for, and a file of the wrong kind.
+- The bilingual handling is tested: the English half, a line with no
+  English, and a mangled line.
+- The items are tested against all four BOQ header spellings.
+
+**The LLM and the embedding model**
+
+- The LLM is `openai/gpt-oss-20b` on Groq. `LLM_API_KEY` is a Groq key and
+  Groq serves gpt-oss under exactly the `openai/` prefix the configured
+  model name uses. It answers in about 1.4 seconds.
+- gpt-oss is a **reasoning** model: the answer comes in `message.content`
+  and the reasoning in `message.reasoning`, and a 32-token budget is spent
+  entirely on reasoning and returns an empty answer. The client asks for
+  room and keeps the reasoning apart.
+- The embedding model is the local Ollama's `nomic-embed-text` (768
+  dimensions), which is free and needs no account. The HuggingFace token
+  now has the inference permission, but the account has **no credits** (HTTP
+  402), so `BAAI/bge-small-en-v1.5` is a configuration change away, not a
+  code change.
+
+**Left open**
+
+- **The extraction prompt and the requirement assembly are not written.** The
+  LLM client, the span validation and the deterministic fallback are ready;
+  what the model is asked, and how its answer becomes requirements, is not.
+- **The tender is not written to the database.** The `tender`,
+  `tender_item`, `requirement` and `tender_page` rows, and the page ledger
+  (FR-T2), are not populated yet.
+- **There is no frontend.** The API exposes the attachments and the upload;
+  the screen that lists them and prompts for an upload does not exist, and
+  the whole React app is unbuilt.
+- **The report does not list the attachments.** The manifest holds every
+  attachment with its name, URL and hash, and the API returns them, but the
+  report generator is a later phase.
+- **Only 24 tenders' wrappers have been surveyed.** The attachments have
+  not been fetched into the corpus yet.
+- The item identity is read from the BOQ; where the BOQ and the
+  specification disagree about which item a requirement belongs to, the
+  requirement is not yet flagged as ambiguous (FR-T9).
