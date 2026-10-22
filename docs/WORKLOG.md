@@ -399,3 +399,75 @@ first, and the content under it is no longer hidden.
   unchanged: "Material of body shall be SS316 with pressure rating 16 bar"
   still yields the pressure and not the grade. The LLM extractor is what
   fixes that, because it extracts the two attributes as two facts.
+
+---
+
+## Phase 4 triage — the tenders, measured before building
+
+The PRD says to run a triage script over the tenders *before* building the
+tender pipeline, and to choose the tools from the evidence. This is what the
+evidence says.
+
+**The corpus of tenders**
+
+24 GeM tender PDFs, 266 pages. Two kinds: 15 named `GEM_<id>_<Category>.pdf`
+(pump, valve, motor) and 9 named by their content hash.
+
+| Measure | Result |
+| --- | --- |
+| Pages | 266 |
+| Pages with a text layer | 264 (99.2%) |
+| Pages needing OCR | 2 (0.8%) |
+| Pages containing tables | 158 (59%) |
+
+**What that changes**
+
+- **OCR is nearly irrelevant here.** 2 pages out of 266. The selective-OCR
+  path exists and works (Phase 3 proved it on the catalogues, where 5 of 59
+  documents were image-only), but it is not what this phase is about. The
+  catalogue corpus and the tender corpus have opposite shapes: the
+  catalogues are designed pages with almost no text layer, the tenders are
+  text documents that are mostly tables.
+- **The table pipeline is the main event.** 59% of pages hold a table, and
+  the requirements live in them: "Face to face distance 267mm", "Working
+  pressure 8 bar", "Cast carbon steel". FR-T6 is the path that matters.
+- **The tenders are bilingual.** Every heading is Hindi and English on the
+  same line, and the Devanagari text is sometimes mangled by the PDF's
+  encoding ("बड ववरण/Bid Details"). A classifier reading these lines has to
+  cope with that, and the English half is the one to read.
+- **The PDF is a wrapper, not the tender.** The specification and the BOQ are
+  *links* inside the wrapper ("Specification Document — View File", "BOQ
+  Detail Document — View File"), pointing at `mkp.gem.gov.in`. The wrapper
+  PDF has **zero embedded files**. So the requirements are not in the file
+  that was downloaded; they are one fetch away.
+
+**The attachments**
+
+- `specification_for_gem_...pdf` — the specification, 2 pages, a table of
+  "Sr. No. | Item Descriptions | Qty | Unit | Rate/Unit | Amount" where the
+  Item Description carries the requirement: "Flanged Gate valve 6" Class 150
+  Cast carbon steel Face to face distance 267mm".
+- `boq_item_sample_file_...csv` — the BOQ, with the columns `Item Number,
+  Item Title, Item Description, Item Quantity, Unit of Measure, Consignee ID,
+  Delivery Period`. **This is the `item_id` spine**: one row per BOQ item,
+  and "GATE VALVE SIZE 150 MM CLASS 150" is the item a requirement belongs
+  to.
+
+Both are reachable (HTTP 200) and both are what the phase must work on.
+
+**What this means for the phase**
+
+The tender pipeline is three things, in this order:
+
+1. **Fetch the attachments** a tender PDF links to, and record the links as
+   part of the tender. Without the specification, there is nothing to
+   extract: the wrapper PDF is a cover sheet.
+2. **Read the BOQ** into `tender_item` rows, one per item, with a stable
+   `item_id`. FR-T9: a requirement is only ever compared against models in
+   its own item's category.
+3. **Extract the requirements** from the specification table, per item, and
+   carry `item_id` through.
+
+The PRD's own cut order says to keep "triage, the table/prose split, item
+identity, clause classification and the recall check" and to cut
+cross-reference resolution and parallel batching first. That is the scope.
