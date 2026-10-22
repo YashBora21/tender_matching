@@ -400,3 +400,28 @@ def read_manifest(path: Path) -> dict:
         return {"documents": []}
     data.setdefault("documents", [])
     return data
+
+
+def manifest_identity(manifest: dict, tender_dir: Path) -> tuple[Optional[str], Optional[str]]:
+    """The hash and the name of a tender, from its manifest.
+
+    A manifest written before the wrapper was recorded has no hash of its
+    own, so it is taken from the wrapper file beside it. The tender is
+    identified by what it contains, and the wrapper is what it contains.
+    """
+    sha256 = manifest.get("wrapper_sha256")
+    filename = manifest.get("filename")
+    if not sha256:
+        wrapper = manifest.get("wrapper_path")
+        if wrapper and Path(wrapper).exists():
+            sha256 = sha256_file(Path(wrapper))
+        else:
+            # The wrapper sits beside the manifest it describes.
+            for candidate in sorted(tender_dir.glob("*.pdf")):
+                sha256 = sha256_file(candidate)
+                filename = filename or candidate.name
+                break
+    if not filename:
+        candidate = manifest.get("tender_id")
+        filename = f"{candidate}.pdf" if candidate else None
+    return sha256, filename

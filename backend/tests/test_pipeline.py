@@ -361,7 +361,8 @@ def test_a_tender_with_no_bill_of_quantities_fails_with_a_reason(tmp_path):
 
 def test_a_tender_with_no_specification_fails_with_a_reason(tmp_path):
     attachments, directory = _attachments(tmp_path)
-    # The bill of quantities is there, but the specification is not.
+    # The bill of quantities is a CSV, and the specification is not there.
+    # A CSV cannot be read as a specification: it has no pages.
     attachments = [
         dict(record, kind="boq-csv" if record["kind"] == "boq-csv" else "form")
         for record in attachments

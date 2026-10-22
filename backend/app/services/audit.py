@@ -21,7 +21,7 @@ from typing import Optional
 
 from app.core.logging import get_logger
 from app.services.tendercollect import read_manifest
-from app.services.pipeline import PipelineResult, run_pipeline
+from app.services.pipeline import PipelineResult, resolve_roles, run_pipeline
 
 logger = get_logger(__name__)
 
@@ -129,7 +129,7 @@ def audit_tender(
     # database's id and never with a name.
     tender_id = None
     if repo is not None:
-        tender_id = repo.resolve_tender(manifest)
+        tender_id = repo.resolve_tender(manifest, tender_dir)
     if tender_id is None:
         return TenderAudit(
             tender_id=name,
@@ -160,13 +160,13 @@ def audit_tender(
             failure=f"{type(exc).__name__}: {str(exc)[:80]}",
         )
 
-    kinds = {record.get("kind") for record in attachments}
+    roles = resolve_roles(attachments)
     return TenderAudit(
         tender_id=tender_id,
         filename=manifest.get("filename") or tender_dir.name,
         category=manifest.get("category", "unknown"),
-        spec_found=bool(kinds & {"boq-pdf", "spec"}),
-        boq_found=bool(kinds & {"boq-csv", "boq-pdf"}),
+        spec_found=roles.specification is not None,
+        boq_found=roles.boq is not None,
         attachments=len(attachments),
         attachments_failed=sum(
             1
@@ -232,15 +232,26 @@ def audit_corpus(
 
 @contextmanager
 def _isolated(repo):
-    """A savepoint, so one tender's failure does not abort the others."""
+    """A transaction of its own, so one tender's failure does not abort the
+    others.
+
+    A savepoint is not enough: the error often arrives when the work is
+    written, after the savepoint has closed, and the whole transaction is
+    then unusable. A separate transaction is thrown away with the tender
+    that caused it.
+    """
     if repo is None:
         yield
         return
     session = repo.session
-    savepoint = session.begin_nested()
+    # The session may already hold a transaction from an earlier read, so it
+    # is rolled back first: what follows is the tender's own work.
+    if session.in_transaction():
+        session.rollback()
+    transaction = session.begin()
     try:
         yield
-        savepoint.commit()
+        transaction.commit()
     except Exception:
-        savepoint.rollback()
+        transaction.rollback()
         raise

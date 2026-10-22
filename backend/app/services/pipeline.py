@@ -38,8 +38,7 @@ from app.services.tenderingest import (
     assign_to_items,
     english_half,
     is_mangled,
-    read_boq_csv,
-    read_boq_table,
+    read_boq_items,
     read_specification,
 )
 
@@ -128,6 +127,53 @@ def _attachment_by_kind(attachments: list[dict], *kinds: str) -> Optional[dict]:
     return None
 
 
+@dataclass
+class Roles:
+    """Which attachment plays which part of a tender.
+
+    The roles are resolved once, so the stage that reads the items and the
+    stage that reads the requirements agree on what is what. A scanned
+    document can be either, so it is tried as the bill of quantities first
+    and as the specification after.
+    """
+
+    boq: Optional[dict] = None
+    specification: Optional[dict] = None
+
+    @property
+    def has_both(self) -> bool:
+        return self.boq is not None and self.specification is not None
+
+
+def resolve_roles(attachments: list[dict]) -> Roles:
+    """Decide which attachment is the bill of quantities and which is the
+    specification.
+
+    A tender links to several documents and only some of them are the
+    requirements. The bill of quantities is a CSV or a table; a scanned
+    document is tried as the bill of quantities, and then as the
+    specification, because the same kind of file can be either.
+    """
+    roles = Roles()
+
+    roles.boq = _attachment_by_kind(attachments, "boq-csv", "boq-pdf")
+    if roles.boq is None:
+        roles.boq = _attachment_by_kind(attachments, "scanned")
+    if roles.boq is None:
+        roles.boq = _attachment_by_kind(attachments, "spec")
+
+    # The specification is the table of item descriptions, which is often the
+    # same file as the bill of quantities. A CSV cannot be read as a
+    # specification - it has no pages - so a PDF is preferred.
+    roles.specification = _attachment_by_kind(attachments, "boq-pdf")
+    if roles.specification is None:
+        roles.specification = _attachment_by_kind(attachments, "spec")
+    if roles.specification is None and roles.boq is not None:
+        if str(roles.boq.get("path") or "").lower().endswith(".pdf"):
+            roles.specification = roles.boq
+    return roles
+
+
 def stage_keys(
     attachments: list[dict],
     *,
@@ -150,12 +196,14 @@ def stage_keys(
     )
     attachments_key = content_hash("attachments", fetch_config, attachment_parts)
 
+    roles = resolve_roles(attachments)
+
     # The items: the bill of quantities and how it is read.
-    boq = _attachment_by_kind(attachments, "boq-csv", "boq-pdf")
+    boq = roles.boq
     items_key = content_hash("items", attachments_key, boq.get("sha256") if boq else "")
 
     # The requirements: the specification and the items they hang from.
-    spec = _attachment_by_kind(attachments, "boq-pdf", "spec")
+    spec = roles.specification
     requirements_key = content_hash(
         "requirements", items_key, spec.get("sha256") if spec else ""
     )
@@ -241,7 +289,8 @@ def run_pipeline(
         key=keys[STAGE_ITEMS],
         depends_on=keys[STAGE_ATTACHMENTS],
     )
-    boq = _attachment_by_kind(attachments, "boq-csv", "boq-pdf")
+    roles = resolve_roles(attachments)
+    boq = roles.boq
     if boq is None:
         items_state.status = STATUS_FAILED
         items_state.detail = _no_bill_reason(attachments)
@@ -274,7 +323,7 @@ def run_pipeline(
         key=keys[STAGE_REQUIREMENTS],
         depends_on=keys[STAGE_ITEMS],
     )
-    spec = _attachment_by_kind(attachments, "boq-pdf", "spec")
+    spec = roles.specification
     if spec is None:
         requirements_state.status = STATUS_FAILED
         requirements_state.detail = "no specification was found"
@@ -427,20 +476,7 @@ def _read_items(attachment: dict, tender_id: str, tender_dir: Path) -> list[Tend
     path = tender_dir / (attachment.get("path") or "")
     if not path.exists():
         return []
-    if path.suffix.lower() == ".csv":
-        return read_boq_csv(path, tender_id, attachment.get("category") or "unknown")
-    import pdfplumber
-
-    items: list[TenderItem] = []
-    try:
-        with pdfplumber.open(path) as pdf:
-            for page in pdf.pages:
-                for table in page.extract_tables() or []:
-                    items.extend(read_boq_table(table, tender_id, "unknown"))
-    except Exception as exc:  # noqa: BLE001 - a file that cannot be read gives no items
-        logger.warning("could not read the items of %s: %s", path, exc)
-        return []
-    return items
+    return read_boq_items(path, tender_id, attachment.get("category") or "unknown")
 
 
 def _read_specification(attachment: dict, tender_dir: Path) -> list[dict]:

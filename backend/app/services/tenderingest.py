@@ -171,6 +171,158 @@ def read_boq_csv(path: Path, tender_id: str, category: str = "unknown") -> list[
     return items
 
 
+def read_boq_items(path: Path, tender_id: str, category: str = "unknown") -> list[TenderItem]:
+    """The items of a bill of quantities, whatever file it is.
+
+    A bill of quantities is a CSV, or a PDF with a table, or a scanned PDF
+    whose table is an image. The first is read as a CSV, the second as a
+    table, and the third through OCR, so a tender is not skipped because
+    the buyer scanned it (FR-9).
+    """
+    if path.suffix.lower() == ".csv":
+        return read_boq_csv(path, tender_id, category)
+
+    import pdfplumber
+
+    items: list[TenderItem] = []
+    try:
+        with pdfplumber.open(path) as pdf:
+            for page in pdf.pages:
+                for table in page.extract_tables() or []:
+                    items.extend(read_boq_table(table, tender_id, category))
+    except Exception:  # noqa: BLE001 - a file that cannot be read gives no items
+        items = []
+
+    if not items:
+        # No table was found. The document may be scanned, and a scanned
+        # page is read through OCR.
+        items = _read_scanned_items(path, tender_id, category)
+    return items
+
+
+def _read_scanned_items(
+    path: Path, tender_id: str, category: str = "unknown"
+) -> list[TenderItem]:
+    """The items of a scanned bill of quantities.
+
+    A scanned bill of quantities is a list of items, one under the other.
+    The number of each is read from the line that names it, and the
+    description from the lines that follow.
+    """
+    import pymupdf
+
+    from app.services.docparser import ocr_page
+
+    items: list[TenderItem] = []
+    seen: set[str] = set()
+    try:
+        document = pymupdf.open(path)
+    except Exception:  # noqa: BLE001 - a file that cannot be read has no items
+        return items
+    try:
+        for page in document:
+            text = ocr_page(page)
+            if not text:
+                continue
+            for number, title, description in _scanned_item_lines(text):
+                item_id = item_id_for(tender_id, number)
+                if item_id in seen:
+                    # The same number twice: a scanner reads a two-column
+                    # table as two columns of text, so a number can be seen
+                    # again with a different title beside it.
+                    continue
+                seen.add(item_id)
+                items.append(
+                    TenderItem(
+                        item_id=item_id,
+                        title=title,
+                        description=description,
+                        category=category,
+                        source_row=number,
+                    )
+                )
+    finally:
+        document.close()
+    return items
+
+
+# A line that names an item: a number, then words.
+_ITEM_LINE = re.compile(r"^\s*(\d{1,3})[.)]\s*(.{4,})$")
+# A line that is only a number: the item number on its own, and the item
+# named on the line below. A scanner reads a two-column table as two columns
+# of text, so the number and the words arrive separately.
+_NUMBER_LINE = re.compile(r"^\s*(\d{1,3})[.)]\s*$")
+
+
+def _scanned_item_lines(text: str) -> list[tuple[str, str, str]]:
+    """The items on an OCRed page, with the lines that describe each.
+
+    A scanned bill of quantities names an item and then describes it. The
+    number names the item and the description is what the lines below it say.
+    The number and the words arrive on separate lines when the table was
+    read as two columns, and on the same line when it was not.
+
+    A line that states no specification is not an item: a scanned page
+    carries the buyer's letterhead, the signature block and the footer as
+    well as the requirements, and those are numbered too.
+    """
+    lines = [" ".join(line.split()) for line in text.split("\n")]
+    lines = [line for line in lines if line]
+
+    found: list[tuple[str, str, str]] = []
+    current: Optional[tuple[str, str]] = None
+    pending_number: Optional[str] = None
+    for line in lines:
+        match = _ITEM_LINE.match(line)
+        if match:
+            if current is not None and _states_a_specification(current[1]):
+                found.append((current[0], current[1], ""))
+            current = (match.group(1), match.group(2))
+            pending_number = None
+            continue
+        number_only = _NUMBER_LINE.match(line)
+        if number_only:
+            if current is not None and _states_a_specification(current[1]):
+                found.append((current[0], current[1], ""))
+                current = None
+            pending_number = number_only.group(1)
+            continue
+        if pending_number is not None:
+            # The number was on its own line and this is the item it names.
+            current = (pending_number, line)
+            pending_number = None
+            continue
+        if current is not None:
+            number, title = current
+            found.append((number, title, line))
+            current = None
+    if current is not None and _states_a_specification(current[1]):
+        found.append((current[0], current[1], ""))
+    return found
+
+
+# The words that say a line states a specification. A requirement states a
+# value, a limit or an obligation; a letterhead states neither.
+_SPECIFICATION_WORDS = re.compile(
+    r"\b(?:shall|should|must|required|not\s+less|not\s+more|not\s+exceed|"
+    r"at\s+least|at\s+most|min(?:imum)?|max(?:imum)?|rated|tolerance|"
+    r"mm|cm|mtr|meter|metre|bar|kg|rpm|volt|amp|kw|%|degree|"
+    r"no\.?\s|nos\.?|range|with|material|construction|size|capacity|"
+    r"efficiency|head|discharge|pressure|voltage|frequency|flow)\b",
+    re.IGNORECASE,
+)
+
+
+def _states_a_specification(text: str) -> bool:
+    """True when a line states something that can be compared.
+
+    A scanned page carries the buyer's letterhead and the signature block
+    as well as the requirements, and the letterhead is numbered too. A line
+    that names no value and no obligation is not an item.
+    """
+    return bool(_SPECIFICATION_WORDS.search(text))
+
+
 def read_boq_table(
     rows: list[list[Optional[str]]],
     tender_id: str,

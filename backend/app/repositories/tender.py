@@ -19,6 +19,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from sqlalchemy import delete, insert, select, update
@@ -128,23 +129,17 @@ class TenderRepo:
         ).first()
         return str(row[0]) if row else None
 
-    def resolve_tender(self, manifest: dict) -> Optional[str]:
+    def resolve_tender(self, manifest: dict, tender_dir: Path) -> Optional[str]:
         """The tender's id, from the manifest that describes it.
 
         A manifest names the tender by its file, and the database identifies
         it by the hash of that file. The two are reconciled here, so the rest
         of the pipeline works with the database's id and never with a name.
         """
-        filename = manifest.get("filename")
-        sha256 = manifest.get("wrapper_sha256")
+        from app.services.tendercollect import manifest_identity
+
+        sha256, filename = manifest_identity(manifest, tender_dir)
         if not sha256:
-            # A manifest with no wrapper hash describes a tender whose file
-            # is not known. It is keyed by its name instead.
-            if not filename:
-                return None
-            existing = self.find_tender_by_filename(filename)
-            if existing:
-                return existing
             return None
         return self.upsert_tender(
             filename=filename or "",
@@ -228,6 +223,10 @@ class TenderRepo:
 
         The requirements of the tender are removed first: they point at the
         items, and an item that is gone takes its requirements with it.
+
+        A number that appears twice is written once: the key is the tender
+        and the number, and a bill of quantities that repeats a number is a
+        document with a mistake in it, not a reason to lose the tender.
         """
         self.session.execute(
             delete(requirement).where(requirement.c.tender_id == tender_id)
@@ -237,6 +236,16 @@ class TenderRepo:
         )
         if not items:
             return 0
+
+        unique: list[dict] = []
+        seen: set[str] = set()
+        for item in items:
+            key = item["item_id"]
+            if key in seen:
+                continue
+            seen.add(key)
+            unique.append(item)
+
         self.session.execute(
             insert(tender_item),
             [
@@ -247,10 +256,10 @@ class TenderRepo:
                     "category": item.get("category"),
                     "boq_ref": item.get("boq_ref"),
                 }
-                for item in items
+                for item in unique
             ],
         )
-        return len(items)
+        return len(unique)
 
     def list_items(self, tender_id: str) -> list[dict]:
         rows = self.session.execute(

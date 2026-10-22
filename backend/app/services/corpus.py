@@ -80,7 +80,12 @@ def process_corpus(
     force: bool = False,
     audit_only: bool = False,
 ) -> AuditReport:
-    """Process every tender in a corpus and audit the result."""
+    """Process every tender in a corpus and audit the result.
+
+    The session is not wrapped in a transaction here: each tender runs in
+    one of its own, so a tender that fails is rolled back alone and the
+    rest of the corpus is still measured.
+    """
     repo = TenderRepo(session)
     cache = LLMCache(session)
 
@@ -121,10 +126,21 @@ def main(argv: Optional[list[str]] = None) -> int:
     configure_logging(settings.log_level)
     corpus_dir = Path(args.corpus_dir) if args.corpus_dir else _corpus_dir()
 
-    with session_scope() as session:
+    # The session is not wrapped in a transaction: each tender runs in one
+    # of its own, so a tender that fails does not take the corpus with it.
+    from sqlalchemy.orm import Session
+
+    from app.repositories.db import build_engine
+
+    engine = build_engine()
+    session = Session(engine, future=True)
+    try:
         report = process_corpus(
             corpus_dir, session=session, force=args.force, audit_only=args.audit
         )
+    finally:
+        session.close()
+        engine.dispose()
 
     if args.json:
         print(

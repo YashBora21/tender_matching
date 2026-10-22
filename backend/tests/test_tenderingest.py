@@ -87,6 +87,49 @@ def test_a_row_without_a_number_is_not_an_item():
     assert [item.item_id for item in items] == ["2"]
 
 
+def test_a_scanned_page_without_specifications_gives_no_items(monkeypatch, tmp_path):
+    """A scanned page carries the buyer's letterhead and the signature block
+    as well as the requirements, and those are numbered too. A line that
+    states no specification is not an item."""
+    from app.services import tenderingest
+
+    scanned = "1.\nShow Cause Notice\n2.\n0 Circulation of the names of Agencies\n"
+    monkeypatch.setattr("app.services.docparser.ocr_page", lambda page: scanned)
+
+    path = tmp_path / "scanned.pdf"
+    import pymupdf
+
+    document = pymupdf.open()
+    document.new_page()
+    document.save(path)
+    document.close()
+
+    items = tenderingest.read_boq_items(path, "T1")
+
+    assert items == []
+
+
+def test_a_repeated_item_number_is_written_once(monkeypatch, tmp_path):
+    """A scanner reads a two-column table as two columns of text, so a
+    number can be seen twice."""
+    from app.services import tenderingest
+
+    scanned = "1.\nGATE VALVE 150 MM\nFlanged gate valve\n1.\nGATE VALVE 150 MM\nFlanged gate valve\n"
+    monkeypatch.setattr("app.services.docparser.ocr_page", lambda page: scanned)
+
+    path = tmp_path / "scanned.pdf"
+    import pymupdf
+
+    document = pymupdf.open()
+    document.new_page()
+    document.save(path)
+    document.close()
+
+    items = tenderingest.read_boq_items(path, "T1")
+
+    assert [item.item_id for item in items] == ["1"]
+
+
 def test_a_requirement_carries_its_item():
     requirement = RequirementRecord(
         text="Body of body shall be SS316 with pressure rating 16 bar",
@@ -95,3 +138,55 @@ def test_a_requirement_carries_its_item():
     )
     assert requirement.item_id == "GEM_1:3"
     assert requirement.requirement_type is RequirementType.TECHNICAL
+
+
+def test_a_scanned_bill_of_quantities_gives_its_items(monkeypatch, tmp_path):
+    """A bill of quantities the buyer scanned is still a bill of quantities.
+
+    The number of an item arrives on its own line when the table was read as
+    two columns, and the item is named on the line below.
+    """
+    from app.services import tenderingest
+
+    scanned = "1.\nGATE VALVE SIZE 150 MM\nFlanged gate valve 6 inch\n2.\nCHECK VALVE\nWafer check valve\n"
+    monkeypatch.setattr(
+        "app.services.docparser.ocr_page", lambda page: scanned
+    )
+
+    path = tmp_path / "scanned.pdf"
+    import pymupdf
+
+    document = pymupdf.open()
+    document.new_page()
+    document.save(path)
+    document.close()
+
+    items = tenderingest.read_boq_items(path, "T1")
+
+    assert [item.item_id for item in items] == ["1", "2"]
+    assert items[0].title.startswith("GATE VALVE")
+    assert "Flanged gate valve" in items[0].description
+
+
+def test_a_scanned_bill_of_quantities_with_inline_numbers(monkeypatch, tmp_path):
+    """The number and the words arrive on one line when the table was not
+    read as two columns."""
+    from app.services import tenderingest
+
+    scanned = "1. GATE VALVE SIZE 150 MM\nFlanged gate valve 6 inch\n"
+    monkeypatch.setattr(
+        "app.services.docparser.ocr_page", lambda page: scanned
+    )
+
+    path = tmp_path / "scanned.pdf"
+    import pymupdf
+
+    document = pymupdf.open()
+    document.new_page()
+    document.save(path)
+    document.close()
+
+    items = tenderingest.read_boq_items(path, "T1")
+
+    assert [item.item_id for item in items] == ["1"]
+    assert items[0].title.startswith("GATE VALVE")
