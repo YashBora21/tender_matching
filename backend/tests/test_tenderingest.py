@@ -38,10 +38,11 @@ def test_a_mangled_line_is_flagged_and_is_not_a_missing_requirement():
     assert is_mangled("Cast steel body, 16 bar") is False
 
 
-def test_the_item_key_is_the_tender_and_the_item():
-    """The composite key: a requirement belongs to the item it was written
-    under (FR-T9)."""
-    assert item_id_for("GEM_9671792", "3") == "GEM_9671792:3"
+def test_the_item_key_is_the_number_within_the_tender():
+    """The item is identified by the tender it belongs to and its number
+    within it. The tender is a column, so the key is the number alone
+    (FR-T9)."""
+    assert item_id_for("GEM_9671792", "3") == "3"
 
 
 def test_a_boq_csv_gives_the_items(tmp_path):
@@ -57,11 +58,11 @@ def test_a_boq_csv_gives_the_items(tmp_path):
     items = read_boq_csv(path, "GEM_1", "valve")
 
     assert len(items) == 2
-    assert items[0].item_id == "GEM_1:1"
+    assert items[0].item_id == "1"
     assert items[0].title == "GATE VALVE SIZE 150 MM CLASS 150"
     assert items[0].quantity == "13"
     assert items[0].unit == "pieces"
-    assert items[1].item_id == "GEM_1:2"
+    assert items[1].item_id == "2"
 
 
 def test_a_boq_table_gives_the_items_whatever_the_header_says():
@@ -76,14 +77,14 @@ def test_a_boq_table_gives_the_items_whatever_the_header_says():
         rows = [header, ["1", "GATE VALVE 150MM", "Flanged gate valve", "13"]]
         items = read_boq_table(rows, "GEM_1", "valve")
         assert len(items) == 1, header
-        assert items[0].item_id == "GEM_1:1"
+        assert items[0].item_id == "1"
         assert items[0].title
 
 
 def test_a_row_without_a_number_is_not_an_item():
     rows = [["Item No", "Item Title"], ["", "no number"], ["2", "GATE VALVE"]]
     items = read_boq_table(rows, "GEM_1")
-    assert [item.item_id for item in items] == ["GEM_1:2"]
+    assert [item.item_id for item in items] == ["2"]
 
 
 def test_a_requirement_carries_its_item():

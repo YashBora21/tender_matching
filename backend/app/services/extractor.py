@@ -33,6 +33,10 @@ from app.services.tenderingest import RequirementRecord, english_half, is_mangle
 
 logger = get_logger(__name__)
 
+# The version of the prompt below. A change to the prompt is a change to
+# every answer, so it is part of the cache key (FR-12, FR-34).
+PROMPT_VERSION = "1"
+
 # The types a clause can be, and what happens to each (FR-14). Only the
 # technical and certification ones go to matching; the commercial and
 # eligibility ones are listed separately; the unknown ones go to review.

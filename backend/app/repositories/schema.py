@@ -23,6 +23,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
     Integer,
     MetaData,
@@ -217,12 +218,37 @@ tender = Table(
 tender_item = Table(
     "tender_item",
     metadata,
+    # The composite key: an item is numbered within its tender, and two
+    # tenders both have an item "1".
+    Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False, primary_key=True),
     Column("item_id", String(64), primary_key=True),
-    Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False),
     Column("name", String(255), nullable=False),
     Column("category", String(255)),
     Column("boq_ref", String(64)),
     Index("ix_tender_item_tender_id", "tender_id"),
+)
+
+# The documents a tender links to. A tender PDF is a wrapper: it names its
+# bill of quantities and its specification and embeds neither.
+tender_attachment = Table(
+    "tender_attachment",
+    metadata,
+    _uuid_pk(),
+    Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False),
+    Column("url", Text, nullable=False),
+    Column("filename", String(512)),
+    Column("path", Text),
+    Column("sha256", String(64)),
+    # The role the document plays: boq-csv, boq-pdf, spec, form, scanned.
+    Column("kind", String(64)),
+    # The outcome: new, unchanged, changed, failed, restricted, manual.
+    Column("status", String(64), nullable=False),
+    Column("note", Text),
+    Column("bytes", Integer),
+    Column("pages", Integer),
+    Column("retrieved_at", DateTime(timezone=True)),
+    Index("ix_tender_attachment_tender_id", "tender_id"),
+    UniqueConstraint("tender_id", "url", name="uq_tender_attachment_tender_url"),
 )
 
 tender_page = Table(
@@ -235,6 +261,11 @@ tender_page = Table(
     Column("quality_warnings", JSONB, nullable=False, server_default="[]"),
     Column("ledger_status", _enum(LedgerStatus, "ledger_status"), nullable=False),
     Column("skip_reason", Text),
+    # The attachment the page came from. A tender is a wrapper: its pages
+    # live in the documents it links to, and a page without one cannot be
+    # said to have come from anywhere.
+    Column("attachment_id", Uuid(), ForeignKey("tender_attachment.id")),
+    Index("ix_tender_page_tender_id", "tender_id"),
 )
 
 tender_table = Table(
@@ -254,7 +285,9 @@ requirement = Table(
     metadata,
     _uuid_pk(),
     Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False),
-    Column("item_id", String(64), ForeignKey("tender_item.item_id")),
+    # The item is identified by the tender it belongs to and its number
+    # within that tender.
+    Column("item_id", String(64)),
     Column("parent_requirement_id", Uuid(), ForeignKey("requirement.id")),
     Column("source_table_id", Uuid(), ForeignKey("tender_table.id")),
     Column("source_row_id", String(128)),
@@ -277,8 +310,18 @@ requirement = Table(
     Column("review_reason", Text),
     Column("extraction_version", String(64), nullable=False),
     Column("schema_version", String(64), nullable=False),
+    # What read this requirement, and what it read. The hash is of the input
+    # the model was given, so a cached answer is reused only when the input
+    # and everything that read it are the same.
+    Column("model", String(128)),
+    Column("prompt_version", String(64)),
+    Column("input_hash", String(64)),
     Index("ix_requirement_tender_id", "tender_id"),
     Index("ix_requirement_item_id", "item_id"),
+    # The item is identified by its tender and its number within it.
+    ForeignKeyConstraint(
+        ["tender_id", "item_id"], ["tender_item.tender_id", "tender_item.item_id"]
+    ),
 )
 
 extraction_batch = Table(
@@ -293,6 +336,31 @@ extraction_batch = Table(
     Column("prompt_version", String(64)),
     Column("output_hash", String(64)),
     Index("ix_extraction_batch_tender_id", "tender_id"),
+    # One row per stage per tender: the checkpoint a resumed run reads.
+    UniqueConstraint("tender_id", "section", name="uq_extraction_batch_tender_section"),
+)
+
+# A cached LLM answer. The key is the content of the input plus the model,
+# the prompt and the schema that read it, so a change to any of them is a
+# different answer and not a stale one.
+llm_cache = Table(
+    "llm_cache",
+    metadata,
+    _uuid_pk(),
+    Column("input_hash", String(64), nullable=False),
+    Column("model", String(128), nullable=False),
+    Column("prompt_version", String(64), nullable=False),
+    Column("schema_version", String(64), nullable=False),
+    Column("output", JSONB, nullable=False),
+    Column("created_at", DateTime(timezone=True), server_default=func.now()),
+    Index("ix_llm_cache_input_hash", "input_hash"),
+    UniqueConstraint(
+        "input_hash",
+        "model",
+        "prompt_version",
+        "schema_version",
+        name="uq_llm_cache_key",
+    ),
 )
 
 # --- run and results --------------------------------------------------------

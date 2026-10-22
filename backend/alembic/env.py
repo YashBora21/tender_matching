@@ -46,6 +46,20 @@ def run_migrations_offline() -> None:
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section, {})
     configuration["sqlalchemy.url"] = get_url()
+
+    # A connection given by the caller is used as it is, so a test can run the
+    # migration inside a transaction and roll it back.
+    existing = config.attributes.get("connection")
+    if existing is not None:
+        context.configure(
+            connection=existing,
+            target_metadata=target_metadata,
+            compare_type=True,
+        )
+        with context.begin_transaction():
+            context.run_migrations()
+        return
+
     connectable = engine_from_config(
         configuration, prefix="sqlalchemy.", poolclass=pool.NullPool
     )

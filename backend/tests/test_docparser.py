@@ -122,7 +122,7 @@ def test_a_page_with_no_text_is_ocr_flagged(tmp_path, monkeypatch):
     def fake_ocr(page):
         return "Body of body shall be SS316"
 
-    monkeypatch.setattr("app.services.docparser._ocr_page", fake_ocr)
+    monkeypatch.setattr("app.services.docparser.ocr_page", fake_ocr)
     # A page whose text layer is this short is treated as scanned.
     monkeypatch.setenv("INGEST_MIN_CHARS_FOR_TEXT", "10000")
 
@@ -138,7 +138,7 @@ def test_a_page_that_cannot_be_read_is_reported_as_failed(tmp_path, monkeypatch)
     path = tmp_path / "doc.pdf"
     _pdf_with_two_pages(path)
 
-    monkeypatch.setattr("app.services.docparser._ocr_page", lambda page: None)
+    monkeypatch.setattr("app.services.docparser.ocr_page", lambda page: None)
     monkeypatch.setenv("INGEST_MIN_CHARS_FOR_TEXT", "10000")
 
     parsed = parse_document(path)

@@ -136,10 +136,10 @@ def test_a_tender_is_read_from_its_attachments(tmp_path):
     result = run_slice("T1", directory)
 
     assert len(result.items) == 2
-    assert result.items[0].item_id == "T1:1"
+    assert result.items[0].item_id == "1"
     assert result.items[0].quantity == "13"
     assert len(result.requirements) == 2
-    assert result.requirements[0].item_id == "T1:1"
+    assert result.requirements[0].item_id == "1"
     assert "Face to face distance 267mm" in result.requirements[0].text
 
 

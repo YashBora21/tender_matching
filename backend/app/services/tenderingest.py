@@ -93,6 +93,9 @@ class RequirementRecord:
     page: Optional[int] = None
     source_section: Optional[str] = None
     extraction_method: str = "table"
+    # How sure the reading is. A requirement read from a text layer is
+    # certain; one read from a scanned page is not (FR-9).
+    confidence: Optional[float] = None
     # True when the line could not be read. It is flagged, never counted as
     # a requirement that was not stated.
     unreadable: bool = False
@@ -118,8 +121,13 @@ class TenderIngestion:
 
 
 def item_id_for(tender_id: str, number: str) -> str:
-    """The composite key of an item: the tender and the item number."""
-    return f"{tender_id}:{number}"
+    """The key of an item within its tender.
+
+    The tender is a separate column, so the item is identified by its number
+    alone: two tenders both have an item "1", and the pair is what tells them
+    apart (FR-T9).
+    """
+    return number
 
 
 def _clean_cell(value: Optional[str]) -> str:
@@ -244,6 +252,10 @@ def read_specification(path: Path) -> list[dict]:
     ("BOQ", "Name of Supply") and the header is below it. And a table that
     runs over a page break is not repeated, so the columns found on one
     page are carried to the next (FR-T6).
+
+    A scanned specification has no table to find. Its pages are read through
+    OCR and the rows are taken from the text, so a scanned document is read
+    like any other (FR-9).
     """
     import pdfplumber
 
@@ -279,7 +291,67 @@ def read_specification(path: Path) -> list[dict]:
                             ),
                         }
                     )
+
+    if not rows:
+        # No table was found. The document may be scanned, and a scanned
+        # page is read through OCR (FR-9).
+        rows = _read_scanned_specification(path)
     return rows
+
+
+def _read_scanned_specification(path: Path) -> list[dict]:
+    """The rows of a specification whose pages are images.
+
+    A scanned page has no table to find, so the pages are read through OCR
+    and the rows are taken from the text.
+    """
+    import pymupdf
+
+    from app.services.docparser import ocr_page
+
+    rows: list[dict] = []
+    try:
+        document = pymupdf.open(path)
+    except Exception:  # noqa: BLE001 - a file that cannot be read has no rows
+        return rows
+    try:
+        for page_number, page in enumerate(document, start=1):
+            text = ocr_page(page)
+            if not text:
+                continue
+            for index, line in enumerate(_ocr_lines(text)):
+                rows.append(
+                    {
+                        "row": index,
+                        "page": page_number,
+                        "number": "",
+                        "title": "",
+                        "description": line,
+                        "quantity": "",
+                        "unit": "",
+                        "row_text": line,
+                    }
+                )
+    finally:
+        document.close()
+    return rows
+
+
+def _ocr_lines(text: str) -> list[str]:
+    """The readable lines of an OCRed page.
+
+    The lines of a scanned specification are short: a title, a value, a note.
+    The ones worth keeping are the ones that carry a specification.
+    """
+    lines = []
+    for raw in text.split("\n"):
+        line = " ".join(raw.split())
+        if len(line) < 8:
+            continue
+        if not re.search(r"\d", line):
+            continue
+        lines.append(line)
+    return lines
 
 
 def _find_header_row(table: list[list[Optional[str]]]) -> tuple[int, Optional[dict]]:
