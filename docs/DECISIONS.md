@@ -676,3 +676,62 @@ failures, and the report said nothing about the real cause.
 *Alternatives:* One transaction for the whole corpus — rejected, a single
 bad tender costs the whole run. A transaction per tender without a
 savepoint — rejected, the abort still poisons the session.
+
+---
+
+**D-50 — The two searches are merged by rank, not by score.**
+*Decision:* Reciprocal rank fusion: a chunk's score is the sum of what each
+search gives it for its position. The keyword search is OR over the words,
+with the common words left out; the exact tokens are boosted.
+*Why:* A requirement names several things at once - "Body shall be SS316
+with pressure rating 16 bar" - and no datasheet sentence has all of them,
+so a search that ANDs the words finds nothing at all. And the two searches'
+scores are not comparable: a full-text rank and a cosine distance are
+different scales, and a fixed weighting between them would be a guess.
+Only the order is used, so nothing has to be calibrated.
+*Alternatives:* One search only — rejected, the PRD asks for both, and
+keyword alone misses "Face to Face: ASME B16.10" for a requirement that
+says "face to face distance". A weighted sum of the raw scores — rejected,
+the scales are not comparable and the weights would be a guess.
+
+---
+
+**D-51 — The exact tokens are worth more than the common words.**
+*Decision:* The words that identify a product - a model number, a standard
+code, a material grade, a size - are boosted over the full-text rank. A
+token is looked for in three forms: as it stands ("SS316"), with its parts
+joined ("150mm"), and, when it carries a number, the number alone ("150").
+*Why:* A requirement that names "SS316" wants the datasheet that says
+"SS316", not the many that say "stainless". The full-text rank cannot tell
+them apart, because "stainless" is the common word and "ss316" is the one
+that identifies the product. The number alone matters because a datasheet
+table writes the value in the cell and the unit in the column header, so
+"267 mm" never appears in the text and "267" does.
+*Alternatives:* Ranking by the full-text score alone — rejected, as above.
+Matching the joined form only — rejected, a corpus writes both ways.
+
+---
+
+**D-52 — The embedding model is the local one.**
+*Decision:* The corpus is embedded with the local Ollama's
+`nomic-embed-text` (768 dimensions), which is served without an account.
+*Why:* The HuggingFace router needs a token *and* credits: the account
+answers 402, and the anonymous path answers with a web page rather than
+JSON. The local model needs neither, and it is the same shape of service
+(the embedding is a vector, the dimension is a property of the model).
+*Alternatives:* The HuggingFace model — rejected, it cannot be reached
+without credits. A hosted embedding provider — rejected, it needs an
+account and an API key for a computation the local machine does for free.
+
+---
+
+**D-53 — A rate-limited call waits as long as the provider says.**
+*Decision:* The retry delay is read from the error when the provider gives
+one ("Please try again in 24.9s"), and the fixed backoff stands when it
+does not.
+*Why:* The provider's limit is per minute and it knows when the limit
+resets. A fixed five second backoff retried into an exhausted limit, and
+every retry was another call against the same limit.
+*Alternatives:* A longer fixed backoff — rejected, the wait is then either
+too long for a fast limit or too short for a slow one. Retrying without a
+wait — rejected, that is what made it fail.

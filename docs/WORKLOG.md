@@ -712,3 +712,67 @@ The audit reports, per tender, whether its specification and its bill of
 quantities were found, how many items and requirements it produced, and why
 it failed if it did - and then ranks the failure causes, so the thing that
 goes wrong most often is the thing that is looked at first.
+
+---
+
+## Phase 6 — Retrieval, extraction and matching (FR-11, FR-17 to FR-28)
+
+Phase 6 answers a requirement from the corpus. It is the phase where the
+pieces from Phase 1 - the verifier, the comparison registry, the scoring -
+are finally given something to work on.
+
+**Built**
+
+- `app/services/retrieval.py` (FR-17 to FR-20) — the keyword search, the
+  semantic search, and the merge that combines them. The exact tokens a
+  requirement carries are boosted, and the words are ORed rather than ANDed.
+- `app/services/facts.py` (FR-22) — the LLM reads a passage and states
+  what it documents, with the sentence it says it in. The answer is strict
+  JSON, validated by Pydantic; an answer that is not JSON is a failed
+  extraction, never a capability that was never stated.
+- `app/services/matching.py` (FR-21 to FR-28) — retrieve, extract, verify
+  through the four layers, compare deterministically. The LLM never decides
+  whether a capability matches.
+- `app/services/embeddings.py` (FR-11) — the corpus is embedded once, in
+  batches, and a chunk that already has an embedding is left alone.
+- Migration `0004_chunk_embedding` — the embedding column gets its
+  dimension and an HNSW index (D-6).
+
+**Three defects the corpus found**
+
+- **The keyword search found nothing.** The words were ANDed, and a
+  requirement names several things at once, so no datasheet sentence
+  matched. They are ORed now, and the common words are left out: a chunk
+  that says "the" matches every requirement.
+- **A datasheet's value never matched.** A requirement says "267mm" and the
+  datasheet writes "267" in the cell with the unit in the column header, so
+  "267 mm" appears nowhere. A token is looked for in three forms now.
+- **The rank put a page footer above the answer.** The full-text rank
+  cannot tell "stainless" from "SS316", because the first is the common
+  word and the second is the one that identifies the product. The exact
+  tokens are boosted over the rank.
+
+**The rate limit**
+
+The provider's limit is 8,000 tokens a minute and it says when the limit
+resets. A fixed five second backoff retried into it, and every retry was
+another call against the same exhausted limit. The retry now waits as long
+as the provider says (D-53).
+
+**The embedding model**
+
+The local Ollama's `nomic-embed-text` (768 dimensions) is served without an
+account. The HuggingFace router needs a token *and* credits: the account
+answers 402, and the anonymous path answers with a web page rather than
+JSON. The corpus is embedded with the local model, and the dimension in the
+migration matches it (D-52).
+
+**Tested**
+
+252 backend tests and 14 collector tests pass. The retrieval tests cover
+the tokens that identify a product, the merge of the two searches, and the
+exact-token boost. The fact tests cover a fact read from a passage, a
+passage that states nothing, an answer that is not JSON, and an answer
+with a field the schema does not have. The matching tests cover a
+requirement nothing answers, a quote that is not on the page it names, and
+a failed extraction.
