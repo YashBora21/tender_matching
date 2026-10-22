@@ -88,6 +88,23 @@ def test_the_client_asks_for_json_and_reads_the_answer(monkeypatch):
     assert sent["body"]["max_tokens"] >= 512
 
 
+def test_a_rate_limited_call_waits_as_long_as_the_provider_says(monkeypatch):
+    """A per-minute limit resets in under a minute, and a fixed backoff
+    would retry into it."""
+    import urllib.error
+
+    from app.services.llm import _retry_after
+
+    error = urllib.error.HTTPError(
+        "u", 429, "Rate limit reached ... Please try again in 24.9s", {}, None
+    )
+    assert _retry_after(error, 5.0) == 24.9
+
+    # With no advice from the provider, the backoff stands.
+    plain = RuntimeError("rate limited")
+    assert _retry_after(plain, 5.0) == 5.0
+
+
 def test_a_model_error_is_reported_not_raised_past(monkeypatch):
     """A failed call is a failed extraction, and the caller decides what to
     do about it."""

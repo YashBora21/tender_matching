@@ -37,6 +37,27 @@ class _RateLimited(Exception):
     """The provider's limit was hit. Worth retrying."""
 
 
+# The provider says how long to wait: "Please try again in 24.9s".
+_RETRY_AFTER = re.compile(r"try again in\s+([\d.]+)\s*s", re.IGNORECASE)
+
+
+def _retry_after(error: Exception, fallback: float) -> float:
+    """How long to wait before trying again.
+
+    The provider knows when its limit resets, and a per-minute limit resets
+    sooner than a fixed backoff assumes. A limit of a minute would be
+    retried into with a five second wait, so the provider's own advice is
+    used when it gives any.
+    """
+    match = _RETRY_AFTER.search(str(error))
+    if match:
+        try:
+            return max(fallback, float(match.group(1)))
+        except ValueError:
+            pass
+    return fallback
+
+
 @dataclass
 class LLMResult:
     """One answer from the LLM."""
@@ -103,7 +124,7 @@ class LLMClient:
                 last_error = str(exc)
                 if attempt >= settings.llm_max_retries:
                     break
-                wait = settings.llm_retry_seconds * (attempt + 1)
+                wait = _retry_after(exc, settings.llm_retry_seconds * (attempt + 1))
                 logger.warning(
                     "the model is rate limited, retrying in %.0fs (%d/%d)",
                     wait,
