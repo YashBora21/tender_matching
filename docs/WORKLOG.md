@@ -1180,3 +1180,74 @@ The backend suite still passes: 369 pass, 6 skip.
   still not built.**
 - **The corpus is still not in git**; `backend/data/manufacturers/` is ignored,
   only manifests and source configs are tracked.
+
+
+## Phase 10 — Evaluation harness (PRD 15, FR-35/FR-36)
+
+Phase 10 makes a run's quality a number instead of an impression: a stored
+report is scored against hand-written labels, offline and reproducibly. What it
+cannot verify, it refuses (D-66).
+
+**Built**
+
+- `eval/harness.py` — `score` joins a report JSON with a JSONL gold file on
+  `(tender sha256, requirement_id, manufacturer)` and reports status accuracy,
+  a confusion matrix, per-status precision/recall/F1, the false-confident rate,
+  coverage, review rate, citation correctness and a separate unsupported block.
+  `check` validates a gold file on its own. `--corpus` overrides the data
+  directory (`DATA_DIR` by default), `--out` writes the JSON summary.
+- Citations are checked with `app.services.verifier.check_citation` against the
+  cited page of the real PDF, so "verified" means what it means in the
+  pipeline. Documents are found through the corpus manifests, by hash then by
+  filename; a document that is not on disk is reported as unavailable and left
+  out of the citation denominator rather than counted either way.
+- Refusals: a label naming a pair the report does not contain stops the run and
+  lists the keys; a prediction with no label is *unlabelled*, never correct; a
+  claim label without a document, page and quote is invalid, and a
+  `no_evidence_found` or `unsupported_requirement` label needs a note saying
+  where the labeller looked or why it is not verifiable.
+- `eval/README.md` — the metric definitions, the gold format and what is not
+  built; `eval/gold/synthetic.example.jsonl` — the shape, explicitly synthetic.
+- `Makefile` — `make eval REPORT=… GOLD=…`, `make eval-check GOLD=…`; `test`
+  and `test-unit` now run `pytest eval` alongside the backend and collector.
+
+**Tested**
+
+17 harness tests pass (`eval/tests/test_harness.py`), with the whole suite now
+31 non-backend tests and 369 backend tests (6 skip without `TEST_DATABASE_URL`).
+
+The tests pin the arithmetic with hand-computed examples: accuracy and the
+confusion matrix on four pairs, per-status precision/recall/F1 including "no
+precision, not precision 1" for a status that is never predicted, the
+false-confident rate ignoring flagged mistakes and counting unflagged ones,
+coverage, the unsupported block staying out of the score, and unlabelled
+predictions not moving accuracy. They pin the refusals: a label whose pair is
+absent, a report without a tender hash, a duplicate label, a claim without a
+quote, an unknown status, a silent label without a note, and a malformed line.
+Citation checks are exercised against a generated PDF: quote on the cited page
+verifies, a real quote on the wrong page fails, a claim with no quote is
+uncited, a document that is not on disk is excluded, and an unlabelled
+prediction is never citation-checked. `main()` is covered for `check`, `score`
+and `--out`.
+
+`make` is not installed in this environment, so the Makefile targets themselves
+were not executed; their commands were (`python eval/harness.py …`), including
+a scored synthetic report and a green `check` on the example gold file.
+
+**Left open**
+
+- **No real gold set.** The 50–100 hand-labelled pairs PRD 15 asks for need
+  requirements from an actual model run; without a live LLM there is nothing
+  honest to label, and writing labels anyway would invent the evidence. The
+  harness, format and validator are ready for them, and `eval/README.md` says
+  so.
+- **Ablations and the manual page audit (PRD 15)** are not built; the first is
+  a harness flag over two reports, the second is human work.
+- **The eval has no HTML rendering or CI hook**; it writes Markdown and JSON to
+  the console and `--out`.
+- **Citation correctness depends on the local corpus.** On a machine without
+  the PDFs, every claim is reported *source unavailable* and the metric is
+  `—`, which is the honest answer but not a measurement.
+- **The corpus is still not in git**; `backend/data/manufacturers/` is ignored,
+  only manifests and source configs are tracked.
+

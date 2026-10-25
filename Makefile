@@ -8,7 +8,8 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev migrate downgrade run test test-unit test-integration \
-        test-collect collect ingest embed match report tenders tenders-audit docker-build docker-up docker-down \
+        test-collect collect ingest embed match report tenders tenders-audit eval eval-check \
+        docker-build docker-up docker-down \
         docker-logs clean
 
 help: ## Show this help
@@ -33,10 +34,12 @@ run: ## Start the API locally
 test: ## Run all tests (integration tests skip without TEST_DATABASE_URL)
 	cd backend && ../$(VENV)/Scripts/python.exe -m pytest
 	$(VENV)/Scripts/python.exe -m pytest collect
+	$(VENV)/Scripts/python.exe -m pytest eval
 
 test-unit: ## Run only tests that need no database
 	cd backend && ../$(VENV)/Scripts/python.exe -m pytest -m "not integration"
 	$(VENV)/Scripts/python.exe -m pytest collect
+	$(VENV)/Scripts/python.exe -m pytest eval
 
 test-integration: ## Run only database-backed tests (needs TEST_DATABASE_URL)
 	cd backend && ../$(VENV)/Scripts/python.exe -m pytest -m integration
@@ -64,6 +67,12 @@ tenders: ## Process the tender corpus and report what it gave
 
 tenders-audit: ## Report what the tender corpus holds, without processing it
 	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpus --audit
+
+eval: ## Score a report against gold labels: make eval REPORT=r.json GOLD=eval/gold/x.jsonl
+	$(VENV)/Scripts/python.exe eval/harness.py score --report "$(REPORT)" --gold "$(GOLD)" $(ARGS)
+
+eval-check: ## Validate a gold file without a report: make eval-check GOLD=eval/gold/x.jsonl
+	$(VENV)/Scripts/python.exe eval/harness.py check --gold "$(GOLD)"
 
 docker-build: ## Build the backend image
 	$(COMPOSE) build backend

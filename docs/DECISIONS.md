@@ -961,3 +961,38 @@ it — rejected, a half-finished run reads as manufacturers that answered
 nothing. Deep-linking to the quoted page — rejected, an unverified jump reads
 as a verified citation. A past-runs screen — deferred, not rejected: it needs
 a `GET /api/runs` list the API does not have yet.
+
+---
+
+**D-66 — The evaluation harness scores a stored report offline, and refuses
+what it cannot verify.**
+*Decision:* `eval/harness.py` joins a report JSON (`make report … FORMAT=json`)
+with a JSONL gold file on `(tender sha256, requirement_id, manufacturer)` and
+computes status accuracy, the confusion matrix, per-status precision/recall/F1,
+the false-confident rate, coverage, review rate and citation correctness. It
+runs with no database, API or model. A quote counts as verified only if
+`app.services.verifier.check_citation` finds it on the cited page; the corpus
+is indexed from the manifests, and a document that is not on disk is reported
+as unavailable and excluded from the citation denominator. A label whose pair
+is absent from the report stops the run and lists the keys; a prediction with
+no label is reported as unlabelled, never as correct. A `full_match`,
+`partial_match` or `missing_capability` label must carry its document, page and
+quote; a `no_evidence_found` or `unsupported_requirement` label must carry a
+note saying where the labeller looked or why it is not verifiable. Unsupported
+clauses are excluded from the metrics and reported apart.
+*Why:* A measurement that needs a live stack is neither reproducible nor
+runnable in review, and an evaluation that re-ran the pipeline could disagree
+with the report a bid manager actually saw. Grading citations with the same
+function that gates publication means the evaluation cannot be more forgiving
+than the product. Counting a missing prediction as correct, or dropping it,
+would inflate accuracy in exactly the direction that hides a broken run. A
+label without a quote is an opinion, and "the corpus is silent" is a claim that
+has to say where it looked.
+*Alternatives:* Recomputing the predictions inside the harness — rejected, it
+needs a database and an LLM and measures a different report. Trusting the
+report's own `verification_outcome` as the citation result — rejected, that is
+grading the system with its own homework. Counting missing pairs as passes —
+rejected, it rewards a run that stored nothing. Shipping hand-written labels
+without a model run — rejected: it would be inventing the evidence the labels
+are supposed to check, which this project does not do.
+
