@@ -926,3 +926,38 @@ the tenders the feature exists for. A temporary directory followed by a copy —
 rejected, two homes for one file with no benefit. A separate ingestion table —
 rejected, one lifecycle per tender belongs on the tender row. Returning an
 empty list while reading — rejected, it asserts a fact nobody has established.
+
+---
+
+**D-65 — The frontend renders the report it is given, and decides nothing
+itself.**
+*Decision:* `frontend/` is a Vite + React + TypeScript app with two views, no
+router and no UI kit: upload (drop a PDF, poll the tender until `done` or
+`failed`, choose manufacturers, start a run) and run/report (poll the run,
+fetch the JSON report once the run is terminal, then rank, filter and open
+evidence from that payload). Every status, score, count and explanation on
+screen comes from the report: labels are vocabulary words, filters select rows,
+and nothing recomputes a compatibility, a coverage or a status. The report is
+requested only after the API says the run has stopped. The evidence drawer
+links to `document.url`, which `RunRepo.results` now returns alongside the
+quote and page; when a document has no URL the drawer says so rather than
+inventing one, and the page number is shown as text, not appended to the link
+as a fragment.
+*Why:* The report is built from stored rows and the run's own config snapshot
+(D-63); a client that recomputed a ranking from the same rows would be a second
+implementation of the scoring rules and could disagree with the HTML and CSV
+exports of the same run. Showing only stored values keeps every claim tied to
+its verified quote. Linking to a stored document URL is honest; a `#page=12`
+fragment is not, because the viewer may ignore it and the link would then claim
+a location nobody checked. A partial or incompletely ingested report is
+labelled with the API's own numbers instead of being hidden or read as a
+missing capability (PRD 4).
+*Alternatives:* A client-side summary recomputed from the result rows —
+rejected, two scoring implementations and no way to tell which one is right.
+react-router — rejected, two screens and a run id are not a route tree. A UI
+kit — rejected, nothing here needs one and it would add a dependency for
+tables and buttons. Fetching the report while the run is live and refreshing
+it — rejected, a half-finished run reads as manufacturers that answered
+nothing. Deep-linking to the quoted page — rejected, an unverified jump reads
+as a verified citation. A past-runs screen — deferred, not rejected: it needs
+a `GET /api/runs` list the API does not have yet.

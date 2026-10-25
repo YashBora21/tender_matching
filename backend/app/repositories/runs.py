@@ -114,6 +114,7 @@ class RunRepo:
                 document.c.filename,
                 document.c.doc_type,
                 document.c.sha256,
+                document.c.url,
             )
             .select_from(result)
             .join(manufacturer, manufacturer.c.id == result.c.manufacturer_id)
@@ -149,6 +150,9 @@ class RunRepo:
                             "document": row[16],
                             "doc_type": row[17],
                             "sha256": row[18],
+                            # Where the document came from, so the report can
+                            # offer the source page rather than only its name.
+                            "url": row[19],
                         }
                     ),
                 }

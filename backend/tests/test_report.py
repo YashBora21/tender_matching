@@ -117,6 +117,9 @@ EVIDENCE = {
     "document": "circor-d-series.pdf",
     "doc_type": "catalogue",
     "sha256": "b" * 64,
+    # Where the document came from: the report shows a source link, not only
+    # a filename.
+    "url": "https://manufacturer.test/d-series.pdf",
 }
 
 RUN = {
@@ -186,6 +189,9 @@ def test_a_requirement_row_carries_its_evidence_and_its_flags():
     # A claim without its quote is a claim nobody can check (PRD 13).
     assert result["evidence"]["page"] == 12
     assert result["evidence"]["quote"].startswith("Body: ASTM A351")
+    # The document's own address travels with the quote, so the UI can offer
+    # the source page as a link instead of inventing one.
+    assert result["evidence"]["url"] == "https://manufacturer.test/d-series.pdf"
 
 
 def test_an_unsupported_clause_is_listed_separately_and_not_scored():

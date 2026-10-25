@@ -1089,3 +1089,94 @@ unknown and malformed ids as 404). The OpenAPI schema lists `POST
   built.**
 - **The corpus is still not in git**; `backend/data/manufacturers/` is ignored,
   only manifests and source configs are tracked.
+
+
+## Phase 9 — The React frontend (PRD 12)
+
+Phase 9 puts the pipeline in front of a person: upload a tender, watch it being
+read, run the match, then read the report and its evidence. It decides nothing
+— every status, score and count on screen is a value the API stored (D-65).
+
+**Built**
+
+- `frontend/` — Vite 8 + React 19 + TypeScript 6, `oxlint`, Vitest 5 with
+  jsdom and `@testing-library/react`. Two views in `App.tsx` (`upload`, `run`)
+  and no router: the run id is the only state that survives a screen change.
+- `src/api.ts` — a typed client over the five endpoints the UI needs
+  (`POST /api/tenders`, `GET /api/tenders/{id}/requirements`,
+  `GET /api/manufacturers`, `POST /api/runs`, `GET /api/runs/{id}`,
+  `GET /api/runs/{id}/report`) plus the HTML/CSV export URLs. `VITE_API_URL`
+  points at the backend; a 409 is passed through untouched so the tender poll
+  can read it as "not read yet" instead of an error.
+- `src/components/UploadPage.tsx` — drag-and-drop or click for a PDF, upload,
+  poll the tender once a second, show the file, pages, item and requirement
+  counts and the flag count, then the corpus as checkboxes and **Run the
+  match**. A failed read shows the reason and offers another upload instead of
+  a run; a `done` tender with no requirements says so and also offers no run.
+- `src/components/RunPage.tsx` — polls the run until `done` or `failed`, shows
+  the state, `results / expected_results` and the percentage, surfaces
+  `run.error`, then hands over to the report.
+- `src/components/ReportPage.tsx` — ranking cards (rank, compatibility,
+  coverage, fails-mandatory, review count), status chips that filter the table
+  and explain themselves from `status_meanings`, filters by status,
+  manufacturer and needs-review, a partial-results warning and an
+  incomplete-ingestion warning listing unaccounted and unresolved pages,
+  HTML/CSV export links, and the run's config snapshot under "What produced
+  this report".
+- `src/components/AssessmentTable.tsx` — one row per requirement ×
+  manufacturer, unsupported clauses included and labelled "Excluded from
+  score"; `src/components/EvidenceDrawer.tsx` — quote, document, page, type,
+  hash, the source link, and the score / verification / applicability /
+  confidence / review fields; `src/components/ReviewQueue.tsx` — the API's
+  `review_queue` with its reason, and a jump back to the filtered table.
+- `src/report.ts` — the pure part: status labels, counts, the requirement ×
+  manufacturer flattening, the three filters. `src/fixtures.ts` holds the
+  synthetic report the tests share.
+- `RunRepo.results` now selects `document.url` and returns it as
+  `evidence.url`; `test_report.py` asserts it. A display field only — nothing
+  is decided by it.
+- `frontend/README.md` and `frontend/.env.example`.
+
+**Tested**
+
+21 frontend tests pass in three files and `npm run lint` and `npm run build`
+are clean. `report.test.ts` covers the flattening (unsupported clauses kept),
+each filter and the combination, counts, the PRD status order, labels for
+unknown words, "no score" staying absent rather than zero, and finding a
+reviewed requirement's text. `ReportPage.test.tsx` renders the ranking and both
+manufacturers' rows, filters from a status chip and clears them, shows the
+review queue and jumps to the row, opens the drawer with its quote, document,
+page and source `href`, closes it, and labels a partial report and an
+incomplete ingestion. `UploadPage.test.tsx` reads a tender and starts the run
+with both manufacturers, disables Run when none is chosen, refuses a non-PDF
+before uploading, and shows a failed read with no Run button.
+
+A browser pass against a throwaway mock API (synthetic payloads, no database)
+walked upload → manufacturer picker → run → report, the drawer, the review
+queue and a status filter, and found two layout defects that are now fixed: a
+wide table widened the whole page instead of scrolling in its own box (a
+`min-width: 0` panel is not enough — the absolutely positioned screen-reader
+labels in the header needed the scroll box to be their containing block), and
+the item id and title now stay on their own line. `scrollWidth` equals
+`clientWidth` at an 800 px window after the fix.
+
+The backend suite still passes: 369 pass, 6 skip.
+
+**Left open**
+
+- **No live backend was exercised.** No PostgreSQL (`TEST_DATABASE_URL` unset)
+  and no LLM, so the new `evidence.url` SQL and the real payloads are covered
+  by unit tests and the mock only. The browser pass proves the screens, not the
+  integration.
+- **Past runs (PRD 12.4) are not built.** It needs a `GET /api/runs` list the
+  API does not have; the PRD marks it as the first thing to cut.
+- **Polling is per-tab and unauthenticated**, one request a second for the
+  tender and for the run; a refresh loses the run id because the view is not in
+  the URL. There is no auth in front of the API at all, so the app assumes a
+  trusted network.
+- **Not covered by tests:** the run-error path, the corpus-error path and the
+  `no_evidence_found` drawer text have no render test; only the paths above do.
+- **The eval harness (FR-35/FR-36), Docker Compose and the top-level README are
+  still not built.**
+- **The corpus is still not in git**; `backend/data/manufacturers/` is ignored,
+  only manifests and source configs are tracked.
