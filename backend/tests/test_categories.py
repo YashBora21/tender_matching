@@ -1,0 +1,184 @@
+"""FR-16: the category is inferred per bill-of-quantities item.
+
+A tender's category is a coarse hint. The item is what a requirement belongs
+to, so the item's own words decide the category it is compared in (FR-T9), and
+an item whose category cannot be settled is flagged rather than guessed.
+
+The vocabulary is a data file, so these tests never invent a category in code:
+the shipped file is read, and a temporary one is written where a test needs a
+vocabulary of its own.
+"""
+
+from __future__ import annotations
+
+import json
+
+import pytest
+
+from app.services.categories import (
+    UNKNOWN,
+    categories_path,
+    category_names,
+    infer_category,
+    load_categories,
+)
+
+
+def test_the_shipped_vocabulary_names_the_categories_the_corpus_uses():
+    from pathlib import Path
+
+    from app.core.config import get_settings
+
+    vocabulary = load_categories()
+    assert vocabulary, "the shipped category vocabulary is missing"
+    assert {"valves", "pumps", "motors"} <= category_names(vocabulary)
+    # The file is a data file under the data directory, not a list in a module.
+    assert Path(categories_path()).name == "categories.json"
+    assert Path(categories_path()).parent == Path(get_settings().data_dir)
+
+
+@pytest.mark.parametrize(
+    "title, description, expected",
+    [
+        ("GATE VALVE SIZE 150 MM CLASS 150", "Flanged gate valve 6 inch", "valves"),
+        ("GLOBE VALVE 80 MM", "", "valves"),
+        ("Severn glocon make control valves 1", "", "valves"),
+        ("CENTRIFUGAL PUMP 50 M3/HR", "Dewatering application", "pumps"),
+        ("Submersible pump for sump", "", "pumps"),
+        ("INDUCTION MOTOR 30 KW", "Squirrel cage motor", "motors"),
+    ],
+)
+def test_an_item_is_classified_by_its_own_words(title, description, expected):
+    guess = infer_category(title, description)
+    assert guess.category == expected
+    assert guess.term
+    assert not guess.ambiguous
+
+
+def test_the_most_specific_term_wins():
+    """A motor-operated gate valve is bought as a valve.
+
+    "gate valve" says what the thing is; "motor" says how it is driven. The
+    longer term is the more specific description of the item.
+    """
+    guess = infer_category("MOTOR OPERATED GATE VALVE")
+    assert guess.category == "valves"
+    assert guess.term == "gate valve"
+
+
+def test_an_item_naming_two_categories_equally_is_flagged_not_guessed():
+    """"gate valve" and "gear motor" are equally specific, and the item names
+    both. Picking one would compare the requirement against the wrong corpus."""
+    guess = infer_category("GATE VALVE AND GEAR MOTOR")
+    assert guess.category == UNKNOWN
+    assert guess.ambiguous
+    assert "more than one category" in (guess.reason or "")
+
+
+def test_an_item_that_names_no_category_is_unknown():
+    """A spare part is a real requirement with no category in the vocabulary.
+
+    It is left unknown - and therefore unfiltered by the run - instead of
+    being pushed into whichever category the tender declares.
+    """
+    guess = infer_category("PISTON RING", "Spare for the compressor")
+    assert guess.category == UNKNOWN
+    assert not guess.known
+    assert not guess.ambiguous
+    assert guess.reason == "the item names no product category"
+
+
+def test_an_empty_vocabulary_classifies_nothing_and_does_not_crash():
+    guess = infer_category("GATE VALVE", categories=())
+    assert guess.category == UNKNOWN
+    assert guess.reason == "the category vocabulary is empty"
+
+
+def test_the_vocabulary_is_a_data_file_a_deployment_can_own(tmp_path, monkeypatch):
+    """Adding a category is editing a file, not editing code (FR-6)."""
+    path = tmp_path / "categories.json"
+    path.write_text(
+        json.dumps(
+            {
+                "categories": [
+                    {"name": "gaskets", "terms": ["spiral wound", "ring gasket"]}
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("CATEGORY_VOCABULARY_PATH", str(path))
+
+    assert category_names() == frozenset({"gaskets"})
+    assert infer_category("Spiral Wound Gasket 4 inch").category == "gaskets"
+    # A term that is not in this vocabulary is not a category.
+    assert infer_category("GATE VALVE").category == UNKNOWN
+
+
+def test_a_missing_vocabulary_file_gives_no_categories_instead_of_crashing(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setenv("CATEGORY_VOCABULARY_PATH", str(tmp_path / "absent.json"))
+    assert load_categories() == ()
+    assert infer_category("GATE VALVE").category == UNKNOWN
+
+
+def test_a_broken_vocabulary_file_gives_no_categories(tmp_path, monkeypatch):
+    path = tmp_path / "categories.json"
+    path.write_text("{not json", encoding="utf-8")
+    monkeypatch.setenv("CATEGORY_VOCABULARY_PATH", str(path))
+    assert load_categories() == ()
+
+
+def test_the_items_stage_is_keyed_on_the_category_vocabulary(tmp_path, monkeypatch):
+    """The item stage infers the category, so the vocabulary is one of its
+    inputs: correcting the vocabulary re-reads the items, and nothing before
+    them."""
+    from app.core.config import get_settings
+    from app.services.pipeline import STAGE_ATTACHMENTS, STAGE_ITEMS, stage_keys
+
+    one = tmp_path / "one.json"
+    one.write_text(json.dumps({"categories": [{"name": "valves", "terms": ["valve"]}]}))
+    two = tmp_path / "two.json"
+    two.write_text(
+        json.dumps({"categories": [{"name": "valves", "terms": ["valve", "gate valve"]}]})
+    )
+    attachments = [
+        {"kind": "boq-csv", "sha256": "a" * 64, "status": "new"},
+        {"kind": "boq-pdf", "sha256": "b" * 64, "status": "new"},
+    ]
+    kwargs = dict(
+        prompt_version="1", schema_version="1", model="m", vocabulary_hash="v"
+    )
+
+    monkeypatch.setenv("CATEGORY_VOCABULARY_PATH", str(one))
+    before = stage_keys(attachments, **kwargs)
+    monkeypatch.setenv("CATEGORY_VOCABULARY_PATH", str(two))
+    # Settings are read once per process; a changed environment is a restart.
+    get_settings.cache_clear()
+    after = stage_keys(attachments, **kwargs)
+
+    assert before[STAGE_ATTACHMENTS] == after[STAGE_ATTACHMENTS]
+    assert before[STAGE_ITEMS] != after[STAGE_ITEMS]
+
+
+def test_every_item_is_classified_from_its_own_words():
+    """Two items in one tender can be in two categories: the tender's own
+    category is not copied onto them (FR-16, FR-T9)."""
+    from app.services.pipeline import assign_categories
+    from app.services.tenderingest import TenderItem
+
+    items = assign_categories(
+        [
+            TenderItem(item_id="1", title="GATE VALVE SIZE 150 MM"),
+            TenderItem(item_id="2", title="CENTRIFUGAL PUMP 50 M3/HR"),
+            TenderItem(item_id="3", title="PISTON RING"),
+        ]
+    )
+
+    assert [item.category for item in items] == ["valves", "pumps", UNKNOWN]
+    assert items[0].category_term == "gate valve"
+    assert items[0].category_ambiguous is False
+    # The item nothing recognised says why, so the run can flag it.
+    assert items[2].category_reason
+    assert items[2].category_ambiguous is False

@@ -797,3 +797,104 @@ report zero documents instead of failing.
 one machine's checkout and breaks on every other one. Requiring the process
 to start at the repository root — rejected, that is the defect, and a path
 should not mean two things depending on where it was started.
+
+
+---
+
+**D-58 — The category is inferred per bill-of-quantities item, from a data file.**
+*Decision:* The words of an item decide its category, not the tender's own
+category and not one category for the whole tender. The vocabulary is
+`backend/data/categories.json`; the most specific matching term wins, a
+trailing plural is the same term, and an item that names no category — or
+two categories equally specifically — is `unknown` and flagged for review.
+*Why:* FR-16 and FR-T9: a requirement is only ever compared against models in
+the category of the item it belongs to, and one tender carries a gate valve, a
+pump and a box of spares. Copying the tender's category onto every item
+compares a pump requirement with a valve catalogue; asking the LLM is the one
+thing the architecture forbids; and picking one of two equally-named
+categories is a guess the verifier cannot catch.
+*Alternatives:* The tender's category, kept as metadata only — rejected, it is
+the coarse hint the PRD warns about. A category list in code — rejected, FR-6
+says adding a category is adding data. Stemming every word — rejected, it is
+more machinery than an optional plural, and it misfires on words like "gas".
+
+---
+
+**D-59 — A document's `category` is its product category, not its manufacturer.**
+*Decision:* The collector's source configs and the manufacturer manifests
+declare `valves` or `pumps`, the same vocabulary a tender item is classified
+in. The manufacturer is already a column; its slug is not a category.
+*Why:* The retrieval filter compares a document's category with the item's.
+While the manifests wrote the manufacturer's slug there, every item either
+matched nothing or everything, and the filter could only be wrong.
+*Alternatives:* A separate `product_category` column — rejected, `category`
+already means exactly this and a second name for one fact invites drift.
+
+---
+
+**D-60 — Retrieval excludes only documents that declare a different known category.**
+*Decision:* A search in category C adds `category IS NULL OR category NOT IN
+(every known category except C)`. A document that declares nothing, or
+declares a value that is not a category at all, is kept.
+*Why:* Equality alone drops every document whose category is null or was
+written by an older manifest, so the corpus goes silently empty and every
+requirement comes back *no evidence found*. Absence of a category is not a
+statement that the document is about something else (PRD 4). The filter now
+fails open on metadata the system cannot interpret, and the run flags items
+whose own category is unknown.
+*Alternatives:* Backfilling the column and filtering on equality — rejected,
+it makes an old corpus a second-class corpus and does not help a deployment
+that has not re-ingested. Failing closed — rejected, it turns a metadata gap
+into a missing capability.
+
+---
+
+**D-61 — Re-ingestion refreshes the metadata of an unchanged document.**
+*Decision:* When a document's hash is already stored, its text is not parsed
+again but `category`, `doc_type`, `path`, `url` and `model_or_family` are
+brought up to date from the manifest, and the count is reported as
+`metadata_refreshed`.
+*Why:* The manifest is edited after collection — a category corrected, a model
+named more precisely — and those are exactly the fields retrieval filters on.
+Skipping the document entirely left the correction invisible, which is the
+same failure as D-60 from the other side.
+*Alternatives:* Re-parsing every document whose metadata changed — rejected,
+minutes of parsing to change no chunk. A manual SQL update — rejected, the
+next ingestion would leave it stale again.
+
+---
+
+**D-62 — Run states are `queued → retrieving → scoring → done | failed`.**
+*Decision:* A run moves through these states, and `failed` carries the
+failure's message in `run.error`. `parsing` and `verifying` are not used:
+the tender is parsed before a run exists, and verification happens inside each
+requirement's match, so there is no separate pass to show.
+*Why:* The PRD lists the states but a state that is never entered is a state a
+polling client waits for forever. Two states that would each last one function
+call add nothing a caller can act on. The failure message is part of the
+state: `failed` without a reason is a run someone has to guess about.
+*Alternatives:* Entering every PRD state for completeness — rejected, it
+advertises progress that is not observable. Storing the exception on the
+result rows — rejected, the run failed before those rows exist.
+
+---
+
+**D-63 — A report is built from stored rows and the run's own config snapshot.**
+*Decision:* `build_report` reads the run, the tender, its page ledger and the
+stored results, and takes the scoring policy, model and prompt versions from
+`run.config_snapshot`. The JSON report is canonical; HTML and CSV are renderings
+of the same dict. The report endpoints serve it only when the run is `done` or
+`failed`; a live run is `409` with its progress in the error detail. CSV cells
+that begin `=`, `+`, `-` or `@` are prefixed with `'`, and every document-derived
+value is HTML-escaped.
+*Why:* FR-34: a report that does not name the rules, models and corpus it was
+produced with cannot be compared with another one, and re-reading the settings
+could describe a run with rules that did not exist when it ran. Rendering from
+one dict means the three outputs cannot disagree. A report of a live run shows
+half the requirements, which reads as manufacturers that answered nothing. A
+tender is untrusted data: a quote is shown as text and never executed as a
+spreadsheet formula or as markup (PRD 10).
+*Alternatives:* A report recomputed from current settings — rejected, it is a
+different report. Serving a partial report with a banner — rejected for the
+JSON and CSV endpoints, where no banner exists; the stored results are still
+reachable through `GET /api/runs/{id}` while it works.

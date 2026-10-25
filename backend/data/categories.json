@@ -1,0 +1,58 @@
+{
+  "version": "1",
+  "notes": "The product categories the corpus is collected in, and the words an item uses to name them (FR-16, FR-6). A category is added here with the term that names it; no code changes. The names are the same ones the manufacturer manifests declare, so a BOQ item and a document are compared in one vocabulary.",
+  "categories": [
+    {
+      "name": "valves",
+      "terms": [
+        "gate valve",
+        "globe valve",
+        "glove valve",
+        "check valve",
+        "non return valve",
+        "nonreturn valve",
+        "nrv",
+        "ball valve",
+        "butterfly valve",
+        "control valve",
+        "needle valve",
+        "plug valve",
+        "diaphragm valve",
+        "pinch valve",
+        "sluice valve",
+        "safety valve",
+        "relief valve",
+        "pressure reducing valve",
+        "pressure relief valve",
+        "valve"
+      ]
+    },
+    {
+      "name": "pumps",
+      "terms": [
+        "centrifugal pump",
+        "submersible pump",
+        "dewatering pump",
+        "booster pump",
+        "jet pump",
+        "slurry pump",
+        "sump pump",
+        "gear pump",
+        "screw pump",
+        "diaphragm pump",
+        "pump"
+      ]
+    },
+    {
+      "name": "motors",
+      "terms": [
+        "electric motor",
+        "induction motor",
+        "squirrel cage motor",
+        "brake motor",
+        "gear motor",
+        "motor"
+      ]
+    }
+  ]
+}

@@ -25,7 +25,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Optional
 
-from sqlalchemy import func, literal, literal_column, select, text
+from sqlalchemy import func, literal, literal_column, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -141,6 +141,27 @@ def _tsquery(or_query: str):
     return literal(or_query, type_=TSQUERY)
 
 
+def _category_filter(category: Optional[str]):
+    """The condition that keeps a requirement inside its own category (FR-17).
+
+    A document that declares a *different* product category is not evidence
+    for this item, and is excluded. A document that declares nothing, or
+    declares something that is not a product category at all - an older
+    manifest wrote the manufacturer's slug there - is kept: a missing
+    category is not a category that says "not this one", and filtering on
+    equality alone would drop the whole corpus and report the silence as
+    "no evidence found" (PRD 4).
+    """
+    if not category:
+        return None
+    from app.services.categories import category_names
+
+    others = category_names() - {category}
+    if not others:
+        return None
+    return or_(document.c.category.is_(None), document.c.category.notin_(others))
+
+
 def keyword_search(
     session: Session,
     query_text: str,
@@ -190,8 +211,9 @@ def keyword_search(
     )
     if manufacturer_name:
         statement = statement.where(manufacturer.c.name == manufacturer_name)
-    if category:
-        statement = statement.where(document.c.category == category)
+    condition = _category_filter(category)
+    if condition is not None:
+        statement = statement.where(condition)
     if model:
         statement = statement.where(product.c.model == model)
     # More rows are fetched than are returned: the exact-token boost below
@@ -292,8 +314,9 @@ def semantic_search(
     )
     if manufacturer_name:
         statement = statement.where(manufacturer.c.name == manufacturer_name)
-    if category:
-        statement = statement.where(document.c.category == category)
+    condition = _category_filter(category)
+    if condition is not None:
+        statement = statement.where(condition)
     if model:
         statement = statement.where(product.c.model == model)
     statement = statement.order_by(distance).limit(limit)

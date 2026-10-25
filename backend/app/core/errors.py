@@ -41,5 +41,12 @@ class DependencyUnavailableError(AppError):
     http_status = status.HTTP_503_SERVICE_UNAVAILABLE
 
 
+class ConflictError(AppError):
+    """The request is valid, but the thing it asks for is not ready yet."""
+
+    code = "conflict"
+    http_status = status.HTTP_409_CONFLICT
+
+
 async def app_error_handler(_: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(status_code=exc.http_status, content=exc.to_payload())

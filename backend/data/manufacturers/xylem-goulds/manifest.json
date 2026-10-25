@@ -6,7 +6,7 @@
     {
       "url": "https://www.xylem.com/siteassets/brand/goulds-water-technology/resources/brochure/jet-and-submersible-product-catalog-jetsub.pdf",
       "manufacturer": "Xylem Goulds",
-      "category": "xylem",
+      "category": "pumps",
       "doc_type": "catalogue",
       "model_or_family": "Goulds jet and submersible pumps",
       "status": "new",
@@ -24,7 +24,7 @@
     {
       "url": "https://www.xylem.com/siteassets/brand/goulds-water-technology/resources/brochure/wastewater-product-catalog-wws.pdf",
       "manufacturer": "Xylem Goulds",
-      "category": "xylem",
+      "category": "pumps",
       "doc_type": "catalogue",
       "model_or_family": "Goulds wastewater pumps",
       "status": "new",

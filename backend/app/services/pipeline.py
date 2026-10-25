@@ -233,7 +233,13 @@ def stage_keys(
     # reader changes what the stage produces.
     boq = roles.boq
     items_key = content_hash(
-        "items", attachments_key, boq.get("sha256") if boq else "", _reader_version()
+        "items",
+        attachments_key,
+        boq.get("sha256") if boq else "",
+        _reader_version(),
+        # The item's category is inferred as part of this stage, so the
+        # vocabulary that infers it is one of its inputs (FR-16).
+        _categories_hash(),
     )
 
     # The requirements: the specification, the items they hang from, and the
@@ -276,6 +282,20 @@ def _vocabulary_hash() -> str:
     from app.comparison.vocabulary import vocabulary_path
 
     path = Path(vocabulary_path())
+    if not path.exists():
+        return ""
+    return content_hash(path.read_bytes())
+
+
+def _categories_hash() -> str:
+    """A hash of the category vocabulary.
+
+    It decides what category an item gets, so a change to it invalidates the
+    item stage and everything after it.
+    """
+    from app.services.categories import categories_path
+
+    path = Path(categories_path())
     if not path.exists():
         return ""
     return content_hash(path.read_bytes())
@@ -342,6 +362,9 @@ def run_pipeline(
             _save_failed(repo, result, settings)
         return result
     result.items = _read_items(boq, tender_id, tender_dir)
+    # The item's own words decide its category, not the attachment's hint
+    # (FR-16). It is part of the items stage: the items are what it reads.
+    assign_categories(result.items)
     items_state.status = STATUS_DONE if changed(STAGE_ITEMS) else STATUS_SKIPPED
     items_state.rows = len(result.items)
     result.stages[STAGE_ITEMS] = items_state
@@ -519,6 +542,26 @@ def _read_items(attachment: dict, tender_id: str, tender_dir: Path) -> list[Tend
     if not path.exists():
         return []
     return read_boq_items(path, tender_id, attachment.get("category") or "unknown")
+
+
+def assign_categories(items: list[TenderItem]) -> list[TenderItem]:
+    """Give every item the category its own words name (FR-16).
+
+    The category an attachment declares is the tender's coarse hint and is
+    the same for every item in it. An item is the thing a requirement
+    belongs to, so the item's own title and description decide, and an item
+    that names no category - or two - is left `unknown` and flagged rather
+    than given the tender's guess (FR-T9).
+    """
+    from app.services.categories import infer_category
+
+    for item in items:
+        guess = infer_category(item.title, item.description)
+        item.category = guess.category
+        item.category_term = guess.term
+        item.category_ambiguous = guess.ambiguous
+        item.category_reason = guess.reason
+    return items
 
 
 def _read_specification(attachment: dict, tender_dir: Path) -> list[dict]:

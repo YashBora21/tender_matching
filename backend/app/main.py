@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import router, tenders_router
+from app.api import manufacturers_router, router, runs_router, tenders_router
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging, get_logger
@@ -34,6 +34,8 @@ def create_app() -> FastAPI:
     app.add_exception_handler(AppError, app_error_handler)
     app.include_router(router)
     app.include_router(tenders_router)
+    app.include_router(runs_router)
+    app.include_router(manufacturers_router)
 
     @app.get("/", include_in_schema=False)
     def root() -> dict:

@@ -149,6 +149,10 @@ def test_a_document_that_did_not_change_is_not_re_ingested(tmp_path, monkeypatch
         def exists_by_sha256(self, sha256):
             return True
 
+        def refresh_metadata(self, record):
+            # Nothing changed in the manifest either, so nothing is written.
+            return False
+
         def upsert_document(self, record):  # pragma: no cover - must not run
             raise AssertionError("an unchanged document must not be re-ingested")
 
@@ -161,6 +165,51 @@ def test_a_document_that_did_not_change_is_not_re_ingested(tmp_path, monkeypatch
 
     assert report.documents == 0
     assert report.skipped_unchanged == 1
+    assert report.metadata_refreshed == 0
+
+
+def test_a_corrected_category_reaches_an_unchanged_document(tmp_path, monkeypatch):
+    """The text did not change; what the manifest says about it did.
+
+    The category is what retrieval filters on, so a manifest corrected after
+    the first ingestion has to reach the stored document. Re-parsing the file
+    would cost minutes and change no chunk, so only the metadata moves.
+    """
+    raw = tmp_path / "manufacturers" / "acme" / "raw"
+    raw.mkdir(parents=True)
+    _pdf(raw / "datasheet.pdf", "Body of body shall be SS316")
+    _manifest(
+        tmp_path,
+        "acme",
+        [{"url": "u", "sha256": "d" * 64, "path": "raw/datasheet.pdf", "category": "valves"}],
+    )
+
+    refreshed: list[dict] = []
+
+    class FakeRepo:
+        def __init__(self, session):
+            pass
+
+        def exists_by_sha256(self, sha256):
+            return True
+
+        def refresh_metadata(self, record):
+            refreshed.append(record)
+            return True
+
+        def upsert_document(self, record):  # pragma: no cover - must not run
+            raise AssertionError("the text did not change, so it must not be re-read")
+
+        def insert_chunks(self, document_id, chunks):  # pragma: no cover
+            raise AssertionError("the text did not change, so it must not be re-read")
+
+    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+
+    report = ingest_corpus(tmp_path, FakeSession())
+
+    assert report.skipped_unchanged == 1
+    assert report.metadata_refreshed == 1
+    assert refreshed and refreshed[0]["category"] == "valves"
 
 
 def test_a_document_that_cannot_be_parsed_is_reported_not_raised(tmp_path, monkeypatch):
@@ -328,6 +377,7 @@ def test_ingesting_a_corpus_seeds_the_products_its_documents_are_about(monkeypat
         documents = 0
         chunks = 0
         skipped_unchanged = 0
+        metadata_refreshed = 0
         failed = 0
         incomplete: list[str] = []
         errors: list[str] = []

@@ -29,6 +29,9 @@ class IngestionReport:
     skipped_unchanged: int = 0
     failed: int = 0
     chunks: int = 0
+    # Documents whose text did not change but whose metadata did: a category
+    # corrected in the manifest reaches the row without a re-parse.
+    metadata_refreshed: int = 0
     # Documents whose hash changed, so their chunks were replaced.
     changed: int = 0
     # Pages that could not be read. A document with a failed page is reported
@@ -75,6 +78,12 @@ def ingest_corpus(
         # long is killed by the server.
         session.commit()
         if not force and already_there:
+            # The text has not changed, but what the manifest says about it
+            # may have. The metadata is the part retrieval filters on, so it
+            # is refreshed without reading the file again.
+            if repo.refresh_metadata(entry):
+                report.metadata_refreshed += 1
+                session.commit()
             report.skipped_unchanged += 1
             continue
 
@@ -141,6 +150,7 @@ def main() -> int:
     print(f"documents ingested: {report.documents}")
     print(f"chunks written:     {report.chunks}")
     print(f"unchanged, skipped: {report.skipped_unchanged}")
+    print(f"metadata refreshed: {report.metadata_refreshed}")
     print(f"products seeded:    {seeded.products}")
     print(f"family-level:       {seeded.family_level}")
     if stale:

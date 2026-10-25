@@ -58,6 +58,10 @@ class Settings(BaseSettings):
     # The canonical attribute vocabulary is a data file, not code. A deployment
     # can point this at its own copy without touching the app.
     attribute_vocabulary_path: Optional[str] = None
+    # The product categories a tender item can be classified into, and the
+    # words that name them (FR-16). Also a data file: a category is added by
+    # editing it, not by editing code (FR-6).
+    category_vocabulary_path: Optional[str] = None
 
     # --- llm / embeddings ---
     # The LLM and the embedding model are reached over an OpenAI-compatible

@@ -331,6 +331,7 @@ class TenderRepo:
     def list_requirements(self, tender_id: str) -> list[dict]:
         rows = self.session.execute(
             select(
+                requirement.c.id,
                 requirement.c.item_id,
                 requirement.c.text,
                 requirement.c.source_text,
@@ -339,19 +340,26 @@ class TenderRepo:
                 requirement.c.attribute,
                 requirement.c.review_required,
                 requirement.c.review_reason,
+                requirement.c.value,
+                requirement.c.unit,
+                requirement.c.mandatory,
             )
             .where(requirement.c.tender_id == tender_id)
         ).all()
         return [
             {
-                "item_id": row[0],
-                "text": row[1],
-                "source_text": row[2],
-                "page": row[3],
-                "type": row[4],
-                "attribute": row[5],
-                "review_required": row[6],
-                "review_reason": row[7],
+                "id": str(row[0]),
+                "item_id": row[1],
+                "text": row[2],
+                "source_text": row[3],
+                "page": row[4],
+                "type": row[5],
+                "attribute": row[6],
+                "review_required": row[7],
+                "review_reason": row[8],
+                "value": row[9],
+                "unit": row[10],
+                "mandatory": bool(row[11]) if row[11] is not None else True,
             }
             for row in rows
         ]

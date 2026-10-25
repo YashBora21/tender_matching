@@ -891,3 +891,131 @@ With those three fixed, 269 backend tests pass and 6 skip (all six need a
 live database); the collector's 14 pass. Three of the six that used to skip
 were the corpus checks that could not find the corpus, and the two new
 config tests cover the absolute and relative forms of `DATA_DIR`.
+
+
+## Phase 7 — Runs, reporting and the API (FR-16, FR-31 to FR-34, PRD 11)
+
+Phase 7 turns the matching service into something a caller can start, poll and
+read: a run is one tender assessed against a chosen set of manufacturers, and
+its answer exists in three renderings of one stored report. It also closes the
+Phase 6 entry "FR-16 is still unbuilt": a requirement is now compared in the
+category of the BOQ item it belongs to.
+
+**Built**
+
+- `app/services/categories.py` and `backend/data/categories.json` (FR-16,
+  FR-6) — the category is inferred per item from the item's own title and
+  description. The most specific term wins, a trailing plural is the same
+  term, and an item naming nothing — or two categories equally specifically —
+  is `unknown` with a reason, never guessed (D-58). The vocabulary is a data
+  file: adding a category is editing JSON.
+- `TenderItem` carries `category`, `category_term`, `category_ambiguous` and
+  `category_reason`, and `pipeline.assign_categories` fills them in the items
+  stage. The category vocabulary is part of that stage's key, so correcting
+  the vocabulary re-reads the items and nothing before them.
+- The corpus's document `category` is the product category (`valves`,
+  `pumps`), not the manufacturer's slug (D-59): the collector's source
+  configs and the manufacturer manifests now declare the same vocabulary a
+  tender item is classified in.
+- `retrieval._category_filter` (D-60) — a search excludes only documents that
+  declare a *different known* category. A document with no category, or one
+  from an older manifest, is kept, so a metadata gap cannot empty the corpus
+  and read as *no evidence found*.
+- `PostgresDocumentRepo.refresh_metadata` (D-61) — an unchanged document is
+  not re-parsed, but its category, doc type, path, URL and model are brought
+  up to date from the manifest; the ingestion reports the count as
+  `metadata_refreshed`.
+- `app/repositories/runs.py` — `RunRepo` creates a run before any work
+  starts, moves its state, and reads its results joined back through the fact
+  to the document, page and quote.
+- `app/repositories/corpus.py` — the manufacturers with their coverage, the
+  corpus hash a run was scored against (FR-34), and a name-to-id lookup.
+- `app/services/runs.py` — `create_run` validates the tender and the
+  manufacturer names (an unknown name is a 422 listing the known ones, not an
+  empty result), deduplicates them and records the config snapshot;
+  `execute_run` answers every requirement for every manufacturer. A clause
+  whose type is not technical or certification is recorded as *unsupported*
+  and never sent to the corpus (FR-14); an item with no category is searched
+  unfiltered and the result is flagged. Each result is committed as it is
+  found, and a failure is written to `run.error` with the run left `failed`
+  (D-62). `summarise` reuses the Phase 1 scoring, so a summary and the rows it
+  summarises cannot disagree.
+- `TenderRepo.list_requirements` now carries `id`, `value`, `unit` and
+  `mandatory`; the mandatory weight and the "fails mandatory" rule need them.
+- Migration `0007_run_error` — the run says why it stopped.
+- `app/services/report.py` (FR-31 to FR-34) — `build_report` assembles the
+  canonical JSON from stored rows: the run, the tender and every page in its
+  ledger, the config snapshot, the manufacturer summaries, one row per
+  requirement × manufacturer with its status, score, confidence, flags and
+  evidence, the unsupported clauses listed separately, and the review queue.
+  An incomplete ingestion (a failed page, or a ledger short of the page count)
+  is labelled, not hidden. `render_html` is the bid-manager view with the
+  statuses explained; `render_csv` is one flat row per assessment. Both
+  escape document text: a quote is data, never markup or a formula (PRD 10).
+  `make report RUN=<id> FORMAT=json|html|csv` builds the same report without
+  the server.
+- `app/api/runs.py` (PRD 11) — `POST /api/runs` creates the run, answers 202
+  with its id and schedules it, so the request that starts a run is not the
+  request that waits for it; `GET /api/runs/{id}` reports state and progress;
+  `/report`, `/report.html` and `/export.csv` serve the three renderings. A
+  report of a run that has not stopped is 409 with the progress in the detail
+  (D-63). A malformed id is a 404, not a 500. The PRD's "options" are not
+  defined anywhere, so the request accepts none rather than ignoring keys.
+- `app/api/manufacturers.py` (PRD 11) — the manufacturers with their document,
+  product and chunk counts and the categories their documents cover, plus the
+  corpus totals and hash.
+- `app/api/deps.py` — the request session as a dependency, so a test can
+  replace it and no route opens a connection by hand.
+- `ConflictError` in `app/core/errors.py` — 409 for "not ready yet", distinct
+  from a validation error and from a missing resource.
+
+**Tested**
+
+332 backend tests pass and 6 skip (all six need `TEST_DATABASE_URL`); the
+collector's 14 pass. No test fails.
+
+The new tests are: `test_categories.py` (the shipped vocabulary, an item
+classified by its own words, the most specific term, two categories named
+equally, a spare part left unknown, a vocabulary read from a data file, a
+missing and a broken file, the items stage keyed on the vocabulary);
+`test_retrieval.py` (a document in another category excluded, a document with
+none kept, an unrecognised category not treated as a product category);
+`test_runs.py` (a technical requirement matched and a commercial one not, an
+unknown category searched unfiltered and flagged, a requirement with no item
+flagged rather than guessed at, an unknown clause type
+flagged, a raising matcher recorded as failed with its reason, a finished run
+not re-run, creation refusals, deduplication, the summary's ranking and the
+mandatory rule, coverage against evidence); `test_report.py` (the evidence in
+a row, unsupported clauses listed separately, a failed page and a short ledger
+labelled incomplete, the run's own config, partial results, the review queue,
+the CSV rows, a formula-shaped cell defused, markup in a quote escaped, every
+status explained); `test_runs_api.py` (202 and a background task, manufacturer
+selection, an empty list refused, malformed and missing ids, progress, a
+report of a live run refused with 409, the three renderings, the manufacturers
+route, an empty corpus). `test_ingestion.py` gained the metadata-refresh test.
+
+**Left open**
+
+- **`POST /api/tenders` and `GET /api/tenders/{id}/requirements` (PRD 11) are
+  not built.** Uploading a tender and running it through the pipeline is a
+  job of its own — collection, parsing and the stages — and a run today needs
+  a tender that `make tenders` has already ingested. The two routes are the
+  next API work, and the frontend cannot offer "upload a tender" until they
+  exist.
+- **The run SQL has not run against PostgreSQL in this session.** `RunRepo`,
+  `corpus.py`, `refresh_metadata`, the new `run.error` column and the category
+  filter are proven by unit tests and by compiling the filter, not by
+  executing against a database. The integration tests are skipped without
+  `TEST_DATABASE_URL`, exactly as in Phase 6.
+- **The background queue is in-process.** `BackgroundTasks` runs the match in
+  the API process; a restart loses runs that were queued and they stay
+  `queued`. A durable queue, or a startup sweep that fails runs older than a
+  configured age, is the fix; neither is built.
+- **`document.category` keeps its old values until the next ingestion.** The
+  manifests are corrected (D-59) but an existing database still holds the
+  manufacturer slugs until `make ingest` refreshes the metadata (D-61).
+- **No live LLM or database was exercised.** Matching, runs and reports were
+  tested with fake matchers, stores and repositories; the end-to-end run over
+  the real corpus and a real model is not measured here.
+- **The corpus is still not in git.** `backend/data/manufacturers/` is
+  behind the ignore rule; only the manifests and the source configs changed.

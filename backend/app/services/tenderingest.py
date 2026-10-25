@@ -77,7 +77,14 @@ class TenderItem:
     description: str = ""
     quantity: Optional[str] = None
     unit: Optional[str] = None
+    # The category the item's own words name (FR-16). `unknown` when they
+    # name none, or name two equally - which is flagged, never guessed
+    # (FR-T9).
     category: str = "unknown"
+    # The term that decided the category, and why it is unresolved when it is.
+    category_term: Optional[str] = None
+    category_ambiguous: bool = False
+    category_reason: Optional[str] = None
     # The row the item came from, for its provenance.
     source_row: Optional[str] = None
 

@@ -12,6 +12,12 @@ from typing import Iterable, Optional
 from app.core.config import ScoringPolicy
 from app.schemas.enums import Applicability, RequirementStatus, VerificationOutcome
 
+# The version of the scoring rules below. It is written into every report so
+# a score can be read against the rules that produced it (FR-34): a report
+# that does not name its policy cannot be compared with one that does, and a
+# change here is a change to what every number means.
+SCORING_POLICY_VERSION = "1"
+
 
 @dataclass
 class ScoredResult:

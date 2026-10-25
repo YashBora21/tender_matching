@@ -6,7 +6,7 @@
     {
       "url": "https://www.flowserve.com/sites/default/files/dam/documents/FCENBR00002_EN_A4.pdf",
       "manufacturer": "Flowserve",
-      "category": "flowserve",
+      "category": "valves",
       "doc_type": "catalogue",
       "model_or_family": "Control valves",
       "status": "new",
@@ -24,7 +24,7 @@
     {
       "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf",
       "manufacturer": "Flowserve",
-      "category": "flowserve",
+      "category": "valves",
       "doc_type": "specification",
       "model_or_family": "Valtek GS",
       "status": "new",
@@ -42,7 +42,7 @@
     {
       "url": "https://www.flowserve.com/sites/default/files/dam/documents/WCENBR0001_EN_AQ.pdf",
       "manufacturer": "Flowserve",
-      "category": "flowserve",
+      "category": "valves",
       "doc_type": "catalogue",
       "model_or_family": "Worcester controls",
       "status": "new",

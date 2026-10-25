@@ -8,7 +8,7 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev migrate downgrade run test test-unit test-integration \
-        test-collect collect ingest embed match tenders tenders-audit docker-build docker-up docker-down \
+        test-collect collect ingest embed match report tenders tenders-audit docker-build docker-up docker-down \
         docker-logs clean
 
 help: ## Show this help
@@ -55,6 +55,9 @@ embed: ## Embed the corpus chunks (FR-11)
 
 match: ## Answer a requirement from the corpus: make match REQ="body shall be SS316"
 	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.matching "$(REQ)" $(ARGS)
+
+report: ## Build a run's report: make report RUN=<run_id> FORMAT=json|html|csv
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.report "$(RUN)" --format $(if $(FORMAT),$(FORMAT),json) $(if $(OUT),--out $(OUT),)
 
 tenders: ## Process the tender corpus and report what it gave
 	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpus

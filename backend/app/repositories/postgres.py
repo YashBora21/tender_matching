@@ -91,6 +91,64 @@ class PostgresDocumentRepo:
         )
         return str(document_id)
 
+    def refresh_metadata(self, record: dict) -> bool:
+        """Bring what the manifest says about an unchanged document up to date.
+
+        The text of a document that was already ingested has not changed, so
+        it is not read again. What the manifest says *about* it can change:
+        a category corrected in the source config, a model named more
+        precisely, a document reclassified. Those are the fields retrieval
+        filters on, so leaving them stale would keep an old category in front
+        of every search.
+
+        Returns True when a row was actually updated.
+        """
+        manufacturer_id = self.get_manufacturer_id(record["manufacturer"])
+        row = self.session.execute(
+            select(
+                document.c.id,
+                document.c.url,
+                document.c.doc_type,
+                document.c.path,
+                document.c.model_or_family,
+                document.c.category,
+            ).where(
+                document.c.manufacturer_id == manufacturer_id,
+                document.c.sha256 == record["sha256"],
+            )
+        ).first()
+        if row is None:
+            return False
+
+        wanted = {
+            "url": record.get("url"),
+            "doc_type": record.get("doc_type"),
+            "path": record.get("path"),
+            "model_or_family": record.get("model_or_family"),
+            "category": record.get("category"),
+        }
+        # A manifest that does not state a field has not said the stored value
+        # is wrong. Writing its absence would erase what an earlier, more
+        # complete manifest said - a catalogue CSV without a category column
+        # would null the category of every document it lists.
+        wanted = {
+            key: value for key, value in wanted.items() if value not in (None, "")
+        }
+        stored = {
+            "url": row[1],
+            "doc_type": row[2],
+            "path": row[3],
+            "model_or_family": row[4],
+            "category": row[5],
+        }
+        changed = {key: value for key, value in wanted.items() if stored[key] != value}
+        if not changed:
+            return False
+        self.session.execute(
+            update(document).where(document.c.id == row[0]).values(**changed)
+        )
+        return True
+
     def insert_chunks(self, document_id: str, chunks: list[dict]) -> int:
         """Replace a document's chunks with these ones.
 

@@ -60,3 +60,51 @@ def test_a_chunk_both_searches_found_scores_higher_than_one_only():
 def test_the_search_needs_a_query():
     assert keyword_search(None, "") == []
     assert semantic_search(None, "") == []
+
+
+def _sql(expression) -> str:
+    """The condition as PostgreSQL would receive it, for a reader to check."""
+    from sqlalchemy.dialects import postgresql
+
+    return str(
+        expression.compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+
+
+def test_a_requirement_without_a_category_is_not_filtered():
+    from app.services.retrieval import _category_filter
+
+    assert _category_filter(None) is None
+
+
+def test_a_document_in_another_category_is_excluded():
+    """A pump catalogue is not evidence for a gate valve (FR-17)."""
+    from app.services.retrieval import _category_filter
+
+    sql = _sql(_category_filter("valves"))
+
+    # The other categories are excluded...
+    assert "pumps" in sql
+    assert "motors" in sql
+    # ...and the one asked for is not.
+    assert "valves" not in sql
+    assert "IS NULL" in sql
+
+
+def test_a_document_that_declares_no_category_is_kept():
+    """A missing category is not a category that says "not this one".
+
+    Older manifests wrote the manufacturer's slug into `category`, so a
+    document can also declare something that is not a product category at all.
+    Filtering on equality alone dropped the whole corpus and reported the
+    silence as "no evidence found" (PRD 4).
+    """
+    from app.services.retrieval import _category_filter
+
+    sql = _sql(_category_filter("circor"))
+
+    assert "valves" in sql and "pumps" in sql and "motors" in sql
+    assert "circor" not in sql
+    assert "IS NULL" in sql

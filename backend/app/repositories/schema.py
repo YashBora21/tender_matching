@@ -384,6 +384,9 @@ run = Table(
     Column("status", _enum(RunStatus, "run_status"), nullable=False),
     Column("config_snapshot", JSONB),
     Column("corpus_hash", String(64)),
+    # Why the run failed, in the caller's words. A run that stopped has to be
+    # able to say what stopped it without the caller reading the server log.
+    Column("error", Text),
     Index("ix_run_tender_id", "tender_id"),
 )
 

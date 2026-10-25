@@ -6,7 +6,7 @@
     {
       "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/documents/d103311x012.pdf",
       "manufacturer": "Emerson Fisher",
-      "category": "emerson",
+      "category": "valves",
       "doc_type": "specification",
       "model_or_family": "Fisher D series",
       "status": "new",
@@ -23,7 +23,7 @@
     {
       "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/documents/d103554x012.pdf",
       "manufacturer": "Emerson Fisher",
-      "category": "emerson",
+      "category": "valves",
       "doc_type": "specification",
       "model_or_family": "Fisher large ED/EWD ET/EWT",
       "status": "new",
@@ -40,7 +40,7 @@
     {
       "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/documents/d352343x012.pdf",
       "manufacturer": "Emerson Fisher",
-      "category": "emerson",
+      "category": "valves",
       "doc_type": "catalogue",
       "model_or_family": "Fisher globe valves",
       "status": "new",
@@ -57,7 +57,7 @@
     {
       "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/valves/documents/control-valve-handbook-en-3661206.pdf",
       "manufacturer": "Emerson Fisher",
-      "category": "emerson",
+      "category": "valves",
       "doc_type": "catalogue",
       "model_or_family": "Control valve handbook",
       "status": "new",
