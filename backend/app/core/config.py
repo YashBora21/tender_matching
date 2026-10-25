@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -40,6 +40,19 @@ class Settings(BaseSettings):
 
     # --- storage ---
     data_dir: Path = REPO_ROOT / "backend" / "data"
+
+    @field_validator("data_dir")
+    @classmethod
+    def _data_dir_from_the_repo(cls, value: Path) -> Path:
+        """A relative data directory is relative to the repository.
+
+        `.env` says `DATA_DIR=backend/data`. A process started from the repo
+        root finds it, and the same process started from `backend/` would look
+        for `backend/backend/data` and find nothing - the corpus would be
+        silently empty and every ingestion would report zero documents. The
+        path means the same thing from any working directory.
+        """
+        return value if value.is_absolute() else REPO_ROOT / value
 
     # --- attribute vocabulary ---
     # The canonical attribute vocabulary is a data file, not code. A deployment

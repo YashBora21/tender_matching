@@ -865,14 +865,29 @@ touch the network.
   The integration tests are skipped without `TEST_DATABASE_URL`, so the
   `tsvector` search, the pgvector ordering and the `document.product_id`
   join are proven by unit tests only.
-- **`test_tendercollect` writes fixed file names into `backend/tests/`.**
-  Two pytest processes at once collide on `_boq.pdf`, `_form.pdf` and
-  `_scanned.pdf`, and a test fails for a reason unrelated to the code.
-  `tmp_path` is the fix.
-- **One ingestion test names an absolute path.** The doc-type check reads
-  `C:/Users/Lenovo/.../backend/data/catalogue/manifest.csv`; it skips when
-  the file is absent, so another machine silently loses the check instead
-  of failing.
 - **The corpus is not in git.** `backend/data/manufacturers/` is 157 MB of
   PDFs behind the ignore rule; only the manifests and the four new source
   configs are left to commit.
+
+**Fixed after the merge**
+
+- **`test_tendercollect` wrote fixed file names into `backend/tests/`.**
+  `_boq.pdf`, `_form.pdf` and `_scanned.pdf` were real files in the source
+  tree, so two pytest processes at once collided on them and a test failed
+  for a reason unrelated to the code. They are written to `tmp_path` now.
+- **One ingestion test named an absolute path.** The doc-type check read
+  `C:/Users/Lenovo/.../backend/data/catalogue/manifest.csv`: on another
+  machine the check silently skipped itself, and a check that skips is a
+  check that is not there. It reads every `manifest.csv` under the
+  configured data directory, the same place the ingestion looks.
+- **A relative `DATA_DIR` depended on the working directory.** `.env` says
+  `DATA_DIR=backend/data`; read as a plain relative path it resolved
+  against the current directory, so the suite run from `backend/` looked in
+  `backend/backend/data` and three tests that inspect the corpus skipped
+  themselves instead of running. A relative data directory is resolved
+  against the repository root now (D-57).
+
+With those three fixed, 269 backend tests pass and 6 skip (all six need a
+live database); the collector's 14 pass. Three of the six that used to skip
+were the corpus checks that could not find the corpus, and the two new
+config tests cover the absolute and relative forms of `DATA_DIR`.

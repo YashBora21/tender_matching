@@ -781,3 +781,19 @@ someone has to remember, and forgetting it fails quietly.
 *Alternatives:* A `make seed` target — rejected, the step that must follow
 ingestion is not a separate job. Seeding during the migration — rejected,
 a migration cannot read the corpus and must stay reversible.
+
+---
+
+**D-57 — A relative `DATA_DIR` is resolved against the repository root.**
+*Decision:* When settings load, a data directory that is not absolute is
+joined to the repository root; an absolute one is used as given.
+*Why:* `.env` says `DATA_DIR=backend/data`. Read as a plain relative path
+it depends on the working directory: the suite run from `backend/` looked
+in `backend/backend/data`, found no corpus, and the three tests that inspect
+the corpus skipped themselves instead of running. A check that skips is a
+check that is not there, and the same fault would make a deployed ingestion
+report zero documents instead of failing.
+*Alternatives:* Writing an absolute path into `.env` — rejected, it names
+one machine's checkout and breaks on every other one. Requiring the process
+to start at the repository root — rejected, that is the defect, and a path
+should not mean two things depending on where it was started.

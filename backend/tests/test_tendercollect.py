@@ -109,7 +109,7 @@ def test_a_link_that_is_not_a_document_is_ignored(tmp_path):
     assert discover_links(path) == ["https://example.com/a.pdf"]
 
 
-def test_a_boq_is_told_from_a_form_by_its_content():
+def test_a_boq_is_told_from_a_form_by_its_content(tmp_path):
     """A link's file name says nothing: the same shape carries the BOQ in one
     tender and a certificate in another."""
     import pymupdf
@@ -122,7 +122,7 @@ def test_a_boq_is_told_from_a_form_by_its_content():
         document.close()
         return path.read_bytes()
 
-    tmp = Path(__file__).parent
+    tmp = tmp_path
     boq = make_pdf(
         "BOQ Item number  BOQ Item Title  BOQ Item Description  BOQ Item Quantity",
         tmp / "_boq.pdf",
@@ -131,17 +131,15 @@ def test_a_boq_is_told_from_a_form_by_its_content():
 
     assert classify_document(boq, "x.pdf")[0] == "boq-pdf"
     assert classify_document(form, "x.pdf")[0] == "form"
-    for name in ("_boq.pdf", "_form.pdf"):
-        (tmp / name).unlink(missing_ok=True)
 
 
-def test_a_scanned_document_is_still_a_document():
+def test_a_scanned_document_is_still_a_document(tmp_path):
     """A page that is an image is a scanned page, even when the scanner
     wrote a little text on it. The OCR pass reads it later; it is not a
     document that says nothing."""
     import pymupdf
 
-    tmp = Path(__file__).parent / "_scanned.pdf"
+    tmp = tmp_path / "_scanned.pdf"
     document = pymupdf.open()
     page = document.new_page()
     # A picture covering the page: a scanned page.

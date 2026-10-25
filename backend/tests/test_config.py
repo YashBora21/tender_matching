@@ -35,6 +35,31 @@ def test_cors_origins_are_split_and_trimmed(monkeypatch: pytest.MonkeyPatch) -> 
     assert get_settings().cors_origin_list == ["http://a.test", "http://b.test"]
 
 
+def test_a_relative_data_dir_is_read_from_the_repository_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`DATA_DIR=backend/data` means the same thing from any directory.
+
+    Read as a plain relative path it resolves against the working directory,
+    so the same test run from `backend/` looked for `backend/backend/data`
+    and found an empty corpus instead of failing.
+    """
+    from app.core.config import REPO_ROOT
+
+    monkeypatch.setenv("DATA_DIR", "backend/data")
+    settings = Settings()
+
+    assert settings.data_dir.is_absolute()
+    assert settings.data_dir == REPO_ROOT / "backend" / "data"
+
+
+def test_an_absolute_data_dir_is_left_alone(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    monkeypatch.setenv("DATA_DIR", str(tmp_path))
+    assert Settings().data_dir == tmp_path
+
+
 def test_scoring_policy_comes_from_config(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SCORING_FAMILY_LEVEL_CAP", "0.25")
     policy = get_settings().scoring
