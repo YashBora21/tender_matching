@@ -129,6 +129,22 @@ class RunStatus(StrEnum):
     FAILED = "failed"
 
 
+class TenderStatus(StrEnum):
+    """The state of a tender's ingestion (PRD 11).
+
+    A tender is processed when it is uploaded, not when a run asks for it, so
+    the caller needs a state to poll. `failed` is distinct from "read it and
+    found no requirements": one is a document that could not be read, the
+    other is a document that was read. Reporting the first as the second is
+    the absence-of-evidence trap PRD 4 forbids.
+    """
+
+    QUEUED = "queued"
+    PROCESSING = "processing"
+    DONE = "done"
+    FAILED = "failed"
+
+
 class ConfidenceLevel(StrEnum):
     """PRD 9 - confidence buckets. Rule-based review flags override the bucket."""
 

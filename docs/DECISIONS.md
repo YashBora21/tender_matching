@@ -898,3 +898,31 @@ spreadsheet formula or as markup (PRD 10).
 different report. Serving a partial report with a banner — rejected for the
 JSON and CSV endpoints, where no banner exists; the stored results are still
 reachable through `GET /api/runs/{id}` while it works.
+
+---
+
+**D-64 — An uploaded tender is frozen first, read in the background, and its
+own state is stored.**
+*Decision:* `POST /api/tenders` writes the file under
+`DATA_DIR/tenders/<tender_id>/` with a manifest in the same shape
+`make tenders` produces, finds or creates the tender by its sha256, answers
+`202` with the id and status, and schedules `ingest` in the background.
+`ingest` moves `tender.status` to `processing`, runs collection and the
+pipeline, and finishes on `done` or `failed` with the reason in `tender.error`.
+`GET /api/tenders/{id}/requirements` answers `409` while the tender is `queued`
+or `processing`. A duplicate upload is the same tender (FR-12); it is read
+again only when the earlier read failed, because a `queued` or `processing`
+tender already has a reader.
+*Why:* Reading a 200-page tender is minutes of parsing and extraction, so
+holding the upload request open would turn a slow tender into a timeout that
+looks like a rejected file. Freezing before parsing means a crash cannot lose
+the bytes the caller sent, and the manifest keeps an uploaded tender
+indistinguishable from a collected one to runs and reports. The status is not
+decoration: without it, "no requirements" covers both a document that states
+none and a document nobody has read — the absence-of-evidence error PRD 4
+forbids. A failed read is recorded with its reason, never as zero requirements.
+*Alternatives:* Parsing inside the request — rejected, it times out on exactly
+the tenders the feature exists for. A temporary directory followed by a copy —
+rejected, two homes for one file with no benefit. A separate ingestion table —
+rejected, one lifecycle per tender belongs on the tender row. Returning an
+empty list while reading — rejected, it asserts a fact nobody has established.

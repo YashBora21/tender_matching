@@ -47,6 +47,7 @@ from app.schemas.enums import (
     RequirementStatus,
     RequirementType,
     RunStatus,
+    TenderStatus,
     ValueType,
     VerificationOutcome,
 )
@@ -223,6 +224,11 @@ tender = Table(
     Column("sha256", String(64), nullable=False, unique=True),
     Column("page_count", Integer),
     Column("processing_version", String(64)),
+    # The state of the tender's own ingestion. A tender is read when it is
+    # uploaded, not when a run asks for it, so the caller needs a state to
+    # poll, and a failure needs somewhere to say why (PRD 11).
+    Column("status", _enum(TenderStatus, "tender_status"), nullable=False),
+    Column("error", Text),
 )
 
 tender_item = Table(

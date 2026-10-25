@@ -1019,3 +1019,73 @@ route, an empty corpus). `test_ingestion.py` gained the metadata-refresh test.
   the real corpus and a real model is not measured here.
 - **The corpus is still not in git.** `backend/data/manufacturers/` is
   behind the ignore rule; only the manifests and the source configs changed.
+
+
+## Phase 8 — Tender upload and the requirements API (PRD 11, FR-12)
+
+Phase 8 closes the two API gaps Phase 7 named: a caller can hand the system a
+tender PDF and then read what was extracted from it. It does not change how a
+tender is read — the same collection, parsing and pipeline stages run — only
+who can start that read and how its state is observed.
+
+**Built**
+
+- `app/services/tenderupload.py` — `store_upload` validates the name and the
+  bytes, hashes the file and freezes it under `DATA_DIR/tenders/<tender_id>/`
+  with the manifest shape `make tenders` produces, so a run and a report cannot
+  tell an uploaded tender from a collected one. `ingest` is the background
+  read: `processing` on entry, then collection and `audit_tender`, then `done`,
+  or `failed` with the reason in `tender.error`. A tender that is its own
+  specification or bill of quantities becomes its own attachment instead of
+  being reported as an empty wrapper; a document uploaded by hand survives a
+  re-read (D-64).
+- `app/schemas/enums.py` — `TenderStatus` (`queued`, `processing`, `done`,
+  `failed`), separate from a run's states because a tender is read when it is
+  uploaded, not when a run asks for it.
+- `TenderRepo.get_tender` carries `status` and `error`; `set_status` moves the
+  state; `upsert_tender` applies `status` only when it creates the row and
+  leaves absent fields alone on an existing one, so re-offering a file neither
+  erases what was read nor claims a field the caller did not state.
+- Migration `0008_tender_status` — the two columns; existing rows are
+  backfilled to `done`, since every tender in a database predates the column
+  and was ingested by the corpus runner.
+- `app/api/tenders.py` — `POST /api/tenders` (202; `.pdf` name, `%PDF-`
+  content, non-empty, `fetch_max_bytes`; duplicate by hash; a background read
+  for a new tender or one whose earlier read failed) and
+  `GET /api/tenders/{id}/requirements` (each requirement with its item's name
+  and category, counts, and the tender's state; 409 while queued or processing,
+  404 for an unknown or malformed id).
+
+**Tested**
+
+369 backend tests pass and 6 skip (all six need `TEST_DATABASE_URL`); the
+collector's 14 pass. No test fails.
+
+The new tests are: `test_tenderupload.py` (the name reduced to its final
+component, non-PDF and empty bytes refused, the file frozen with its hash
+before it is read, a duplicate not duplicated, a manual attachment carried
+across a re-read, a self-contained PDF used as its own attachment,
+processing→done, a failed read with its reason, an exception recorded instead
+of left `processing`, a vanished file reported with what to do);
+`test_tender_upload_api.py` (202 and a scheduled read, a path in the name not
+trusted, non-PDF / wrong extension / empty / oversized refused before anything
+is stored, a duplicate `done` not rescheduled, a duplicate `failed`
+rescheduled, a duplicate `processing` left alone, the requirements payload with
+`item_id` and item title, 409 while unread, a failed tender carrying its error,
+unknown and malformed ids as 404). The OpenAPI schema lists `POST
+/api/tenders` and both tender read routes.
+
+**Left open**
+
+- **No live PostgreSQL or LLM was exercised.** The status columns, migration
+  `0008`, `set_status` and `upsert_tender` are proven by unit tests and
+  compilation only; the integration tests skip without `TEST_DATABASE_URL`.
+- **The background read is in-process**, like the run queue: a restart loses
+  tenders left `queued` or `processing`, and there is no sweep that fails rows
+  older than a configured age.
+- **The frontend (PRD 12) is not built.** The two endpoints it needs now exist;
+  the upload, progress and report screens are Phase 9.
+- **The eval harness (FR-35/FR-36), Docker Compose and the README are not
+  built.**
+- **The corpus is still not in git**; `backend/data/manufacturers/` is ignored,
+  only manifests and source configs are tracked.

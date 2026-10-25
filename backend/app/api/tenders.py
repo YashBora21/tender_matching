@@ -6,32 +6,52 @@ specification, and it embeds nothing. The pipeline fetches those links. When
 a fetch fails — the link has moved, the host is unreachable, the tender
 was withdrawn — the tender is *not* a tender with no requirements. It is a
 tender whose attachments are missing, and the fix is to upload them.
+
+`POST /api/tenders` is the other direction: a caller hands over the tender
+itself. The file is frozen, the tender is created or found by its hash, and
+the reading happens in the background — a 200-page tender is minutes of work
+and the request that uploads it must not wait for it.
 """
 
 from __future__ import annotations
 
 import json
 import shutil
+import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    UploadFile,
+    status,
+)
+from sqlalchemy.orm import Session
 
+from app.api.deps import get_session
 from app.core.config import get_settings
+from app.core.errors import ConflictError, NotFoundError
 from app.core.logging import get_logger
-from app.schemas.enums import HealthState
+from app.repositories.tender import TenderRepo
+from app.schemas.enums import TenderStatus
+from app.services.tenderupload import (
+    ingest,
+    safe_name,
+    store_upload,
+    tender_dir,
+)
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/tenders", tags=["tenders"])
 
 
-def _tender_dir(tender_id: str) -> Path:
-    """Where a tender's frozen attachments live."""
-    return get_settings().data_dir / "tenders" / tender_id
-
-
 def _read_manifest(tender_id: str) -> dict:
-    path = _tender_dir(tender_id) / "manifest.json"
+    path = tender_dir(tender_id) / "manifest.json"
     if not path.exists():
         return {"tender_id": tender_id, "documents": []}
     try:
@@ -43,12 +63,116 @@ def _read_manifest(tender_id: str) -> dict:
 
 
 def _write_manifest(tender_id: str, manifest: dict) -> None:
-    directory = _tender_dir(tender_id)
+    directory = tender_dir(tender_id)
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / "manifest.json"
     temp = path.with_suffix(".json.tmp")
     temp.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     temp.replace(path)
+
+
+def _identifier(value: str) -> str:
+    """The id as a UUID, or a 404.
+
+    A malformed id is not a tender that does not exist, but the caller gets
+    the same answer: there is nothing at that address. Checking it here keeps
+    a bad path from reaching the database, where it would be a 500.
+    """
+    try:
+        return str(uuid.UUID(value))
+    except (ValueError, AttributeError, TypeError):
+        raise NotFoundError(f"no tender with id {value}") from None
+
+
+@router.post("", status_code=status.HTTP_202_ACCEPTED)
+async def upload_tender(
+    background: BackgroundTasks,
+    file: UploadFile = File(...),
+    session: Session = Depends(get_session),
+) -> dict:
+    """Accept a tender PDF and start reading it.
+
+    The size is checked while reading, so an oversized upload is refused
+    without being written; the content is checked before the name is trusted
+    (PRD 13). The answer is the tender's id, not its requirements: those exist
+    when the background read has finished.
+    """
+    settings = get_settings()
+    name = safe_name(file.filename)
+    data = await file.read(settings.fetch_max_bytes + 1)
+    if len(data) > settings.fetch_max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"the file is over the {settings.fetch_max_bytes} byte limit"
+            ),
+        )
+
+    uploaded = store_upload(session, filename=name, data=data)
+    # Committed before the background task is scheduled: that task opens its
+    # own session, and it must be able to see the row it was told to read.
+    session.commit()
+
+    # A new file is read now. A duplicate is read again only when its earlier
+    # reading failed — a tender already reading is left to finish.
+    if not uploaded.duplicate or uploaded.status == TenderStatus.FAILED.value:
+        background.add_task(ingest, uploaded.tender_id)
+
+    logger.info("tender %s accepted (%s)", uploaded.tender_id, name)
+    return {
+        "tender_id": uploaded.tender_id,
+        "status": uploaded.status,
+        "duplicate": uploaded.duplicate,
+    }
+
+
+@router.get("/{tender_id}/requirements")
+def get_requirements(
+    tender_id: str, session: Session = Depends(get_session)
+) -> dict:
+    """The tender's parsed atomic requirements (PRD 11).
+
+    A tender that is still being read is a conflict, not an empty list: an
+    empty answer would say the document states no requirement, which is a
+    different fact from "nobody has read it yet" (PRD 4).
+    """
+    identifier = _identifier(tender_id)
+    repo = TenderRepo(session)
+    tender = repo.get_tender(identifier)
+    if tender is None:
+        raise NotFoundError(f"no tender with id {tender_id}")
+
+    if tender["status"] in (TenderStatus.QUEUED.value, TenderStatus.PROCESSING.value):
+        raise ConflictError(
+            f"tender {tender_id} has not been read yet (status {tender['status']})",
+            {"status": tender["status"]},
+        )
+
+    items = {item["item_id"]: item for item in repo.list_items(identifier)}
+    requirements = []
+    for row in repo.list_requirements(identifier):
+        item = items.get(row.get("item_id")) or {}
+        requirements.append(
+            {
+                **row,
+                "item_title": item.get("name"),
+                "category": item.get("category"),
+            }
+        )
+
+    return {
+        "tender_id": identifier,
+        "filename": tender.get("filename"),
+        "status": tender["status"],
+        "error": tender.get("error"),
+        "page_count": tender.get("page_count"),
+        "counts": {
+            "items": len(items),
+            "requirements": len(requirements),
+            "flagged": sum(1 for row in requirements if row.get("review_required")),
+        },
+        "requirements": requirements,
+    }
 
 
 @router.get("/{tender_id}/attachments")
@@ -114,7 +238,7 @@ def upload_attachment(
             detail="a tender attachment is a PDF, a DOCX or a CSV",
         )
 
-    directory = _tender_dir(tender_id)
+    directory = tender_dir(tender_id)
     raw = directory / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     target = raw / name

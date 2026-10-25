@@ -25,6 +25,8 @@ from typing import Any, Optional
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.orm import Session
 
+from app.schemas.enums import TenderStatus
+
 from app.repositories.schema import (
     extraction_batch,
     llm_cache,
@@ -73,12 +75,41 @@ class TenderRepo:
 
     def get_tender(self, tender_id: str) -> Optional[dict]:
         row = self.session.execute(
-            select(tender.c.id, tender.c.filename, tender.c.sha256, tender.c.page_count)
+            select(
+                tender.c.id,
+                tender.c.filename,
+                tender.c.sha256,
+                tender.c.page_count,
+                tender.c.status,
+                tender.c.error,
+            )
             .where(tender.c.id == tender_id)
         ).first()
         if row is None:
             return None
-        return {"id": str(row[0]), "filename": row[1], "sha256": row[2], "page_count": row[3]}
+        return {
+            "id": str(row[0]),
+            "filename": row[1],
+            "sha256": row[2],
+            "page_count": row[3],
+            "status": row[4],
+            "error": row[5],
+        }
+
+    def set_status(
+        self,
+        tender_id: str,
+        status: TenderStatus,
+        *,
+        error: Optional[str] = None,
+    ) -> None:
+        """Move a tender's ingestion to a state, recording why when it failed."""
+        values: dict = {"status": status.value}
+        if error is not None:
+            values["error"] = error
+        self.session.execute(
+            update(tender).where(tender.c.id == tender_id).values(**values)
+        )
 
     def upsert_tender(
         self,
@@ -88,26 +119,32 @@ class TenderRepo:
         page_count: Optional[int] = None,
         category: Optional[str] = None,
         processing_version: Optional[str] = None,
+        status: TenderStatus = TenderStatus.DONE,
     ) -> str:
         """The tender's row, found by the hash of its file.
 
         A tender is identified by what it contains, so the same file is the
-        same tender however many times it is offered.
+        same tender however many times it is offered. `status` applies only
+        when the row is created: re-offering a file the database already has
+        does not reset what its ingestion has already reached.
         """
         existing = self.session.execute(
             select(tender.c.id).where(tender.c.sha256 == sha256)
         ).first()
         if existing:
-            self.session.execute(
-                update(tender)
-                .where(tender.c.id == existing[0])
-                .values(
-                    filename=filename,
-                    page_count=page_count,
-                    category=category,
-                    processing_version=processing_version,
+            # A field the caller does not state has not said the stored value
+            # is wrong, so it is left alone.
+            values = {
+                "filename": filename,
+                "page_count": page_count,
+                "category": category,
+                "processing_version": processing_version,
+            }
+            values = {key: value for key, value in values.items() if value not in (None, "")}
+            if values:
+                self.session.execute(
+                    update(tender).where(tender.c.id == existing[0]).values(**values)
                 )
-            )
             return str(existing[0])
 
         tender_id = uuid.uuid4()
@@ -119,6 +156,7 @@ class TenderRepo:
                 page_count=page_count,
                 category=category,
                 processing_version=processing_version,
+                status=status.value,
             )
         )
         return str(tender_id)
