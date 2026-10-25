@@ -712,3 +712,167 @@ The audit reports, per tender, whether its specification and its bill of
 quantities were found, how many items and requirements it produced, and why
 it failed if it did - and then ranks the failure causes, so the thing that
 goes wrong most often is the thing that is looked at first.
+
+---
+
+## Phase 6 — Retrieval, extraction and matching (FR-11, FR-17 to FR-28)
+
+Phase 6 answers a requirement from the corpus. It is the phase where the
+pieces from Phase 1 - the verifier, the comparison registry, the scoring -
+are finally given something to work on.
+
+**Built**
+
+- `app/services/retrieval.py` (FR-17 to FR-20) — the keyword search, the
+  semantic search, and the merge that combines them. The exact tokens a
+  requirement carries are boosted, and the words are ORed rather than ANDed.
+- `app/services/facts.py` (FR-22) — the LLM reads a passage and states
+  what it documents, with the sentence it says it in. The answer is strict
+  JSON, validated by Pydantic; an answer that is not JSON is a failed
+  extraction, never a capability that was never stated.
+- `app/services/matching.py` (FR-21 to FR-28) — retrieve, extract, verify
+  through the four layers, compare deterministically. The LLM never decides
+  whether a capability matches. `make match REQ="..."` answers one
+  requirement from the corpus.
+- `app/services/corpusseed.py` (FR-17, FR-20, FR-21) — the catalogue
+  seeding: a collected document becomes a product (the model it names, or a
+  family-level product when it names none), the canonical attributes are
+  written, and the alias table is seeded from the vocabulary. A document
+  points at the product it is about (`0006_document_product`), so a passage
+  is read for that product and not once per product of the manufacturer.
+  `make ingest` runs the seeding after it writes the documents (D-56).
+- `app/services/findings.py` (FR-21) — the structured fact cache. A
+  verified fact is filed under its canonical attribute, and
+  `match_requirement` reads it before it retrieves anything; retrieval and
+  extraction do not run for a fact already held.
+- `app/services/embeddings.py` (FR-11) — the corpus is embedded once, in
+  batches, and a chunk that already has an embedding is left alone.
+- Migration `0004_chunk_embedding` — the embedding column gets its
+  dimension and an HNSW index (D-6).
+- Migration `0005_product_family_level` — a product records whether it is
+  family-level evidence, which caps the score and flags review (PRD 4).
+- Migration `0006_document_product` — the document-to-product link the
+  retrieval joins on.
+
+**Three defects the corpus found**
+
+- **The keyword search found nothing.** The words were ANDed, and a
+  requirement names several things at once, so no datasheet sentence
+  matched. They are ORed now, and the common words are left out: a chunk
+  that says "the" matches every requirement.
+- **A datasheet's value never matched.** A requirement says "267mm" and the
+  datasheet writes "267" in the cell with the unit in the column header, so
+  "267 mm" appears nowhere. A token is looked for in three forms now.
+- **The rank put a page footer above the answer.** The full-text rank
+  cannot tell "stainless" from "SS316", because the first is the common
+  word and the second is the one that identifies the product. The exact
+  tokens are boosted over the rank.
+
+**The rate limit**
+
+The provider's limit is 8,000 tokens a minute and it says when the limit
+resets. A fixed five second backoff retried into it, and every retry was
+another call against the same exhausted limit. The retry now waits as long
+as the provider says (D-53).
+
+**The embedding model**
+
+The local Ollama's `nomic-embed-text` (768 dimensions) is served without an
+account. The HuggingFace router needs a token *and* credits: the account
+answers 402, and the anonymous path answers with a web page rather than
+JSON. The corpus is embedded with the local model, and the dimension in the
+migration matches it (D-52).
+
+**The corpus, answered from**
+
+Five manufacturers were added to the corpus - CIRCOR, Emerson Fisher,
+Flowserve, Xylem Godwin and Xylem Goulds - and their catalogues were read,
+chunked and embedded. The passage the model reads is often a table row,
+and the prompt now says so: a row states the values in its columns, and
+one passage can state more than one capability. The answer is a list
+(`{"requirements": [...]}`) and the comparison runs on the one that
+answers the requirement.
+
+`embed_corpus` had no caller, so the corpus could not be embedded at all:
+`make embed` runs it now, and reports how many chunks were embedded, how
+many already had one, and how many failed.
+
+**A defect the big catalogues found**
+
+- **The ingestion died on the last document.** The corpus grew to 156MB of
+  PDFs, and a 52MB catalogue takes minutes to read. The ingestion held a
+  transaction open across the read, and the server killed the connection:
+  `IdleInTransactionSessionTimeout`, after half an hour of parsing that
+  would have been thrown away. The transaction is now closed before the
+  read and every document is committed on its own, so one document that
+  fails does not take the corpus with it (D-54).
+
+**The OCR that was not running**
+
+Two of the new catalogues have a page with no text layer, and the page
+came back unreadable: `No tessdata specified and Tesseract is not
+installed`. Tesseract was installed, at `C:\Program Files\Tesseract-OCR`,
+but `TESSDATA_PREFIX` was unset, and PyMuPDF's OCR looks for the language
+data in the directory the variable names - the `tessdata` directory
+itself, not the one above it. The setting was already in the config; it
+had no value.
+
+**Three defects found while closing the phase**
+
+- **A document had no product.** `seed_corpus` existed but nothing called
+  it: `make ingest` wrote the documents and stopped. Every passage then
+  named no product, and the fact cache - keyed on a product - could never
+  hit. The ingestion seeds the products and removes the stale ones now
+  (D-56).
+- **A fact read in a synonym was unsupported.** The LLM answers in the
+  document's own words ("body material"), and `_value_type` looked the
+  wording up only as a canonical term, so no evaluator was found and a
+  correctly read fact came back `unsupported_requirement`. The term is
+  resolved through the vocabulary's synonyms before the evaluator is
+  chosen (FR-27, FR-29).
+- **A public host was refused on a NAT64 network.** The private-address
+  fence treated the well-known NAT64 prefix as reserved, and two tests
+  failed on a machine whose resolver returns one. The IPv4 the address
+  carries is checked now, so a public GeM host passes and a NAT64 address
+  wrapping a private one does not (D-55).
+
+**Tested**
+
+264 backend tests pass and 14 collector tests pass; 9 integration tests are
+skipped without a database. No test fails. The fact tests were moved to the
+list shape the model now answers with (`{"requirements": [...]}`, read as
+`result.facts[...]`); no stale `.fact` accessor is left, and the matching
+tests use the same shape end to end.
+
+The retrieval tests cover the tokens that identify a product, the merge of
+the two searches, and the exact-token boost. The fact tests cover a fact
+read from a passage, a passage that states nothing, an answer that is not
+JSON, and an answer with a field the schema does not have. The matching
+tests cover a requirement nothing answers, a quote that is not on the page
+it names, a failed extraction, the fact taken from a multi-fact answer, a
+family-level document capped and flagged, and a cache hit that retrieves
+nothing. The ingestion test covers the transaction and the seeding order.
+The fetching tests cover a public resolve, a NAT64 address carrying a
+public IPv4, and a NAT64 address carrying a private one; they no longer
+touch the network.
+
+**Left open**
+
+- **FR-16 (category inferred per BOQ item) is still unbuilt.** `category`
+  reaches retrieval from the document row; nothing infers it from the BOQ
+  item a requirement belongs to.
+- **The retrieval SQL has not run against PostgreSQL in this session.**
+  The integration tests are skipped without `TEST_DATABASE_URL`, so the
+  `tsvector` search, the pgvector ordering and the `document.product_id`
+  join are proven by unit tests only.
+- **`test_tendercollect` writes fixed file names into `backend/tests/`.**
+  Two pytest processes at once collide on `_boq.pdf`, `_form.pdf` and
+  `_scanned.pdf`, and a test fails for a reason unrelated to the code.
+  `tmp_path` is the fix.
+- **One ingestion test names an absolute path.** The doc-type check reads
+  `C:/Users/Lenovo/.../backend/data/catalogue/manifest.csv`; it skips when
+  the file is absent, so another machine silently loses the check instead
+  of failing.
+- **The corpus is not in git.** `backend/data/manufacturers/` is 157 MB of
+  PDFs behind the ignore rule; only the manifests and the four new source
+  configs are left to commit.

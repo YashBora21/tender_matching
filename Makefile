@@ -8,7 +8,7 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev migrate downgrade run test test-unit test-integration \
-        test-collect collect ingest tenders tenders-audit docker-build docker-up docker-down \
+        test-collect collect ingest embed match tenders tenders-audit docker-build docker-up docker-down \
         docker-logs clean
 
 help: ## Show this help
@@ -49,6 +49,12 @@ collect: ## Collect the manufacturer corpus (writes the manifest)
 
 ingest: ## Parse the collected corpus into the database
 	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.ingestion
+
+embed: ## Embed the corpus chunks (FR-11)
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.embeddings
+
+match: ## Answer a requirement from the corpus: make match REQ="body shall be SS316"
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.matching "$(REQ)" $(ARGS)
 
 tenders: ## Process the tender corpus and report what it gave
 	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpus

@@ -89,21 +89,39 @@ def _resolves_to_private(host: str) -> bool:
         raise FetchRefused(f"the host '{host}' does not resolve: {exc}") from exc
 
     for info in infos:
-        address = info[4][0]
-        try:
-            ip = ipaddress.ip_address(address)
-        except ValueError:
-            continue
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
+        if _address_is_refused(info[4][0]):
             return True
     return False
+
+
+# The well-known NAT64 prefix. On an IPv4-only network with DNS64, a public
+# name resolves to an IPv6 address that carries the IPv4 address in its last
+# 32 bits. Python classes the prefix itself as reserved, so the address is
+# judged by the IPv4 it carries: refusing the prefix would refuse a public
+# document that the network can reach.
+_NAT64_PREFIX = ipaddress.ip_network("64:ff9b::/96")
+
+
+def _address_is_refused(address: str) -> bool:
+    """True when an address is on the machine's own network."""
+    try:
+        ip = ipaddress.ip_address(address)
+    except ValueError:
+        return False
+
+    if ip.version == 6 and ip in _NAT64_PREFIX:
+        embedded = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+        return _address_is_refused(str(embedded))
+
+    return bool(
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
 
 
 def check_url(url: str) -> None:

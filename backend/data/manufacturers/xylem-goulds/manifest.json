@@ -1,0 +1,43 @@
+{
+  "manufacturer": "Xylem Goulds",
+  "manufacturer_slug": "xylem-goulds",
+  "updated_at": "2026-10-22T11:31:37+00:00",
+  "documents": [
+    {
+      "url": "https://www.xylem.com/siteassets/brand/goulds-water-technology/resources/brochure/jet-and-submersible-product-catalog-jetsub.pdf",
+      "manufacturer": "Xylem Goulds",
+      "category": "xylem",
+      "doc_type": "catalogue",
+      "model_or_family": "Goulds jet and submersible pumps",
+      "status": "new",
+      "models": [],
+      "filename": "jet-and-submersible-product-catalog-jetsub.pdf",
+      "path": "raw/jet-and-submersible-product-catalog-jetsub.pdf",
+      "sha256": "440faced41b076306153472041ccf56e8c8b5471e013cebcf3ae7360fbe09a3b",
+      "retrieved_at": "2026-10-22T11:31:37+00:00",
+      "is_secondary": false,
+      "notes": "Goulds jet and submersible pumps, motors and controls",
+      "etag": "\"1dc8a48a1eace34\"",
+      "last_modified": "Tue, 20 Jan 2026 20:09:10 GMT",
+      "content_type": "application/pdf"
+    },
+    {
+      "url": "https://www.xylem.com/siteassets/brand/goulds-water-technology/resources/brochure/wastewater-product-catalog-wws.pdf",
+      "manufacturer": "Xylem Goulds",
+      "category": "xylem",
+      "doc_type": "catalogue",
+      "model_or_family": "Goulds wastewater pumps",
+      "status": "new",
+      "models": [],
+      "filename": "wastewater-product-catalog-wws.pdf",
+      "path": "raw/wastewater-product-catalog-wws.pdf",
+      "sha256": "ecac9cefed4dc039fa31f337b294d80889808de181599a3fe10be0f892406e37",
+      "retrieved_at": "2026-10-22T11:31:34+00:00",
+      "is_secondary": false,
+      "notes": "Goulds Water Technology wastewater product catalog",
+      "etag": "\"1dc02b9671d18d1\"",
+      "last_modified": "Fri, 01 Aug 2025 07:53:39 GMT",
+      "content_type": "application/pdf"
+    }
+  ]
+}

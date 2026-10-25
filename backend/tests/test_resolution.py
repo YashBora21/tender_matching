@@ -174,9 +174,19 @@ def test_seeding_does_not_overwrite_a_reviewers_decision(monkeypatch):
 
     class RecordingRepo(AliasRepo):
         def list_all(self):
-            return [{"alias": "speed"}]
+            return [
+                {
+                    "alias": "speed",
+                    "canonical_term": "rotational_speed",
+                    "approved": True,
+                    "source": "manual",
+                }
+            ]
 
         def add(self, canonical_term, alias, **kwargs):
+            added.append(alias)
+
+        def set_approval(self, alias, approved):
             added.append(alias)
 
     monkeypatch.setattr("app.repositories.aliases.AliasRepo", RecordingRepo)

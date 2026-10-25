@@ -1,0 +1,26 @@
+{
+  "category": "flowserve",
+  "entries": [
+    {
+      "manufacturer": "Flowserve",
+      "url": "https://www.flowserve.com/sites/default/files/dam/documents/FCENBR00002_EN_A4.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Control valves",
+      "note": "Control Valve Product Guide - the general service, severe service and custom engineered ranges"
+    },
+    {
+      "manufacturer": "Flowserve",
+      "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf",
+      "doc_type": "specification",
+      "model_or_family": "Valtek GS",
+      "note": "Valtek GS general service control valve"
+    },
+    {
+      "manufacturer": "Flowserve",
+      "url": "https://www.flowserve.com/sites/default/files/dam/documents/WCENBR0001_EN_AQ.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Worcester controls",
+      "note": "Worcester Controls product catalog"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "category": "emerson",
+  "entries": [
+    {
+      "manufacturer": "Emerson Fisher",
+      "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/documents/d352343x012.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Fisher globe valves",
+      "note": "Fisher Globe Valves product guide - the sliding stem and rotary families"
+    },
+    {
+      "manufacturer": "Emerson Fisher",
+      "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/documents/d103311x012.pdf",
+      "doc_type": "specification",
+      "model_or_family": "Fisher D series",
+      "note": "D series valve selection guide"
+    },
+    {
+      "manufacturer": "Emerson Fisher",
+      "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/valves/documents/control-valve-handbook-en-3661206.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Control valve handbook",
+      "note": "Control Valve Handbook, 6th edition - sizing, materials, trims and actuators"
+    },
+    {
+      "manufacturer": "Emerson Fisher",
+      "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/documents/d103554x012.pdf",
+      "doc_type": "specification",
+      "model_or_family": "Fisher large ED/EWD ET/EWT",
+      "note": "Large ED/EWD and ET/EWT valves, NPS 12-30"
+    }
+  ]
+}

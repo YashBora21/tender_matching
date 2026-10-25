@@ -1,0 +1,61 @@
+{
+  "manufacturer": "Flowserve",
+  "manufacturer_slug": "flowserve",
+  "updated_at": "2026-10-22T11:31:29+00:00",
+  "documents": [
+    {
+      "url": "https://www.flowserve.com/sites/default/files/dam/documents/FCENBR00002_EN_A4.pdf",
+      "manufacturer": "Flowserve",
+      "category": "flowserve",
+      "doc_type": "catalogue",
+      "model_or_family": "Control valves",
+      "status": "new",
+      "models": [],
+      "filename": "FCENBR00002_EN_A4.pdf",
+      "path": "raw/FCENBR00002_EN_A4.pdf",
+      "sha256": "1425ea3b87e6c9d7fca64d9f84e2062b2622aa84de4f1f350f6a29c1a11c432a",
+      "retrieved_at": "2026-10-22T11:31:13+00:00",
+      "is_secondary": false,
+      "notes": "Control Valve Product Guide - the general service, severe service and custom engineered ranges",
+      "etag": "\"6a3b7fc2-193c866\"",
+      "last_modified": "Wed, 24 Jun 2026 06:57:06 GMT",
+      "content_type": "application/pdf"
+    },
+    {
+      "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf",
+      "manufacturer": "Flowserve",
+      "category": "flowserve",
+      "doc_type": "specification",
+      "model_or_family": "Valtek GS",
+      "status": "new",
+      "models": [],
+      "filename": "VLENTB0300_EN_A4.pdf",
+      "path": "raw/VLENTB0300_EN_A4.pdf",
+      "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+      "retrieved_at": "2026-10-22T11:31:14+00:00",
+      "is_secondary": false,
+      "notes": "Valtek GS general service control valve",
+      "etag": "\"6a3b84d6-2a392b\"",
+      "last_modified": "Wed, 24 Jun 2026 07:18:46 GMT",
+      "content_type": "application/pdf"
+    },
+    {
+      "url": "https://www.flowserve.com/sites/default/files/dam/documents/WCENBR0001_EN_AQ.pdf",
+      "manufacturer": "Flowserve",
+      "category": "flowserve",
+      "doc_type": "catalogue",
+      "model_or_family": "Worcester controls",
+      "status": "new",
+      "models": [],
+      "filename": "WCENBR0001_EN_AQ.pdf",
+      "path": "raw/WCENBR0001_EN_AQ.pdf",
+      "sha256": "be1dd0d40e0768bca9e5d7c457e47fb973662d77ee11d3a601c53d61fb5d2a9b",
+      "retrieved_at": "2026-10-22T11:31:29+00:00",
+      "is_secondary": false,
+      "notes": "Worcester Controls product catalog",
+      "etag": "\"6a3b7a44-a2d9bd\"",
+      "last_modified": "Wed, 24 Jun 2026 06:33:40 GMT",
+      "content_type": "application/pdf"
+    }
+  ]
+}

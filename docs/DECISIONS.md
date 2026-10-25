@@ -676,3 +676,108 @@ failures, and the report said nothing about the real cause.
 *Alternatives:* One transaction for the whole corpus — rejected, a single
 bad tender costs the whole run. A transaction per tender without a
 savepoint — rejected, the abort still poisons the session.
+
+---
+
+**D-50 — The two searches are merged by rank, not by score.**
+*Decision:* Reciprocal rank fusion: a chunk's score is the sum of what each
+search gives it for its position. The keyword search is OR over the words,
+with the common words left out; the exact tokens are boosted.
+*Why:* A requirement names several things at once - "Body shall be SS316
+with pressure rating 16 bar" - and no datasheet sentence has all of them,
+so a search that ANDs the words finds nothing at all. And the two searches'
+scores are not comparable: a full-text rank and a cosine distance are
+different scales, and a fixed weighting between them would be a guess.
+Only the order is used, so nothing has to be calibrated.
+*Alternatives:* One search only — rejected, the PRD asks for both, and
+keyword alone misses "Face to Face: ASME B16.10" for a requirement that
+says "face to face distance". A weighted sum of the raw scores — rejected,
+the scales are not comparable and the weights would be a guess.
+
+---
+
+**D-51 — The exact tokens are worth more than the common words.**
+*Decision:* The words that identify a product - a model number, a standard
+code, a material grade, a size - are boosted over the full-text rank. A
+token is looked for in three forms: as it stands ("SS316"), with its parts
+joined ("150mm"), and, when it carries a number, the number alone ("150").
+*Why:* A requirement that names "SS316" wants the datasheet that says
+"SS316", not the many that say "stainless". The full-text rank cannot tell
+them apart, because "stainless" is the common word and "ss316" is the one
+that identifies the product. The number alone matters because a datasheet
+table writes the value in the cell and the unit in the column header, so
+"267 mm" never appears in the text and "267" does.
+*Alternatives:* Ranking by the full-text score alone — rejected, as above.
+Matching the joined form only — rejected, a corpus writes both ways.
+
+---
+
+**D-52 — The embedding model is the local one.**
+*Decision:* The corpus is embedded with the local Ollama's
+`nomic-embed-text` (768 dimensions), which is served without an account.
+*Why:* The HuggingFace router needs a token *and* credits: the account
+answers 402, and the anonymous path answers with a web page rather than
+JSON. The local model needs neither, and it is the same shape of service
+(the embedding is a vector, the dimension is a property of the model).
+*Alternatives:* The HuggingFace model — rejected, it cannot be reached
+without credits. A hosted embedding provider — rejected, it needs an
+account and an API key for a computation the local machine does for free.
+
+---
+
+**D-53 — A rate-limited call waits as long as the provider says.**
+*Decision:* The retry delay is read from the error when the provider gives
+one ("Please try again in 24.9s"), and the fixed backoff stands when it
+does not.
+*Why:* The provider's limit is per minute and it knows when the limit
+resets. A fixed five second backoff retried into an exhausted limit, and
+every retry was another call against the same limit.
+*Alternatives:* A longer fixed backoff — rejected, the wait is then either
+too long for a fast limit or too short for a slow one. Retrying without a
+wait — rejected, that is what made it fail.
+
+---
+
+**D-54 — The ingestion closes its transaction before it reads a document.**
+*Decision:* Each document is a unit of work on its own: the transaction is
+closed before the document is parsed, and the document is committed as soon
+as it is written.
+*Why:* A big catalogue takes minutes to read, and the server kills a
+connection that sits in a transaction that long. The first run over the
+new manufacturers died on the last document with
+`IdleInTransactionSessionTimeout`, after half an hour of parsing that
+would have been thrown away.
+*Alternatives:* Reading every document first and writing them all at the
+end — rejected, the whole corpus is then held in memory and one timeout
+loses all of it. Parsing inside the transaction — rejected, that is the
+defect.
+
+---
+
+**D-55 — A NAT64 address is judged by the IPv4 it carries.**
+*Decision:* An IPv6 address in the well-known NAT64 prefix
+(`64:ff9b::/96`) is reduced to the IPv4 address in its last 32 bits, and
+that address is checked against the private-address rules. The NAT64
+prefix itself is not treated as private.
+*Why:* On an IPv4-only network with DNS64, a public name legitimately
+resolves into that prefix. Python 3.13 classes the prefix as reserved, so
+the fence refused `gem.gov.in` even though the IPv4 inside was public.
+Refusing the prefix would refuse every document on such a network.
+*Alternatives:* Dropping the reserved check — rejected, it also covers
+addresses that must stay refused. Allowing every NAT64 address — rejected,
+`64:ff9b::c0a8:101` carries `192.168.1.1` and must not pass.
+
+---
+
+**D-56 — Ingesting the corpus seeds the products in the same run.**
+*Decision:* `make ingest` seeds the canonical attributes and the aliases,
+ingests the documents, then seeds the product each document is about and
+removes the family-level products nothing points at any more.
+*Why:* A document without a product is a passage that names no product:
+retrieval cannot say what the evidence is for and the fact cache can never
+hit. The seeding had no caller at all, so `document.product_id` stayed
+null on a fresh database. Keeping it as a separate command makes it a step
+someone has to remember, and forgetting it fails quietly.
+*Alternatives:* A `make seed` target — rejected, the step that must follow
+ingestion is not a separate job. Seeding during the migration — rejected,
+a migration cannot read the corpus and must stay reversible.

@@ -69,7 +69,12 @@ def ingest_corpus(
             report.errors.append(f"no hash for {file_path}")
             continue
 
-        if not force and repo.exists_by_sha256(sha256):
+        already_there = repo.exists_by_sha256(sha256)
+        # The transaction is closed before the parse. A big document takes
+        # minutes to read, and a connection that sits in a transaction that
+        # long is killed by the server.
+        session.commit()
+        if not force and already_there:
             report.skipped_unchanged += 1
             continue
 
@@ -98,6 +103,9 @@ def ingest_corpus(
                 for item in parsed.chunks
             ],
         )
+        # The document is written and closed off: one document that fails
+        # does not take the corpus with it.
+        session.commit()
 
         report.documents += 1
         report.chunks += written
@@ -115,6 +123,7 @@ def main() -> int:
     from app.core.config import get_settings
     from app.repositories.aliases import seed_aliases, seed_attributes
     from app.repositories.db import session_scope
+    from app.services.corpusseed import remove_stale_products, seed_corpus
 
     data_dir = get_settings().data_dir
     with session_scope() as session:
@@ -123,10 +132,19 @@ def main() -> int:
         seed_attributes(session)
         seed_aliases(session)
         report = ingest_corpus(data_dir, session)
+        # The documents are in. The product each one is about is what a fact
+        # hangs off and what the retrieval joins on (FR-21), so it is seeded
+        # in the same run rather than in a step someone has to remember.
+        seeded = seed_corpus(session)
+        stale = remove_stale_products(session)
 
     print(f"documents ingested: {report.documents}")
     print(f"chunks written:     {report.chunks}")
     print(f"unchanged, skipped: {report.skipped_unchanged}")
+    print(f"products seeded:    {seeded.products}")
+    print(f"family-level:       {seeded.family_level}")
+    if stale:
+        print(f"stale products:     {stale}")
     print(f"failed:             {report.failed}")
     if report.incomplete:
         print(f"incomplete:         {len(report.incomplete)}")

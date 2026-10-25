@@ -536,4 +536,16 @@ def evaluate(request: ComparisonRequest, value_type: Optional[ValueType]) -> Eva
             "no evaluator is registered for this attribute",
             needs_review=True,
         )
-    return evaluator(request)
+    evaluation = evaluator(request)
+    if request.capability_is_family_level:
+        # Evidence that covers a family, not the model under test: uncertain
+        # applicability. The score is capped and the claim goes to review
+        # (PRD 4).
+        return Evaluation(
+            evaluation.status,
+            min(evaluation.score, request.rules.family_level_score),
+            evaluation.reason,
+            needs_review=True,
+            family_level=True,
+        )
+    return evaluation

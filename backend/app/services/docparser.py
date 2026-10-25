@@ -532,19 +532,41 @@ def iter_manifest_documents(manufacturers_dir: Path) -> Iterable[tuple[Path, dic
 def iter_csv_corpus(catalogue_dir: Path) -> Iterable[tuple[Path, dict]]:
     """Every document in a catalogue, with the manifest record that describes it.
 
-    The collector writes a JSON manifest per manufacturer; a corpus gathered
-    elsewhere can carry a CSV listing instead, with the same fields. Both are
-    read, so a corpus does not have to be rebuilt to be ingested.
-
-    A file that is on disk but not in the manifest is still a document. It is
-    hashed here and recorded, because a corpus is the set of files that exist:
-    leaving the unlisted ones out would make the corpus quietly incomplete.
+    A catalogue is written in more than one way: a CSV listing every
+    document, or a JSON manifest per manufacturer, which is what the
+    collector writes. Both are read, and so is a file on disk that no
+    manifest names - a corpus is the set of files that exist, and leaving the
+    unlisted ones out would make it quietly incomplete.
     """
     catalogue_dir = Path(catalogue_dir)
     if not catalogue_dir.exists():
         return
 
     import csv
+
+    # The collector's own manifests, one per manufacturer.
+    for manifest_path in sorted(catalogue_dir.glob("*/manifest.json")):
+        import json
+
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("could not read %s: %s", manifest_path, exc)
+            continue
+        manufacturer = manifest.get("manufacturer") or manifest_path.parent.name
+        for record in manifest.get("documents", []):
+            relative = record.get("path")
+            if not relative:
+                continue
+            file_path = manifest_path.parent / relative
+            if not file_path.exists():
+                logger.warning("manifest names a missing file: %s", file_path)
+                continue
+            entry = dict(record)
+            entry.setdefault("manufacturer", manufacturer)
+            entry["doc_type"] = entry.get("doc_type") or entry.get("kind")
+            entry["path"] = str(file_path)
+            yield file_path, entry
 
     for manifest_path in sorted(catalogue_dir.glob("**/manifest.csv")):
         with manifest_path.open(encoding="utf-8", newline="") as handle:
@@ -567,7 +589,7 @@ def iter_csv_corpus(catalogue_dir: Path) -> Iterable[tuple[Path, dict]]:
                     "path": file_path.name,
                     "is_secondary": False,
                     "restriction_note": None,
-                    "model_or_family": None,
+                    "model_or_family": (row.get("model_or_family") or "").strip() or None,
                     "category": None,
                     "notes": (row.get("notes") or "").strip(),
                 }

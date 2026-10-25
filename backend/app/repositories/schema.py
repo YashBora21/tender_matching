@@ -93,6 +93,10 @@ product = Table(
     Column("model", String(255), nullable=False),
     Column("family", String(255)),
     Column("category", String(255)),
+    # True when the product stands for a family of products rather than one
+    # model. A fact about a family is family-level evidence: uncertain
+    # applicability, capped and flagged for review (PRD 4).
+    Column("is_family_level", Boolean, nullable=False, server_default="false"),
     UniqueConstraint("manufacturer_id", "model", name="uq_product_manufacturer_model"),
     # The table cannot be referenced by name while it is being defined.
     Index("ix_product_manufacturer_id", "manufacturer_id"),
@@ -118,8 +122,14 @@ document = Table(
     # category and model, so both live on the document the chunks belong to.
     Column("model_or_family", String(255)),
     Column("category", String(255)),
+    # The product the document is about. The corpus seeding writes it: a
+    # document is evidence about one product, and the retrieval joins the
+    # document to that product rather than to every product of the
+    # manufacturer.
+    Column("product_id", Uuid(), ForeignKey("product.id")),
     Index("ix_document_sha256", "sha256"),
     Index("ix_document_manufacturer_id", "manufacturer_id"),
+    Index("ix_document_product_id", "product_id"),
     # One document per manufacturer per content: a distributor reselling the
     # manufacturer's own file is the same document, not a second one.
     UniqueConstraint(

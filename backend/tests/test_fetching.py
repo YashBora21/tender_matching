@@ -6,12 +6,26 @@ anywhere it should not.
 from __future__ import annotations
 
 import http.server
+import socket
 import threading
 
 import pytest
 
 from app.core import fetching
 from app.core.fetching import FetchRefused, check_url, fetch
+
+
+def _resolves_to(monkeypatch, *addresses: str) -> None:
+    """Make a host resolve to the given addresses, without the network."""
+    family = socket.AF_INET6 if ":" in addresses[0] else socket.AF_INET
+    monkeypatch.setattr(
+        "app.core.fetching.socket.getaddrinfo",
+        lambda *args, **kwargs: [
+            (family, socket.SOCK_STREAM, 6, "", (address, 0, 0, 0))
+            for address in addresses
+        ],
+    )
+
 
 
 def test_a_host_off_the_allowlist_is_refused(monkeypatch):
@@ -30,8 +44,8 @@ def test_a_host_on_the_allowlist_is_allowed(monkeypatch):
     from app.core.config import get_settings
 
     get_settings.cache_clear()
+    _resolves_to(monkeypatch, "160.187.232.19")
 
-    # The check resolves the host, so a real one is used here.
     check_url("https://mkp.gem.gov.in/a.pdf")
 
 
@@ -40,8 +54,37 @@ def test_a_subdomain_of_an_allowed_host_is_allowed(monkeypatch):
     from app.core.config import get_settings
 
     get_settings.cache_clear()
+    _resolves_to(monkeypatch, "160.187.232.19")
 
     check_url("https://bidplus.gem.gov.in/a.pdf")
+
+
+def test_a_nat64_address_is_judged_by_the_ipv4_it_carries(monkeypatch):
+    """On an IPv4-only network with DNS64, a public name resolves into
+    64:ff9b::/96. Python classes that prefix as reserved, but the IPv4 inside
+    it is public, so the document is reachable and must not be refused."""
+    monkeypatch.setenv("FETCH_ALLOWED_DOMAINS", "gem.gov.in")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    # 64:ff9b::a0bb:e813 carries 160.187.232.19.
+    _resolves_to(monkeypatch, "64:ff9b::a0bb:e813")
+
+    check_url("https://mkp.gem.gov.in/a.pdf")
+
+
+def test_a_nat64_address_that_carries_a_private_ipv4_is_refused(monkeypatch):
+    monkeypatch.setenv("FETCH_ALLOWED_DOMAINS", "gem.gov.in")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    # 64:ff9b::c0a8:101 carries 192.168.1.1.
+    _resolves_to(monkeypatch, "64:ff9b::c0a8:101")
+
+    with pytest.raises(FetchRefused) as caught:
+        check_url("https://mkp.gem.gov.in/a.pdf")
+    assert "private address" in str(caught.value)
+
 
 
 def test_a_private_address_is_refused(monkeypatch):
