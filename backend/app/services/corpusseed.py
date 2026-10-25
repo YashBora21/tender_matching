@@ -250,7 +250,11 @@ def seed_corpus(session: Session) -> SeedReport:
         name = _manufacturer_name(session, manufacturer_id)
         if model:
             # The document names a model. It is used as it stands.
-            if _upsert_product(session, manufacturer_id, model, model, category, False):
+            product_id, created = _upsert_product(
+                session, manufacturer_id, model, model, category, False
+            )
+            _link_document(session, document_id, product_id)
+            if created:
                 report.products += 1
             report.per_manufacturer[name] = report.per_manufacturer.get(name, 0) + 1
             continue
@@ -260,7 +264,11 @@ def seed_corpus(session: Session) -> SeedReport:
         if not title:
             report.unnamed_documents.append(f"{name}: {path or '?'}")
             continue
-        if _upsert_product(session, manufacturer_id, title, title, category, True):
+        product_id, created = _upsert_product(
+            session, manufacturer_id, title, title, category, True
+        )
+        _link_document(session, document_id, product_id)
+        if created:
             report.products += 1
             report.family_level += 1
             report.family_level_documents.append(f"{name}: {title}")
@@ -268,6 +276,23 @@ def seed_corpus(session: Session) -> SeedReport:
 
     session.commit()
     return report
+
+
+def _link_document(session: Session, document_id, product_id: Optional[str]) -> None:
+    """Point a document at the product it is about.
+
+    The link is what the retrieval joins on: a document is evidence about one
+    product, and joining it to every product of the manufacturer would read
+    the same passage once per product, under a name that is not the one the
+    document is about.
+    """
+    if not product_id:
+        return
+    session.execute(
+        update(document)
+        .where(document.c.id == document_id)
+        .values(product_id=product_id)
+    )
 
 
 def _manufacturer_name(session: Session, manufacturer_id) -> str:
@@ -301,6 +326,15 @@ def remove_stale_products(session: Session) -> int:
         for row in session.execute(select(fact.c.product_id).distinct()).all()
         if row[0]
     }
+    # A product a document points at is not a leftover either: the document is
+    # its evidence.
+    used |= {
+        row[0]
+        for row in session.execute(
+            select(document.c.product_id).distinct()
+        ).all()
+        if row[0]
+    }
 
     removed = 0
     for product_id, manufacturer_id, model in session.execute(
@@ -324,8 +358,11 @@ def _upsert_product(
     family: str,
     category: Optional[str],
     is_family_level: bool,
-) -> bool:
-    """Add the product if it is not there. True when a row was added."""
+) -> tuple[Optional[str], bool]:
+    """Add the product if it is not there.
+
+    Returns the product's id and whether a row was added.
+    """
     existing = session.execute(
         select(product.c.id, product.c.family, product.c.is_family_level).where(
             product.c.manufacturer_id == manufacturer_id,
@@ -348,13 +385,14 @@ def _upsert_product(
                     is_family_level=bool(existing[2]) or is_family_level,
                 )
             )
-        return False
+        return str(existing[0]), False
 
     import uuid
 
+    product_id = uuid.uuid4()
     session.execute(
         product.insert().values(
-            id=uuid.uuid4(),
+            id=product_id,
             manufacturer_id=manufacturer_id,
             model=model,
             family=family,
@@ -362,4 +400,4 @@ def _upsert_product(
             is_family_level=is_family_level,
         )
     )
-    return True
+    return str(product_id), True

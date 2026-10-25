@@ -79,6 +79,9 @@ class TenderDocument:
     filename: Optional[str] = None
     path: Optional[str] = None
     sha256: Optional[str] = None
+    # The model or family the document covers. It is what a fact about the
+    # document is about, so it is recorded.
+    model_or_family: Optional[str] = None
     previous_sha256: Optional[str] = None
     retrieved_at: Optional[str] = None
     bytes: Optional[int] = None

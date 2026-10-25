@@ -19,6 +19,10 @@ class FakeSession:
 
     def __init__(self) -> None:
         self.executed: list[str] = []
+        self.commits: int = 0
+
+    def commit(self) -> None:
+        self.commits += 1
 
 
 def _pdf(path: Path, text: str) -> None:
@@ -89,6 +93,43 @@ def test_a_collected_document_is_ingested(tmp_path, monkeypatch):
     assert calls[0]["model_or_family"] == "GV series"
     assert calls[0]["category"] == "gate_valves"
     assert calls[0]["sha256"] == "a" * 64
+
+
+def test_a_document_is_written_and_closed_off_on_its_own(tmp_path, monkeypatch):
+    """A big document takes minutes to read, and a connection that sits in a
+    transaction that long is killed by the server. The transaction is closed
+    before the parse and the document is committed on its own."""
+    raw = tmp_path / "manufacturers" / "acme" / "raw"
+    raw.mkdir(parents=True)
+    _pdf(raw / "datasheet.pdf", "Body of body shall be SS316")
+    _manifest(
+        tmp_path,
+        "acme",
+        [{"url": "u", "sha256": "d" * 64, "path": "raw/datasheet.pdf"}],
+    )
+
+    class FakeRepo:
+        def __init__(self, session):
+            pass
+
+        def exists_by_sha256(self, sha256):
+            return False
+
+        def upsert_document(self, record):
+            return "doc-1"
+
+        def insert_chunks(self, document_id, chunks):
+            return len(chunks)
+
+    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+
+    session = FakeSession()
+    report = ingest_corpus(tmp_path, session)
+
+    assert report.documents == 1
+    # One commit to close the transaction before the parse, one to write the
+    # document.
+    assert session.commits == 2
 
 
 def test_a_document_that_did_not_change_is_not_re_ingested(tmp_path, monkeypatch):
@@ -264,3 +305,52 @@ def test_every_doc_type_the_corpus_uses_is_in_the_vocabulary():
         used = {row["doc_type"] for row in csv.DictReader(handle) if row.get("doc_type")}
 
     assert used <= vocabulary, f"doc types not in the vocabulary: {used - vocabulary}"
+
+
+def test_ingesting_a_corpus_seeds_the_products_its_documents_are_about(monkeypatch):
+    """A document is evidence about a product. Ingesting it without seeding
+    the product leaves every passage naming none, so the retrieval cannot say
+    what the evidence is for and the fact cache can never hit (FR-21)."""
+    from contextlib import contextmanager
+
+    from app.services import ingestion
+
+    calls: list[str] = []
+
+    class Report:
+        documents = 0
+        chunks = 0
+        skipped_unchanged = 0
+        failed = 0
+        incomplete: list[str] = []
+        errors: list[str] = []
+
+    class Seed:
+        products = 2
+        family_level = 1
+
+    @contextmanager
+    def scope():
+        yield object()
+
+    monkeypatch.setattr("app.repositories.db.session_scope", scope)
+    monkeypatch.setattr(
+        "app.repositories.aliases.seed_attributes", lambda s: calls.append("attributes")
+    )
+    monkeypatch.setattr(
+        "app.repositories.aliases.seed_aliases", lambda s: calls.append("aliases")
+    )
+    monkeypatch.setattr(
+        ingestion, "ingest_corpus", lambda *a, **k: calls.append("ingest") or Report()
+    )
+    monkeypatch.setattr(
+        "app.services.corpusseed.seed_corpus",
+        lambda s: calls.append("seed") or Seed(),
+    )
+    monkeypatch.setattr(
+        "app.services.corpusseed.remove_stale_products",
+        lambda s: calls.append("stale") or 0,
+    )
+
+    assert ingestion.main() == 0
+    assert calls == ["attributes", "aliases", "ingest", "seed", "stale"]

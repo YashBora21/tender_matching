@@ -74,9 +74,14 @@ class Settings(BaseSettings):
     # A tender links to documents on other hosts, and the collector follows
     # those links. It only follows them on the hosts it is allowed to, and
     # never to a private address.
+    #
+    # A manufacturer is added here when its robots.txt allows its PDFs.
+    # KSB and Crane are not on the list: both disallow *.pdf.
     fetch_allowed_domains: str = (
         "gem.gov.in,bidplus.gem.gov.in,mkp.gem.gov.in,admin.gem.gov.in,"
-        "fulfilment.gem.gov.in,bidplus.gem.gov.in"
+        "fulfilment.gem.gov.in,"
+        "flowserve.com,emerson.com,circor.com,xylem.com,"
+        "pentair.com,apollovalves.com,abb.com,nidec.com"
     )
     # The largest a fetched document may be. A tender attachment is a
     # specification, not a dataset.

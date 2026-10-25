@@ -65,6 +65,10 @@ class Candidate:
     manufacturer: Optional[str] = None
     model: Optional[str] = None
     family: Optional[str] = None
+    # True when the document is about a family of products rather than one
+    # model. Evidence from it is family-level: uncertain applicability
+    # (PRD 4).
+    is_family_level: bool = False
     # The ranks the two searches gave it, and the merged score.
     keyword_rank: Optional[int] = None
     semantic_rank: Optional[int] = None
@@ -144,6 +148,7 @@ def keyword_search(
     limit: int = 50,
     manufacturer_name: Optional[str] = None,
     category: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> list[Candidate]:
     """The chunks that match a requirement's words.
 
@@ -171,18 +176,24 @@ def keyword_search(
             manufacturer.c.name,
             product.c.model,
             product.c.family,
+            product.c.is_family_level,
             func.ts_rank_cd(chunk.c.search_vector, _tsquery(_or_query(query))).label("rank"),
         )
         .select_from(chunk)
         .join(document, document.c.id == chunk.c.document_id)
         .join(manufacturer, manufacturer.c.id == document.c.manufacturer_id)
-        .outerjoin(product, product.c.manufacturer_id == document.c.manufacturer_id)
+        # The document's own product, and not every product of its
+        # manufacturer: the same passage read once per product is the same
+        # passage read many times, under a name it is not about.
+        .outerjoin(product, product.c.id == document.c.product_id)
         .where(chunk.c.search_vector.op("@@")(_tsquery(_or_query(query))))
     )
     if manufacturer_name:
         statement = statement.where(manufacturer.c.name == manufacturer_name)
     if category:
         statement = statement.where(document.c.category == category)
+    if model:
+        statement = statement.where(product.c.model == model)
     # More rows are fetched than are returned: the exact-token boost below
     # re-ranks them, and a chunk that shares a token with the requirement
     # would be missed if the database cut the list before the boost.
@@ -204,6 +215,7 @@ def keyword_search(
             manufacturer=row[7],
             model=row[8],
             family=row[9],
+            is_family_level=bool(row[10]),
         )
         if wanted:
             lowered = candidate.text.lower()
@@ -237,6 +249,7 @@ def semantic_search(
     limit: int = 50,
     manufacturer_name: Optional[str] = None,
     category: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> list[Candidate]:
     """The chunks whose meaning is closest to a requirement.
 
@@ -268,18 +281,21 @@ def semantic_search(
             manufacturer.c.name,
             product.c.model,
             product.c.family,
+            product.c.is_family_level,
             distance.label("distance"),
         )
         .select_from(chunk)
         .join(document, document.c.id == chunk.c.document_id)
         .join(manufacturer, manufacturer.c.id == document.c.manufacturer_id)
-        .outerjoin(product, product.c.manufacturer_id == document.c.manufacturer_id)
+        .outerjoin(product, product.c.id == document.c.product_id)
         .where(chunk.c.embedding.isnot(None))
     )
     if manufacturer_name:
         statement = statement.where(manufacturer.c.name == manufacturer_name)
     if category:
         statement = statement.where(document.c.category == category)
+    if model:
+        statement = statement.where(product.c.model == model)
     statement = statement.order_by(distance).limit(limit)
 
     return [
@@ -294,6 +310,7 @@ def semantic_search(
             manufacturer=row[7],
             model=row[8],
             family=row[9],
+            is_family_level=bool(row[10]),
         )
         for row in session.execute(statement)
     ]
@@ -344,6 +361,7 @@ def search(
     limit: int = 20,
     manufacturer_name: Optional[str] = None,
     category: Optional[str] = None,
+    model: Optional[str] = None,
 ) -> list[Candidate]:
     """Find the chunks that answer a requirement.
 
@@ -351,10 +369,18 @@ def search(
     embedding model still gets the keyword half.
     """
     keyword = keyword_search(
-        session, text, manufacturer_name=manufacturer_name, category=category
+        session,
+        text,
+        manufacturer_name=manufacturer_name,
+        category=category,
+        model=model,
     )
     semantic = semantic_search(
-        session, text, manufacturer_name=manufacturer_name, category=category
+        session,
+        text,
+        manufacturer_name=manufacturer_name,
+        category=category,
+        model=model,
     )
     if not semantic:
         # No embedding model, or no embedded corpus: the keyword search is

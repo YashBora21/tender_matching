@@ -103,6 +103,7 @@ def match_requirement(
     requirement_unit: Optional[str] = None,
     requirement_operator: Optional[str] = None,
     manufacturer_name: Optional[str] = None,
+    model: Optional[str] = None,
     category: Optional[str] = None,
     limit: int = 20,
     client: Optional[LLMClient] = None,
@@ -111,12 +112,27 @@ def match_requirement(
     result = MatchResult(requirement_text=requirement_text)
     settings = get_settings()
 
+    # The fact cache is checked first: a fact that was verified once is the
+    # answer, and the passage it came from has not changed (FR-21).
+    cached = _cached_fact(session, requirement_text, manufacturer_name, model)
+    if cached is not None:
+        return _from_cached_fact(
+            cached,
+            requirement_text,
+            requirement_value=requirement_value,
+            requirement_unit=requirement_unit,
+            requirement_operator=requirement_operator,
+            manufacturer_name=manufacturer_name,
+            model=model,
+        )
+
     candidates = search(
         session,
         requirement_text,
         limit=limit,
         manufacturer_name=manufacturer_name,
         category=category,
+        model=model,
     )
     result.candidates = len(candidates)
     if not candidates:
@@ -146,6 +162,11 @@ def match_requirement(
         result.review_reason = result.reason
         return result
 
+    # The best candidate's verdict, with the run's counts kept: how many
+    # passages were read and how many calls that took are the run's, not
+    # one candidate's.
+    best.candidates = result.candidates
+    best.llm_calls = result.llm_calls
     return best
 
 
@@ -192,14 +213,17 @@ def _match_candidate(
 
     extracted = extract_fact(requirement_text, candidate.text, client=client)
     result.llm_calls = 1
-    if extracted.fact is None:
+    if extracted.error:
         result.reason = extracted.error or "the passage could not be read"
         result.review_required = True
         result.review_reason = result.reason
         return result
 
-    fact = extracted.fact
-    if not fact.found:
+    # A passage may state more than one capability. The one that answers the
+    # requirement is the one the comparison runs on; the rest are not this
+    # requirement's business.
+    fact = next((item for item in extracted.facts if item.found), None)
+    if fact is None:
         result.reason = "the passage does not state this capability"
         return result
 
@@ -222,6 +246,11 @@ def _match_candidate(
             else _convertible(requirement_unit, fact.unit)
         ),
     )
+    if candidate.is_family_level:
+        # The document is about a family of products, so the evidence is not
+        # confirmed for this model: uncertain applicability, not a match
+        # (PRD 4).
+        report.applicability = Applicability.FAMILY_LEVEL
 
     result.verification_outcome = report.outcome
     result.applicability = report.applicability
@@ -278,6 +307,147 @@ def _operator(value: Optional[str]):
         return Operator.UNKNOWN
 
 
+def _cached_fact(
+    session: Session,
+    requirement_text: str,
+    manufacturer_name: Optional[str],
+    model: Optional[str],
+) -> Optional[dict]:
+    """The fact already held for this product and attribute (FR-21).
+
+    The cache is keyed on the product and the attribute, so it can only be
+    read when both are known: a fact about one product says nothing about
+    another.
+    """
+    from app.comparison.attributes import find_attribute
+    from app.services.findings import cached_fact, product_id_for
+
+    if not (manufacturer_name and model):
+        return None
+    spec = find_attribute(requirement_text)
+    if spec is None:
+        return None
+    product_id = product_id_for(session, manufacturer_name, model)
+    if not product_id:
+        return None
+    return cached_fact(session, product_id, spec.canonical_term)
+
+
+def _from_cached_fact(
+    cached: dict,
+    requirement_text: str,
+    *,
+    requirement_value: Optional[str],
+    requirement_unit: Optional[str],
+    requirement_operator: Optional[str],
+    manufacturer_name: Optional[str],
+    model: Optional[str],
+) -> MatchResult:
+    """The answer a cached fact gives, without reading a passage again.
+
+    The comparison still runs: the fact holds the value the document states,
+    and whether that value meets the requirement is decided the same way
+    every time (FR-28).
+    """
+    result = MatchResult(
+        requirement_text=requirement_text,
+        manufacturer=manufacturer_name,
+        model=model,
+        page=cached["page"],
+        document_id=cached["document_id"],
+        quote=cached["quote"],
+        capability_text=cached["value"],
+        attribute=cached["attribute"],
+        fact_value=cached["value"],
+        fact_unit=cached["unit"],
+    )
+
+    value_type = _value_type(cached["attribute"])
+    family_level = cached["is_family_level"]
+    evaluation = evaluate(
+        ComparisonRequest(
+            requirement_value=requirement_value,
+            requirement_operator=_operator(requirement_operator),
+            requirement_unit=requirement_unit,
+            requirement_text_value=requirement_value,
+            requirement_range=None,
+            capability_value=cached["value"],
+            capability_unit=cached["unit"],
+            capability_text_value=cached["value"],
+            capability_range=None,
+            capability_is_family_level=family_level,
+        ),
+        value_type,
+    )
+    result.status = evaluation.status
+    result.score = evaluation.score
+    result.reason = evaluation.reason
+    result.verification_outcome = (
+        VerificationOutcome.FAMILY_LEVEL if family_level else VerificationOutcome.PASSED
+    )
+    result.applicability = (
+        Applicability.FAMILY_LEVEL if family_level else Applicability.MODEL_LEVEL
+    )
+    result.value_type = value_type
+    if evaluation.needs_review or family_level:
+        result.review_required = True
+        result.review_reason = evaluation.reason or (
+            "the evidence covers a family of products, not this model"
+        )
+    result.confidence = _confidence(False, False, evaluation.score)
+    return result
+
+
+def store_fact(
+    session,
+    match: MatchResult,
+    *,
+    extractor_version: Optional[str] = None,
+) -> Optional[str]:
+    """Write the fact a match found, and return its id.
+
+    The fact is filed under the canonical attribute, so the cache can find it
+    again by the term (FR-21). The wording the model used is kept as the
+    original name.
+    """
+    from app.services.findings import (
+        StoredFact,
+        _attribute_id,
+        product_id_for,
+        store_fact as write_fact,
+    )
+
+    if not (match.document_id and match.manufacturer and match.model):
+        return None
+    product_id = product_id_for(session, match.manufacturer, match.model)
+    if not product_id:
+        return None
+
+    attribute_term = _canonical_attribute(session, match.attribute)
+    return write_fact(
+        session,
+        StoredFact(
+            product_id=product_id,
+            document_id=match.document_id,
+            attribute_id=_attribute_id(session, attribute_term),
+            original_name=match.attribute,
+            value=match.fact_value,
+            unit=match.fact_unit,
+            value_type=match.value_type,
+            conditions=match.model,
+            page=match.page,
+            quote=match.quote,
+            verification_status=(
+                FactVerificationStatus.VERIFIED
+                if match.verification_outcome
+                in (VerificationOutcome.PASSED, VerificationOutcome.FAMILY_LEVEL)
+                else FactVerificationStatus.NEEDS_REVIEW
+            ),
+            extractor_version=extractor_version,
+        ),
+    )
+
+
 def store_match(
     session,
     match: MatchResult,
@@ -292,40 +462,9 @@ def store_match(
     The fact is written first, because the result carries its id: a reviewer
     who reads "full match" can get back to the sentence that said so.
     """
-    from app.services.findings import (
-        StoredFact,
-        _attribute_id,
-        product_id_for,
-        store_fact,
-        store_result,
-    )
+    from app.services.findings import store_result
 
-    fact_id: Optional[str] = None
-    if match.document_id and match.manufacturer and match.model:
-        product_id = product_id_for(session, match.manufacturer, match.model)
-        if product_id:
-            fact_id = store_fact(
-                session,
-                StoredFact(
-                    product_id=product_id,
-                    document_id=match.document_id,
-                    attribute_id=_attribute_id(session, match.attribute),
-                    original_name=match.attribute,
-                    value=match.fact_value,
-                    unit=match.fact_unit,
-                    value_type=match.value_type,
-                    conditions=match.model,
-                    page=match.page,
-                    quote=match.quote,
-                    verification_status=(
-                        FactVerificationStatus.VERIFIED
-                        if match.verification_outcome
-                        in (VerificationOutcome.PASSED, VerificationOutcome.FAMILY_LEVEL)
-                        else FactVerificationStatus.NEEDS_REVIEW
-                    ),
-                    extractor_version=extractor_version,
-                ),
-            )
+    fact_id = store_fact(session, match, extractor_version=extractor_version)
 
     return store_result(
         session,
@@ -350,11 +489,32 @@ def _value_type(attribute: Optional[str]):
     The type decides which evaluator runs, and it comes from the vocabulary
     rather than from a list here: an attribute the vocabulary does not know
     has no type, and its requirement goes to review (FR-29).
-    """
-    from app.comparison.attributes import attribute_by_term
 
-    spec = attribute_by_term(attribute)
+    The model answers in whatever words the document used ("body material"),
+    and those are often a synonym of the canonical term. The synonym is
+    resolved here, or a correctly read fact would be filed as an attribute
+    nothing can evaluate.
+    """
+    from app.comparison.attributes import attribute_by_term, find_attribute
+
+    if not attribute:
+        return None
+    spec = attribute_by_term(attribute) or find_attribute(attribute)
     return spec.value_type if spec is not None else None
+
+
+def _canonical_attribute(session, attribute: Optional[str]) -> Optional[str]:
+    """The canonical term for an attribute name, or None when it is unknown.
+
+    A fact is filed under the canonical term, so the cache finds it by the
+    term a requirement uses, whatever wording the model answered in.
+    """
+    from app.services.resolution import resolve_attribute
+
+    if not attribute:
+        return None
+    term, _conf, _needs_review, _reason = resolve_attribute(attribute, session)
+    return term
 
 
 def _convertible(requirement_unit: str, capability_unit: str) -> bool:
@@ -406,3 +566,60 @@ def _corpus_file(relative: str) -> Optional[Path]:
         for found in base.glob(f"*/{relative}"):
             return found
     return None
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    """Answer one requirement from the corpus and report what it found."""
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Answer a requirement.")
+    parser.add_argument("requirement", help="the requirement, as it is written")
+    parser.add_argument("--manufacturer", help="the manufacturer to answer for")
+    parser.add_argument("--model", help="the model to answer for")
+    parser.add_argument("--value", help="the value the requirement asks for")
+    parser.add_argument("--unit", help="the unit of that value")
+    parser.add_argument("--operator", help="eq | ne | gt | gte | lt | lte | approx")
+    parser.add_argument(
+        "--store",
+        action="store_true",
+        help="store the fact that was found, so the next run reads the cache",
+    )
+    args = parser.parse_args(argv)
+
+    from app.repositories.db import session_scope
+
+    with session_scope() as session:
+        result = match_requirement(
+            session,
+            args.requirement,
+            requirement_value=args.value,
+            requirement_unit=args.unit,
+            requirement_operator=args.operator,
+            manufacturer_name=args.manufacturer,
+            model=args.model,
+        )
+        if args.store:
+            store_fact(session, result)
+            session.commit()
+
+    print(f"status:        {result.status.value}")
+    print(f"score:         {result.score:.2f}")
+    print(f"applicability: {result.applicability.value}")
+    print(f"verification:  {result.verification_outcome.value}")
+    print(f"confidence:    {result.confidence.value}")
+    if result.manufacturer:
+        print(f"product:       {result.manufacturer} {result.model or ''}".rstrip())
+    if result.page is not None:
+        print(f"page:          {result.page}")
+    if result.quote:
+        print(f"quote:         {result.quote}")
+    print(f"reason:        {result.reason}")
+    if result.review_required:
+        print(f"review:        {result.review_reason}")
+    print(f"candidates:    {result.candidates}")
+    print(f"llm calls:     {result.llm_calls}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

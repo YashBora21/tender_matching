@@ -12,9 +12,11 @@ memory.
 
 from __future__ import annotations
 
+import argparse
 from dataclasses import dataclass
+from typing import Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
@@ -54,6 +56,9 @@ def embed_corpus(
     statement = select(chunk.c.id, chunk.c.text)
     if not force:
         statement = statement.where(chunk.c.embedding.is_(None))
+        report.skipped = session.execute(
+            select(func.count()).select_from(chunk).where(chunk.c.embedding.isnot(None))
+        ).scalar_one()
     rows = session.execute(statement).all()
     if not rows:
         logger.info("every chunk already has an embedding")
@@ -88,3 +93,29 @@ def embed_corpus(
         logger.info("embedded %d of %d chunks", report.embedded, len(rows))
 
     return report
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    """Embed the corpus and report what happened."""
+    parser = argparse.ArgumentParser(description="Embed the corpus chunks.")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="embed every chunk, even the ones that have an embedding",
+    )
+    args = parser.parse_args(argv)
+
+    from app.repositories.db import session_scope
+
+    with session_scope() as session:
+        report = embed_corpus(session, force=args.force)
+
+    print(f"chunks embedded:  {report.embedded}")
+    print(f"already embedded: {report.skipped}")
+    print(f"chunks failed:    {report.failed}")
+    print(f"batches:          {report.batches}")
+    return 1 if report.failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

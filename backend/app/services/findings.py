@@ -80,6 +80,53 @@ def product_id_for(
     return str(row[0]) if row else None
 
 
+def cached_fact(
+    session: Session, product_id: str, canonical_term: str
+) -> Optional[dict]:
+    """The verified fact already held for this product and attribute (FR-21).
+
+    A fact that was verified once is not read again: the extraction is the
+    expensive part, and the passage it came from has not changed. Only a
+    verified fact is a cache hit - a fact that is waiting for a review is not
+    an answer, and it is read again.
+    """
+    row = session.execute(
+        select(
+            fact.c.id,
+            fact.c.value,
+            fact.c.unit,
+            fact.c.value_type,
+            fact.c.document_id,
+            fact.c.page,
+            fact.c.quote,
+            attribute.c.canonical_term,
+            product.c.is_family_level,
+        )
+        .select_from(fact)
+        .join(attribute, attribute.c.id == fact.c.attribute_id)
+        .join(product, product.c.id == fact.c.product_id)
+        .where(
+            fact.c.product_id == product_id,
+            attribute.c.canonical_term == canonical_term,
+            fact.c.verification_status == FactVerificationStatus.VERIFIED.value,
+        )
+        .limit(1)
+    ).first()
+    if row is None:
+        return None
+    return {
+        "id": str(row[0]),
+        "value": row[1],
+        "unit": row[2],
+        "value_type": row[3],
+        "document_id": str(row[4]),
+        "page": row[5],
+        "quote": row[6],
+        "attribute": row[7],
+        "is_family_level": bool(row[8]),
+    }
+
+
 def store_fact(session: Session, stored: StoredFact) -> str:
     """Write a fact and return its id."""
     fact_id = uuid.uuid4()

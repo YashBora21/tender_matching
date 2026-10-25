@@ -122,8 +122,14 @@ document = Table(
     # category and model, so both live on the document the chunks belong to.
     Column("model_or_family", String(255)),
     Column("category", String(255)),
+    # The product the document is about. The corpus seeding writes it: a
+    # document is evidence about one product, and the retrieval joins the
+    # document to that product rather than to every product of the
+    # manufacturer.
+    Column("product_id", Uuid(), ForeignKey("product.id")),
     Index("ix_document_sha256", "sha256"),
     Index("ix_document_manufacturer_id", "manufacturer_id"),
+    Index("ix_document_product_id", "product_id"),
     # One document per manufacturer per content: a distributor reselling the
     # manufacturer's own file is the same document, not a second one.
     UniqueConstraint(

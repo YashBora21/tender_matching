@@ -1,0 +1,26 @@
+{
+  "category": "xylem",
+  "entries": [
+    {
+      "manufacturer": "Xylem Godwin",
+      "url": "https://www.xylem.com/siteassets/brand/godwin/resources/brochure/godwin_product_catalog_us17.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Godwin dewatering pumps",
+      "note": "Godwin product catalog - Dri-Prime, Heidra, Sub-Prime, Wellpoint and Rotary Lobe"
+    },
+    {
+      "manufacturer": "Xylem Goulds",
+      "url": "https://www.xylem.com/siteassets/brand/goulds-water-technology/resources/brochure/wastewater-product-catalog-wws.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Goulds wastewater pumps",
+      "note": "Goulds Water Technology wastewater product catalog"
+    },
+    {
+      "manufacturer": "Xylem Goulds",
+      "url": "https://www.xylem.com/siteassets/brand/goulds-water-technology/resources/brochure/jet-and-submersible-product-catalog-jetsub.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Goulds jet and submersible pumps",
+      "note": "Goulds jet and submersible pumps, motors and controls"
+    }
+  ]
+}

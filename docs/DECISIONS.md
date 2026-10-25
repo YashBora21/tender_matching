@@ -735,3 +735,49 @@ every retry was another call against the same limit.
 *Alternatives:* A longer fixed backoff — rejected, the wait is then either
 too long for a fast limit or too short for a slow one. Retrying without a
 wait — rejected, that is what made it fail.
+
+---
+
+**D-54 — The ingestion closes its transaction before it reads a document.**
+*Decision:* Each document is a unit of work on its own: the transaction is
+closed before the document is parsed, and the document is committed as soon
+as it is written.
+*Why:* A big catalogue takes minutes to read, and the server kills a
+connection that sits in a transaction that long. The first run over the
+new manufacturers died on the last document with
+`IdleInTransactionSessionTimeout`, after half an hour of parsing that
+would have been thrown away.
+*Alternatives:* Reading every document first and writing them all at the
+end — rejected, the whole corpus is then held in memory and one timeout
+loses all of it. Parsing inside the transaction — rejected, that is the
+defect.
+
+---
+
+**D-55 — A NAT64 address is judged by the IPv4 it carries.**
+*Decision:* An IPv6 address in the well-known NAT64 prefix
+(`64:ff9b::/96`) is reduced to the IPv4 address in its last 32 bits, and
+that address is checked against the private-address rules. The NAT64
+prefix itself is not treated as private.
+*Why:* On an IPv4-only network with DNS64, a public name legitimately
+resolves into that prefix. Python 3.13 classes the prefix as reserved, so
+the fence refused `gem.gov.in` even though the IPv4 inside was public.
+Refusing the prefix would refuse every document on such a network.
+*Alternatives:* Dropping the reserved check — rejected, it also covers
+addresses that must stay refused. Allowing every NAT64 address — rejected,
+`64:ff9b::c0a8:101` carries `192.168.1.1` and must not pass.
+
+---
+
+**D-56 — Ingesting the corpus seeds the products in the same run.**
+*Decision:* `make ingest` seeds the canonical attributes and the aliases,
+ingests the documents, then seeds the product each document is about and
+removes the family-level products nothing points at any more.
+*Why:* A document without a product is a passage that names no product:
+retrieval cannot say what the evidence is for and the fact cache can never
+hit. The seeding had no caller at all, so `document.product_id` stayed
+null on a fresh database. Keeping it as a separate command makes it a step
+someone has to remember, and forgetting it fails quietly.
+*Alternatives:* A `make seed` target — rejected, the step that must follow
+ingestion is not a separate job. Seeding during the migration — rejected,
+a migration cannot read the corpus and must stay reversible.

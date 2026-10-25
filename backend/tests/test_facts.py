@@ -24,21 +24,25 @@ class FakeClient:
 def test_a_fact_is_read_from_a_passage():
     client = FakeClient(
         {
-            "found": True,
-            "attribute": "body material",
-            "value": "SS316",
-            "unit": None,
-            "operator": "eq",
-            "model": "Series 75/76",
-            "quote": "Body of body shall be SS316",
+            "requirements": [
+                {
+                    "found": True,
+                    "attribute": "body material",
+                    "value": "SS316",
+                    "unit": None,
+                    "operator": "eq",
+                    "model": "Series 75/76",
+                    "quote": "Body of body shall be SS316",
+                }
+            ]
         }
     )
 
     result = extract_fact("Body shall be SS316", "Body of body shall be SS316", client=client)
 
     assert result.found is True
-    assert result.fact.value == "SS316"
-    assert result.fact.quote == "Body of body shall be SS316"
+    assert result.facts[0].value == "SS316"
+    assert result.facts[0].quote == "Body of body shall be SS316"
     assert client.calls == 1
 
 
@@ -46,13 +50,17 @@ def test_a_passage_that_states_nothing_is_not_a_fact():
     """A passage about something else is a false, not a guess."""
     client = FakeClient(
         {
-            "found": False,
-            "attribute": None,
-            "value": None,
-            "unit": None,
-            "operator": None,
-            "model": None,
-            "quote": None,
+            "requirements": [
+                {
+                    "found": False,
+                    "attribute": None,
+                    "value": None,
+                    "unit": None,
+                    "operator": None,
+                    "model": None,
+                    "quote": None,
+                }
+            ]
         }
     )
 
@@ -79,10 +87,14 @@ def test_an_answer_with_an_unknown_field_is_refused():
     rather than half-read."""
     client = FakeClient(
         {
-            "found": True,
-            "attribute": "body material",
-            "value": "SS316",
-            "confidence": 0.9,
+            "requirements": [
+                {
+                    "found": True,
+                    "attribute": "body material",
+                    "value": "SS316",
+                    "confidence": 0.9,
+                }
+            ]
         }
     )
 
