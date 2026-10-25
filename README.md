@@ -37,34 +37,206 @@ status.
 
 ```
 backend/app/
-  api/            # FastAPI routes
-  services/       # atomizer, normalizer, verifier, evidence, scoring
+  api/            # FastAPI routes: health, tenders, runs, manufacturers
+  services/       # atomizer, normalizer, ingestion, retrieval, extractor,
+                  # verifier, evidence, scoring, pipeline, report
   comparison/     # registry + evaluators, units, attribute vocabulary
   repositories/   # PostgreSQL access behind an interface
   schemas/        # Pydantic v2 models and enums
   core/           # config, logging, errors
-backend/data/     # attribute_vocabulary.json (the attribute catalogue)
-backend/alembic/  # migrations
+backend/data/     # attribute_vocabulary.json; the corpus (not in git)
+backend/alembic/  # migrations; the backend image runs them on start
 backend/tests/    # pytest
+collect/          # collect.py and per-manufacturer source configs
+eval/             # offline scoring harness and the gold-file format
+frontend/         # React + Vite app, built to static files in its image
 docs/             # PRD, DECISIONS.md, WORKLOG.md
 ```
 
 ## Running it
 
+### The stack in containers
+
 ```bash
-make install-dev      # install runtime + dev dependencies
-cp .env.example .env  # then fill in DATABASE_URL and the LLM keys
-make migrate          # apply migrations
-make run              # uvicorn on :8000
-make docker-up        # or: pgvector + backend in containers
+cp .env.example .env    # fill in LLM_API_KEY; the database defaults work as they are
+docker compose up -d --build
+```
+
+- the app: <http://localhost:3000>
+- the API: <http://localhost:8000/api/health>
+- PostgreSQL + pgvector: `localhost:5432`
+
+`docker compose up` starts the three services in order: the database becomes
+healthy, the backend runs `alembic upgrade head` and then serves, and only then
+does the frontend start. A fresh database is usable without a separate migration
+step. `docker-compose.yml` mounts `backend/data` at `/app/data`, so the corpus
+and uploaded tenders survive a rebuild.
+
+Every knob the stack reads is in [`.env.example`](.env.example), including the
+frontend's `VITE_API_URL` — see the build-time caveat below.
+
+The image migrates the schema but does not ingest the corpus. Once the stack is
+up, `make ingest` parses `backend/data/manufacturers/` into PostgreSQL and
+`make embed` builds the vectors; both stay explicit steps because they need the
+corpus on disk and the embedding provider. Without them the app starts with an
+empty corpus and reports it as empty.
+
+### Locally
+
+```bash
+make install-dev
+cp .env.example .env
+make migrate
+make run                                    # uvicorn on :8000
+cd frontend && npm install && npm run dev   # Vite on :5173
 ```
 
 Tests: `make test` (all), `make test-unit` (no database needed),
-`make test-integration` (needs `TEST_DATABASE_URL`).
+`make test-integration` (needs `TEST_DATABASE_URL`). The frontend has its own
+suite: `cd frontend && npm test`.
 
 Every threshold, weight, model name and path comes from the environment
 (`backend/app/core/config.py`). There are no thresholds written into the
 comparison code, the scoring code or the evidence logic.
+
+## The two images
+
+`backend/Dockerfile` builds the API. `frontend/Dockerfile` builds the React app
+with Node and copies the static result into nginx, which serves it with an SPA
+fallback.
+
+**`VITE_API_URL` is a build argument, not a runtime variable.** The browser
+executes the bundle, so the backend address has to be baked in when the image is
+built — and it must be the address the *browser* uses. `http://backend:8000`
+resolves only inside the compose network, so it is the wrong value even though
+the backend can reach it. Change the address and rebuild the frontend image.
+
+Nothing is pushed to Docker Hub from this repository yet, so the `docker pull`
+and `docker push` lines below work only after you publish the images under your
+own account.
+
+### Build
+
+```bash
+docker build -t <user>/tender-backend ./backend
+docker build --build-arg VITE_API_URL=http://localhost:8000 \
+             -t <user>/tender-frontend ./frontend
+```
+
+### Run them on a shared network
+
+The three containers find each other by name on a user-defined network, which
+is what the compose file does for you. By hand, the same shape:
+
+```bash
+docker network create tender
+
+docker run -d --name tender-db --network tender \
+  -e POSTGRES_USER=tender -e POSTGRES_PASSWORD=tender -e POSTGRES_DB=tender \
+  -v tender-pgdata:/var/lib/postgresql/data \
+  pgvector/pgvector:pg16
+
+docker run -d --name tender-backend --network tender \
+  -p 8000:8000 \
+  -e DATABASE_URL=postgresql+psycopg://tender:tender@tender-db:5432/tender \
+  -e CORS_ORIGINS=http://localhost:3000 \
+  -e LLM_API_KEY="$LLM_API_KEY" -e LLM_MODEL="$LLM_MODEL" \
+  -e EMBEDDING_MODEL="$EMBEDDING_MODEL" \
+  -v "$PWD/backend/data:/app/data" \
+  <user>/tender-backend
+
+docker run -d --name tender-frontend --network tender \
+  -p 3000:80 \
+  <user>/tender-frontend
+```
+
+`CORS_ORIGINS` must name the origin the browser loads the app from, or the
+frontend's requests to the API are refused. The `-v` argument needs an absolute
+path; `$PWD` is the shell's working directory. Start the backend only once the
+database accepts connections (`docker logs tender-db`), because this form has no
+healthcheck to wait on — compose does. Without a corpus mounted at `/app/data`
+the app starts with an empty corpus and says so, rather than inventing
+manufacturers.
+
+### Publish and pull
+
+```bash
+docker tag <user>/tender-backend <user>/tender-backend:1.0
+docker push <user>/tender-backend:1.0
+docker tag <user>/tender-frontend <user>/tender-frontend:1.0
+docker push <user>/tender-frontend:1.0
+
+docker pull <user>/tender-backend:1.0
+docker pull <user>/tender-frontend:1.0
+```
+
+The `docker run` commands above are unchanged once the tags are published;
+replace `<user>/tender-backend` with `<user>/tender-backend:1.0`.
+
+## Example output
+
+A trimmed export of a **synthetic** report, produced by the real CSV renderer
+(`GET /api/runs/{run_id}/export.csv`, or `make report RUN=<id> FORMAT=csv`) from
+the test fixture. The tender, the manufacturer and the document are invented,
+and the corpus is not real: this shows the shape of the answer, not a finding
+about any product.
+
+```csv
+requirement_id,item_id,requirement,type,mandatory,manufacturer,status,score,verification_outcome,applicability,capability,document,page,quote,confidence,review_required,review_reason
+r1,1,Body shall be SS316,technical,yes,Acme,full_match,1.0,passed,model_level,Body material SS316,circor-d-series.pdf,12,Body: ASTM A351 CF8M (SS316),high,no,
+r2,1,Delivery within 180 days,commercial,yes,Acme,unsupported_requirement,0.0,not_checked,unknown,,,,,high,no,
+```
+
+The same run in JSON carries the ranking, the page ledger and the review queue
+(abridged):
+
+```json
+{
+  "manufacturers": [
+    {
+      "manufacturer": "Acme",
+      "rank": 1,
+      "compatibility_percent": 100.0,
+      "coverage_percent": 100.0,
+      "status_counts": {"full_match": 1, "unsupported_requirement": 1},
+      "fails_mandatory": false,
+      "review_count": 0
+    }
+  ],
+  "tender": {
+    "pages": {
+      "declared": 2, "accounted": 2, "unaccounted": 0,
+      "counts": {"parsed": 1, "ocr": 1},
+      "unresolved": [], "skipped": [],
+      "incomplete_ingestion": false
+    }
+  },
+  "results": {"stored": 2, "expected": 2, "complete": true}
+}
+```
+
+The commercial clause is listed separately and does not move the score. A page
+that was not read would set `incomplete_ingestion` and label the whole tender,
+rather than being counted as processed; the full JSON also lists every page's
+ledger state.
+
+## Evaluation
+
+The evaluation harness scores a stored report against hand-written labels,
+offline — no database, API or model:
+
+```bash
+make eval-check GOLD=eval/gold/synthetic.example.jsonl
+make eval REPORT=report.json GOLD=eval/gold/tender-a.jsonl
+```
+
+`check` validates a gold file on its own; `score` prints status accuracy, a
+confusion matrix, per-status precision/recall/F1, the false-confident rate,
+coverage, review rate and citation correctness. The 50–100 real labelled pairs
+are not written yet: they need requirements from an actual model run, and
+inventing them would fabricate the evidence the labels exist to check. See
+[`eval/README.md`](eval/README.md) for the metric definitions and the gold
+format.
 
 ## Inspiration
 
@@ -188,12 +360,26 @@ both new attributes being recognised and old ones stopping being recognised).
 
 ## Current state
 
-Phases 0 and 1 are built and tested. See
-[`docs/WORKLOG.md`](docs/WORKLOG.md) for what each phase built, what was
-tested, and what is still open, and [`docs/DECISIONS.md`](docs/DECISIONS.md)
-for the decision log.
+Phases 0–10 are built and tested, and Phase 11 packaging is in place: the two
+images, the compose stack and the commands above. What that covers end to end is
+the corpus collector, tender ingestion with a four-state page ledger, retrieval
+and LLM extraction behind the verifier, deterministic comparison and scoring,
+runs and their reports (JSON, HTML, CSV), the React frontend, and the offline
+evaluation harness.
 
-The retrieval and LLM extraction pipeline, the corpus collector, the report
-and run API endpoints, the React frontend and the evaluation harness are not
-built yet. The comparison, verification, evidence and scoring layers they will
-call are.
+Still open, and named rather than hidden:
+
+- **No real gold set.** The 50–100 hand-labelled pairs need requirements from a
+  live model run; the harness and format are ready for them.
+- **No published images.** Nothing is pushed to Docker Hub from here, and there
+  is no CI pipeline.
+- **The corpus is not in git** (~157 MB of PDFs); only manifests and source
+  configs are tracked, so a fresh clone starts with an empty corpus.
+- **No authentication** in front of the API; it assumes a trusted network.
+- **The matching pipeline has not run end to end here**, because there is no
+  live LLM on this machine, and the 6 database integration tests skip without
+  `TEST_DATABASE_URL`. The stack itself — migrations, health, empty corpus —
+  was verified against a real PostgreSQL.
+
+See [`docs/WORKLOG.md`](docs/WORKLOG.md) for what each phase built and what was
+tested, and [`docs/DECISIONS.md`](docs/DECISIONS.md) for the decision log.

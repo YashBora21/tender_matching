@@ -1,0 +1,14 @@
+# The image copies code only. The corpus, uploaded tenders and the tests are
+# mounted or run outside it, and shipping them would add hundreds of megabytes
+# and make every code edit a slow upload.
+data
+tests
+venv
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.env
+.env.*

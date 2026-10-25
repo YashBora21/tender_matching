@@ -1,5 +1,7 @@
-# Local stack: pgvector + backend (PRD 6.1, PRD 14).
+# Local stack: pgvector + backend + frontend (PRD 6.1, PRD 14).
 # The corpus and uploaded tenders live on a mounted volume so they survive rebuilds.
+# The frontend is static: VITE_API_URL is baked in at build time, so rebuild it
+# (docker compose build frontend) when the address of the backend changes.
 
 services:
   db:
@@ -35,6 +37,19 @@ services:
       - ./backend/data:/app/data
     depends_on:
       db:
+        condition: service_healthy
+
+  # The React app, served by nginx. The API address is baked into the bundle at
+  # build time, so it has to be the address the browser uses (D-67).
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
         condition: service_healthy
 
 volumes:

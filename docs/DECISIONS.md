@@ -996,3 +996,34 @@ rejected, it rewards a run that stored nothing. Shipping hand-written labels
 without a model run — rejected: it would be inventing the evidence the labels
 are supposed to check, which this project does not do.
 
+---
+
+**D-67 — Two images, and the API address is baked into the frontend at build
+time.**
+*Decision:* PRD 14 ships as two images: `backend/Dockerfile` (Python, runs
+`alembic upgrade head` then uvicorn) and `frontend/Dockerfile` (Node build,
+nginx serves `dist` on port 80). The frontend takes `VITE_API_URL` as a **build
+argument**, and the compose stack publishes it on 3000; `nginx.conf` serves
+`index.html` for unknown paths so client-side routes survive a refresh, and
+answers `/healthz` for the healthcheck. `docker-compose.yml` gains the frontend
+service behind a healthy backend, and `backend/.dockerignore` keeps the corpus,
+tests and virtualenv out of the build context. The README carries the exact
+build, pull and shared-network `docker run` commands, and says plainly that a
+pull line only works after someone pushes the image, because nothing is
+published from this repository.
+*Why:* Vite substitutes `import.meta.env.VITE_API_URL` when it builds, so a
+runtime environment variable on the nginx container would change nothing; the
+address has to be the one the *browser* uses, which is why `http://backend:8000`
+is wrong even though the backend can reach it. Rebuilding the frontend when the
+address changes is the honest cost of a static bundle, and stating it prevents a
+stack that silently calls the wrong host. Shipping the corpus in the backend
+build context would add hundreds of megabytes to every build and still leave a
+reviewer without a corpus, so it stays a mount.
+*Alternatives:* A Node server proxying `/api` to the backend at runtime —
+rejected for now: it adds a process and a runtime config file to solve a problem
+that a rebuild solves. Baking the API URL into the image and calling it
+"configurable" — rejected, it is only configurable at build time. Publishing the
+images from here — not possible without credentials, and a README command for an
+image that does not exist would be a lie.
+
+

@@ -1251,3 +1251,77 @@ a scored synthetic report and a green `check` on the example gold file.
 - **The corpus is still not in git**; `backend/data/manufacturers/` is ignored,
   only manifests and source configs are tracked.
 
+
+## Phase 11 - Packaging (PRD 14)
+
+Phase 11 puts the app in two images, one command, and a README that says what
+the commands do. The API address turned out to be the interesting part (D-67):
+Vite bakes it into the bundle, so it is a build argument and the browser-visible
+value, not the compose-internal one.
+
+**Built**
+
+- `frontend/Dockerfile` - multi-stage: `node:22-alpine` runs `npm ci` and
+  `npm run build` with `ARG VITE_API_URL` (default `http://localhost:8000`),
+  then `nginx:1.27-alpine` serves `dist`. Healthcheck on `/healthz`.
+- `frontend/nginx.conf` - `try_files $uri $uri/ /index.html` for client-side
+  routes, `/healthz`, and a one-year immutable cache on hashed `/assets/`.
+- `frontend/.dockerignore`, `backend/.dockerignore` - the frontend never ships
+  `node_modules`/`dist`, the backend never ships the 157 MB corpus, the tests or
+  the virtualenv.
+- `docker-compose.yml` - `frontend` service publishing 3000, `VITE_API_URL` as
+  a build arg, waiting for the backend to be healthy; header updated.
+- `.env.example` - a `Frontend (PRD 14)` block naming `VITE_API_URL` and the
+  rebuild it needs.
+- `Makefile` - `docker-build` builds both images; `docker-up` describes the
+  three services.
+- `README.md` - rewritten: the updated layout, container and local run
+  instructions, the two images with the exact `build`/`pull`/`push`/`run`
+  commands and a shared-network example, a synthetic sample export (labelled),
+  the one-command eval, and an honest current state.
+- `frontend/README.md` - the container build line and why the argument is the
+  browser's address.
+
+**Tested**
+
+- `docker compose config --quiet` exits 0 and the rendered config publishes
+  `8000`, `5432` and `3000`, with `VITE_API_URL: http://localhost:8000`.
+- The frontend image builds (74 MB). A container on 8088 served `/` (200,
+  `text/html`), `/healthz` (200, `ok`), and `/runs/example` (200 with
+  `<div id="root">`, so the SPA fallback works); the hashed JS and CSS were 200,
+  the default `http://localhost:8000` was in the bundle, and the container
+  healthcheck reported `healthy`.
+- `--build-arg VITE_API_URL=http://api.example.test:9000` produced an image with
+  that address in the bundle, so the argument is real and not ignored.
+- The backend image builds. The full stack started from the repo file plus a
+  throwaway port override (host 5432 and 8000 are held by local services): db
+  healthy, then backend healthy after `alembic upgrade head`, then frontend
+  healthy. Inside the stack `GET /api/health` returned `status: ok` with
+  `database: ok` and the expected CORS origins, `/api/manufacturers` returned
+  `count: 0` on the fresh database (an empty corpus is reported as empty, not
+  invented), and `psql` counted 17 tables.
+- Because the override used `!reset` and therefore did not publish ports to the
+  host, host access was proven separately with the standalone container on
+  8088; port publishing itself is what `docker compose config` shows.
+- `make` is not installed in this environment, so the Makefile targets were not
+  executed; their commands were.
+
+**Left open**
+
+- **Nothing is pushed to Docker Hub.** The README says so next to the pull
+  lines, and there is no CI pipeline to build or publish.
+- **The matching pipeline still has not run end to end here**: no live LLM, and
+  the 6 integration tests skip without `TEST_DATABASE_URL`. The stack around it
+  (migrations, health, empty corpus) was verified against real PostgreSQL.
+- **Changing `VITE_API_URL` needs a frontend rebuild**; a runtime env var on the
+  nginx container does nothing. This is documented rather than worked around.
+- **Images are unversioned** (`latest` only), and the compose file builds rather
+  than pulls; version tags are left to whoever publishes.
+- **The index is not built on first start.** The image runs migrations, but
+  `make ingest` and `make embed` stay explicit steps, because they need the
+  corpus and the embedding provider; PRD 14's "builds the index" is therefore
+  a documented two-command step, not automatic.
+- **The corpus is still not in git**, so a fresh clone starts with an empty
+  corpus and an empty manufacturer list, which the app reports honestly.
+
+

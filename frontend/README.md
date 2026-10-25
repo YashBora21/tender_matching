@@ -21,3 +21,17 @@ npm run dev
 The screens are upload → run progress → report (ranking, status filters,
 requirement table, evidence drawer, review queue). A run is only rendered when
 the API says it has stopped; a partial report says it is partial.
+
+## Container
+
+`Dockerfile` builds the app with Node and serves the static result from nginx
+(the compose stack publishes it on <http://localhost:3000>). The backend address
+is compiled into the bundle, so pass it as a build argument — and use the
+address the browser will use, not `http://backend:8000`:
+
+```bash
+docker build --build-arg VITE_API_URL=http://localhost:8000 -t tender-frontend .
+```
+
+`nginx.conf` serves `index.html` for unknown paths so client-side routes work on
+a refresh, and answers `/healthz` for the container healthcheck.

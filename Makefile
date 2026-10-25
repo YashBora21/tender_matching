@@ -74,10 +74,10 @@ eval: ## Score a report against gold labels: make eval REPORT=r.json GOLD=eval/g
 eval-check: ## Validate a gold file without a report: make eval-check GOLD=eval/gold/x.jsonl
 	$(VENV)/Scripts/python.exe eval/harness.py check --gold "$(GOLD)"
 
-docker-build: ## Build the backend image
-	$(COMPOSE) build backend
+docker-build: ## Build the backend and frontend images
+	$(COMPOSE) build backend frontend
 
-docker-up: ## Start pgvector + backend
+docker-up: ## Start pgvector + backend + frontend
 	$(COMPOSE) up -d --build
 
 docker-down: ## Stop the stack
