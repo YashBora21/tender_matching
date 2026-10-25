@@ -24,6 +24,9 @@ backend/data/tmp/
 backend/data/catalogue/*/
 backend/data/tenders/
 
+# Agent worktrees (git worktree directories live here, not in the repo)
+.claude/
+
 # Editors / OS
 .idea/
 .vscode/
