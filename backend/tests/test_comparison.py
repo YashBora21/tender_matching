@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.comparison.registry import ComparisonRequest, evaluate
-from app.schemas.enums import Operator, RequirementStatus, ValueType
+from app.schemas.enums import Operator, ReasonCode, RequirementStatus, ValueType
 
 
 def numeric(
@@ -76,13 +76,45 @@ def test_incompatible_units_are_flagged_for_review_not_guessed() -> None:
         ValueType.NUMERIC,
     )
     assert result.needs_review is True
-    assert result.status is RequirementStatus.UNSUPPORTED_REQUIREMENT
+    # Not "unsupported": the clause is verifiable, our comparison is what
+    # could not run (D-86).
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.code is ReasonCode.UNIT_NOT_COMPARABLE
 
 
 def test_an_unknown_value_type_needs_review() -> None:
     result = evaluate(numeric("1500", Operator.GTE, "1800"), None)
     assert result.needs_review is True
-    assert result.status is RequirementStatus.UNSUPPORTED_REQUIREMENT
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.code is ReasonCode.ATTRIBUTE_NOT_MAPPED
+
+
+def test_a_material_the_vocabulary_does_not_know_is_a_reason_code() -> None:
+    """`cast carbon steel` is not a grade the vocabulary resolves, so nothing
+    is compared - but the clause is still a technical requirement."""
+    request = ComparisonRequest(
+        requirement_value=None,
+        requirement_operator=Operator.EQ,
+        requirement_unit=None,
+        requirement_text_value="cast carbon steel",
+        requirement_range=None,
+        capability_value=None,
+        capability_unit=None,
+        capability_text_value="cast carbon steel",
+        capability_range=None,
+    )
+    result = evaluate(request, ValueType.MATERIAL)
+
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.code is ReasonCode.GRADE_NOT_RECOGNISED
+    assert result.needs_review is True
+
+
+def test_a_comparison_with_no_value_on_one_side_is_a_reason_code() -> None:
+    result = evaluate(numeric("1500", Operator.GTE, "", unit="rpm"), ValueType.NUMERIC)
+
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.code is ReasonCode.VALUE_MISSING
 
 
 def test_ip68_meets_an_ip67_requirement() -> None:

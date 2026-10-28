@@ -22,7 +22,7 @@ from app.comparison import attributes as attrs
 from app.comparison.units import convert, is_compatible
 from app.comparison.vocabulary import load_vocabulary
 from app.core.config import ComparisonPolicy, get_settings
-from app.schemas.enums import Operator, RequirementStatus, ValueType
+from app.schemas.enums import Operator, ReasonCode, RequirementStatus, ValueType
 
 
 def default_policy() -> ComparisonPolicy:
@@ -45,6 +45,9 @@ class Evaluation:
     needs_review: bool = False
     # The capability was documented for a family, not for this model.
     family_level: bool = False
+    # Why no verdict was reached, when the reason is a limit of this system
+    # rather than a finding about the product (D-86).
+    code: Optional[ReasonCode] = None
 
 
 Evaluator = Callable[["ComparisonRequest"], Evaluation]
@@ -212,35 +215,39 @@ def evaluate_numeric(request: ComparisonRequest) -> Evaluation:
     offered = _numeric_value(request.capability_value)
     if required is None or offered is None:
         return Evaluation(
-            RequirementStatus.UNSUPPORTED_REQUIREMENT,
+            RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
             "numeric comparison needs a number on both sides",
             needs_review=True,
+            code=ReasonCode.VALUE_MISSING,
         )
 
     if request.requirement_unit and request.capability_unit:
         if not is_compatible(request.requirement_unit, request.capability_unit):
             return Evaluation(
-                RequirementStatus.UNSUPPORTED_REQUIREMENT,
+                RequirementStatus.NO_EVIDENCE_FOUND,
                 0.0,
                 f"units {request.requirement_unit} and {request.capability_unit} are not convertible",
                 needs_review=True,
+                code=ReasonCode.UNIT_NOT_COMPARABLE,
             )
         try:
             offered = convert(offered, request.capability_unit, request.requirement_unit)
         except Exception as exc:  # noqa: BLE001 - conversion failure is reported, not raised
             return Evaluation(
-                RequirementStatus.UNSUPPORTED_REQUIREMENT,
+                RequirementStatus.NO_EVIDENCE_FOUND,
                 0.0,
                 f"unit conversion failed: {type(exc).__name__}",
                 needs_review=True,
+                code=ReasonCode.UNIT_NOT_COMPARABLE,
             )
     elif request.requirement_unit and not request.capability_unit:
         return Evaluation(
-            RequirementStatus.UNSUPPORTED_REQUIREMENT,
+            RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
             "the capability has no unit, so it cannot be compared",
             needs_review=True,
+            code=ReasonCode.VALUE_MISSING,
         )
 
     if request.requirement_operator is Operator.BETWEEN and request.requirement_range:
@@ -267,6 +274,16 @@ def evaluate_numeric(request: ComparisonRequest) -> Evaluation:
     status, score, reason = _compare_numeric(
         required, request.requirement_operator, offered, request.tolerance, request.rules
     )
+    if status is RequirementStatus.UNSUPPORTED_REQUIREMENT:
+        # An operator this registry cannot apply is a limit of ours, not a
+        # clause no document could answer (D-86).
+        return Evaluation(
+            RequirementStatus.NO_EVIDENCE_FOUND,
+            score,
+            reason,
+            needs_review=True,
+            code=ReasonCode.OPERATOR_NOT_COMPARABLE,
+        )
     return Evaluation(status, score, reason)
 
 
@@ -279,10 +296,11 @@ def evaluate_range(request: ComparisonRequest) -> Evaluation:
     """
     if not request.requirement_range or not request.capability_range:
         return Evaluation(
-            RequirementStatus.UNSUPPORTED_REQUIREMENT,
+            RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
             "range comparison needs a range on both sides",
             needs_review=True,
+            code=ReasonCode.VALUE_MISSING,
         )
     req_low, req_high = request.requirement_range
     cap_low, cap_high = request.capability_range
@@ -350,10 +368,11 @@ def evaluate_categorical(request: ComparisonRequest) -> Evaluation:
     offered = request.capability_text_value or request.capability_value
     if not required or not offered:
         return Evaluation(
-            RequirementStatus.UNSUPPORTED_REQUIREMENT,
+            RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
             "categorical comparison needs a value on both sides",
             needs_review=True,
+            code=ReasonCode.VALUE_MISSING,
         )
 
     req_key = _categorical_key(required)
@@ -430,10 +449,11 @@ def evaluate_boolean(request: ComparisonRequest) -> Evaluation:
     offered = (request.capability_text_value or "").strip().lower()
     if not required or not offered:
         return Evaluation(
-            RequirementStatus.UNSUPPORTED_REQUIREMENT,
+            RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
             "boolean comparison needs a value on both sides",
             needs_review=True,
+            code=ReasonCode.VALUE_MISSING,
         )
     vocabulary = load_vocabulary()
     truthy = vocabulary.boolean_truthy
@@ -453,10 +473,11 @@ def evaluate_certification(request: ComparisonRequest) -> Evaluation:
     offered = request.capability_text_value or request.capability_value
     if not required or not offered:
         return Evaluation(
-            RequirementStatus.UNSUPPORTED_REQUIREMENT,
+            RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
             "certification comparison needs a standard on both sides",
             needs_review=True,
+            code=ReasonCode.VALUE_MISSING,
         )
     req_key = attrs.normalise_token(required)
     off_key = attrs.normalise_token(offered)
@@ -477,18 +498,20 @@ def evaluate_material(request: ComparisonRequest) -> Evaluation:
     offered = request.capability_text_value or request.capability_value
     if not required or not offered:
         return Evaluation(
-            RequirementStatus.UNSUPPORTED_REQUIREMENT,
+            RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
             "material comparison needs a material on both sides",
             needs_review=True,
+            code=ReasonCode.VALUE_MISSING,
         )
     verdict = attrs.material_satisfies(required, offered)
     if verdict is None:
         return Evaluation(
-            RequirementStatus.UNSUPPORTED_REQUIREMENT,
+            RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
             f"the material {required} or {offered} is not a recognised grade",
             needs_review=True,
+            code=ReasonCode.GRADE_NOT_RECOGNISED,
         )
     if verdict:
         return Evaluation(
@@ -531,10 +554,11 @@ def evaluate(request: ComparisonRequest, value_type: Optional[ValueType]) -> Eva
     evaluator = get_evaluator(value_type)
     if evaluator is None:
         return Evaluation(
-            RequirementStatus.UNSUPPORTED_REQUIREMENT,
+            RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
             "no evaluator is registered for this attribute",
             needs_review=True,
+            code=ReasonCode.ATTRIBUTE_NOT_MAPPED,
         )
     evaluation = evaluator(request)
     if request.capability_is_family_level:

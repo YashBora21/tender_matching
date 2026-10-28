@@ -1406,6 +1406,45 @@ the English text on 70 documents to fix nothing, and `hin.traineddata` is not
 installed next to Tesseract. Declare the corpus clean without the check -
 rejected: that is the blind spot this closes.
 
+---
+
+**D-86 - A comparison that cannot run is *no evidence found* with a reason code,
+never *unsupported* (defect D16).**
+
+*Decision:* All twelve "cannot compare" returns in `comparison/registry.py`
+return `no_evidence_found` instead of `unsupported_requirement`, and carry a
+`ReasonCode`: `attribute_not_mapped` (no value type, so no evaluator),
+`value_missing` (one side had nothing to compare), `grade_not_recognised` (a
+material the vocabulary does not resolve), `unit_not_comparable` (units do not
+convert, or conversion failed), `operator_not_comparable` (an operator the
+registry cannot apply). `Evaluation.code` is the carrier. The matcher sets
+`verification_outcome = not_checked` and prefixes `review_reason` with
+`<code>: <reason>`. No migration: the structural fact lives in
+`verification_outcome`, which already exists, and the code is a string prefix on
+`review_reason`.
+
+*Why:* PRD 4 reserves Unsupported for a clause no document could answer -
+commercial, legal, financial, warranty, vague - and `runs._unsupported()`
+already decides that at requirement-type level (FR-14). `class` resolves to no
+attribute, `cast carbon steel` is not a grade the vocabulary knows, and a
+numeric clause with a value on one side only are all technical, verifiable
+clauses that a document could have answered. Publishing them as Unsupported
+says the tender asked something unanswerable, when the truth is that our
+comparison did not run. That is the same error D-73 fixed for a failed
+verifier: a failed check is a failure of *ours*, not a finding about the
+product (PRD 4, AGENTS #4). `not_checked` is the verifier vocabulary's own word
+for "this was never evaluated", so the reviewer can tell an unrun comparison
+from a claim that was read and rejected.
+
+*Alternatives:* Add a new `RequirementStatus` member for "could not compare" -
+rejected: the PRD fixes the five statuses, and a sixth would change every status
+count and the compatibility percentage in the report. Keep `unsupported` and
+only change the reason text - rejected: the status is what the report, the
+score and the "fails mandatory" flag read; a better sentence under the wrong
+status is still the wrong status. Add a `reason_code` column - rejected: it
+would need a migration to record a fact `verification_outcome` already records,
+and the code is diagnostic detail, not a business outcome.
+
 
 
 

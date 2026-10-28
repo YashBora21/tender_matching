@@ -39,6 +39,27 @@ class Applicability(StrEnum):
     UNKNOWN = "unknown"
 
 
+class ReasonCode(StrEnum):
+    """Why a comparison produced no verdict (D-86).
+
+    Each of these is a limit of *this system*, not a finding about the product:
+    the clause is technical and a document could have answered it. They are kept
+    apart from `unsupported_requirement`, which PRD 4 reserves for a clause no
+    document could answer - commercial, legal, financial, warranty, vague.
+    """
+
+    # No attribute mapping, so no evaluator: "class" is not a canonical term.
+    ATTRIBUTE_NOT_MAPPED = "attribute_not_mapped"
+    # One side of the comparison had no value, so there was nothing to compare.
+    VALUE_MISSING = "value_missing"
+    # A material was named but is not a grade the vocabulary knows.
+    GRADE_NOT_RECOGNISED = "grade_not_recognised"
+    # The two units do not convert, or the conversion failed.
+    UNIT_NOT_COMPARABLE = "unit_not_comparable"
+    # The stored operator is not one the registry can apply.
+    OPERATOR_NOT_COMPARABLE = "operator_not_comparable"
+
+
 class LedgerStatus(StrEnum):
     """PRD 5.3.1 FR-T2 - the state every tender page must end in.
 

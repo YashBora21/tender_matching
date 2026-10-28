@@ -1544,6 +1544,51 @@ makes the work visible without letting a partial list pass for a complete one.
 - `backend/data/catalogue.zip` (458 MB) is still untracked and deliberately not
   committed.
 
+## Phase 15 - A comparison that could not run is not a finding about the product (D-86)
+
+**Built**
+
+- `ReasonCode` in `schemas/enums.py`: `attribute_not_mapped`, `value_missing`,
+  `grade_not_recognised`, `unit_not_comparable`, `operator_not_comparable`.
+- `Evaluation.code` in `comparison/registry.py`, and all twelve "cannot compare"
+  returns changed from `unsupported_requirement` to `no_evidence_found` with the
+  matching code. `_compare_numeric` keeps returning `unsupported_requirement`
+  for an operator it cannot apply (it has no way to import the enum's new
+  member without a cycle-free change); the call site maps that one return to
+  `operator_not_comparable`.
+- `services/matching.py` sets `verification_outcome = not_checked` and prefixes
+  `review_reason` with `<code>: <reason>` whenever `Evaluation.code` is set, and
+  keeps `reason` in step with `review_reason`. Nothing else in the matching path
+  changed, and no filter was touched.
+- No migration. The structural distinction is `verification_outcome`, which
+  already exists; the code is a prefix on `review_reason`.
+
+**Tested**
+
+- `test_comparison.py`: the two existing assertions that expected
+  `unsupported_requirement` now expect `no_evidence_found` plus the code, and
+  two tests were added - a material the vocabulary does not know
+  (`grade_not_recognised`) and a comparison with no value on one side
+  (`value_missing`).
+- Full suite with `TEST_DATABASE_URL` set (integration included): **419 passed**.
+- `test_report`, `test_runs` and `test_scoring` still assert
+  `unsupported_requirement` for commercial/unknown clauses and still pass: those
+  are decided by requirement type in `runs._unsupported()`, not by the registry,
+  so the PRD's use of the status is untouched.
+
+**Left open**
+
+- **The stored results still read `unsupported_requirement`.** This changes what
+  the next run writes, not what the database holds; `GEM_9671792_Valve` has to
+  be re-run for the five pairs to change, and the gold slice exported before that
+  carries the old statuses.
+- **The 21-pair gold slice is waiting for retrieval labels** (`gold_document`,
+  `gold_page`), so baseline recall@3 and recall@20 are still unmeasured.
+- Filter visibility, the document-kind filter and the product-link filter (which
+  replaces `_category_filter`) are unchanged and not started, in that order.
+- Neon remains 0/70 product-linked with no tender pages, so the app stays on the
+  local database (D-81).
+
 
 
 

@@ -304,6 +304,22 @@ def _match_candidate(
     result.status = evaluation.status
     result.score = evaluation.score
     result.reason = evaluation.reason
+    if evaluation.code is not None:
+        # The comparison could not run, so this requirement was never checked
+        # against this product. That is a limit of ours, not a finding about
+        # the manufacturer: the status stays *no evidence found* (D-73) and
+        # the code says which limit stopped it (D-86).
+        result.verification_outcome = VerificationOutcome.NOT_CHECKED
+        result.review_required = True
+        result.review_reason = "; ".join(
+            part
+            for part in (
+                result.review_reason,
+                f"{evaluation.code.value}: {evaluation.reason}",
+            )
+            if part
+        )
+        result.reason = result.review_reason
     if evaluation.needs_review and not result.review_required:
         result.review_required = True
         result.review_reason = evaluation.reason
