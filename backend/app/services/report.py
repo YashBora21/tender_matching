@@ -88,8 +88,15 @@ def _pages(tender_repo: TenderRepo, tender_id: str, page_count: Optional[int]) -
     *incomplete ingestion* while one is unresolved (PRD 4). A ledger shorter
     than the page count is incomplete too: a page nothing accounted for is a
     page nobody looked at.
+
+    The declared count is the specification's, because the ledger's pages
+    come from the specification. The wrapper PDF's own page count is only the
+    fallback, for a tender read before the ledger existed (D-91).
     """
     pages = tender_repo.list_pages(tender_id)
+    declared = _declared_pages(tender_repo, tender_id, pages)
+    if declared is None:
+        declared = page_count
     counts: dict[str, int] = {}
     unresolved: list[dict] = []
     skipped: list[dict] = []
@@ -102,9 +109,9 @@ def _pages(tender_repo: TenderRepo, tender_id: str, page_count: Optional[int]) -
             skipped.append({"page": page.get("page"), "reason": page.get("skip_reason")})
 
     accounted = len(pages)
-    unaccounted = max(0, (page_count or 0) - accounted)
+    unaccounted = max(0, (declared or 0) - accounted)
     return {
-        "declared": page_count,
+        "declared": declared,
         "accounted": accounted,
         "unaccounted": unaccounted,
         "counts": counts,
@@ -112,6 +119,28 @@ def _pages(tender_repo: TenderRepo, tender_id: str, page_count: Optional[int]) -
         "skipped": skipped,
         "incomplete_ingestion": bool(unresolved or unaccounted),
     }
+
+
+def _declared_pages(
+    tender_repo: TenderRepo, tender_id: str, pages: list[dict]
+) -> Optional[int]:
+    """How many pages the document the ledger describes declares.
+
+    The ledger names the attachment its pages came from, so the count is that
+    document's: a two-page specification inside a seventeen-page wrapper is
+    two pages, and comparing it with seventeen would report fifteen pages
+    nobody read.
+    """
+    source = next(
+        (page.get("attachment_id") for page in pages if page.get("attachment_id")),
+        None,
+    )
+    if source is None:
+        return None
+    for record in tender_repo.list_attachments(tender_id):
+        if record.get("id") == source:
+            return record.get("pages")
+    return None
 
 
 def _extraction(tender_repo: TenderRepo, tender_id: str) -> dict:

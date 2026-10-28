@@ -37,6 +37,7 @@ from app.services.llm import LLMClient, LLMRateLimited
 from app.services.pageclassify import is_non_technical
 from app.services.retyping import retype_technical
 from app.services.tenderingest import (
+    PageRead,
     RequirementRecord,
     SpecificationRead,
     TenderItem,
@@ -137,6 +138,10 @@ class PipelineResult:
     stages: dict[str, StageState] = field(default_factory=dict)
     items: list[TenderItem] = field(default_factory=list)
     requirements: list[RequirementRecord] = field(default_factory=list)
+    # What became of every page of the specification (FR-T2). Written to the
+    # ledger, and counted by the audit: a tender with no page here was not
+    # read, whatever its requirements say.
+    pages: list[PageRead] = field(default_factory=list)
     attachments: list[dict] = field(default_factory=list)
     llm_calls: int = 0
     llm_cache_hits: int = 0
@@ -422,6 +427,18 @@ def run_pipeline(
             _save_failed(repo, result, settings)
         return result
     read = _read_specification(spec, tender_dir)
+    if read.error:
+        # The document could not be opened, so no page of it was looked at.
+        # That is a document that could not be read, not a document with no
+        # requirements (PRD 4).
+        requirements_state.status = STATUS_FAILED
+        requirements_state.detail = f"the specification could not be read: {read.error}"
+        result.stages[STAGE_REQUIREMENTS] = requirements_state
+        result.failure = requirements_state.detail
+        if repo is not None:
+            _save_failed(repo, result, settings)
+        return result
+    result.pages = read.pages
     result.requirements, unassigned = assign_to_items(read.rows, result.items)
     for row in unassigned:
         # A requirement that names no item is kept and flagged: an ambiguous
@@ -464,6 +481,18 @@ def run_pipeline(
     requirements_state.status = STATUS_DONE if changed(STAGE_REQUIREMENTS) else STATUS_SKIPPED
     requirements_state.rows = len(result.requirements)
     result.stages[STAGE_REQUIREMENTS] = requirements_state
+    if changed(STAGE_REQUIREMENTS) and repo is not None and result.pages:
+        # The ledger is written with the pages that were just read, so every
+        # page the tender declares ends in a state (FR-T2). It is written
+        # before the extraction runs: a read that stops at the provider's
+        # limit still has a ledger saying what was read.
+        repo.replace_pages(
+            tender_id,
+            _page_rows(
+                result.pages,
+                _attachment_id(repo, tender_id, spec),
+            ),
+        )
     # --- the extraction (the only stage that calls the LLM) ---
     extraction_state = StageState(
         name=STAGE_EXTRACTION,
@@ -689,6 +718,40 @@ def _read_specification(attachment: dict, tender_dir: Path) -> SpecificationRead
             error=f"the specification file {path.name} does not exist"
         )
     return read_specification(path)
+
+
+def _attachment_id(repo, tender_id: str, attachment: dict) -> Optional[str]:
+    """The stored row of the attachment the pages came from.
+
+    A page without an attachment cannot be said to have come from anywhere,
+    so the ledger names the document it describes (FR-T2).
+    """
+    url = attachment.get("url")
+    for record in repo.list_attachments(tender_id):
+        if record.get("url") == url:
+            return record.get("id")
+    return None
+
+
+def _page_rows(pages: list[PageRead], attachment_id: Optional[str]) -> list[dict]:
+    """The ledger rows of the pages that were read.
+
+    Every page ends in a state. A page that failed carries the reason it
+    failed, so a reviewer can see that it was looked at and why it gave
+    nothing.
+    """
+    return [
+        {
+            "page": page.page,
+            "tags": [page.tag] if page.tag else [],
+            "extraction_method": page.method,
+            "quality_warnings": [],
+            "ledger_status": page.status,
+            "skip_reason": page.skip_reason or page.error,
+            "attachment_id": attachment_id,
+        }
+        for page in pages
+    ]
 
 
 def _extract_all(

@@ -1610,6 +1610,53 @@ it as unparsed.
 
 ---
 
+**D-91 - Every page read ends in the ledger, and a tender with nothing read
+is `incomplete`, not `done`.**
+
+*Decision:* the requirements stage writes the page ledger itself, before the
+extraction runs, from the `PageRead` list the reader returned:
+
+- one row per page, with the triage tag, the ledger status (`parsed`,
+  `skipped`, `ocr`, `failed`), the method, and the attachment the page came
+  from;
+- a failed page's reason goes in `skip_reason`, so a reviewer can see that
+  the page was looked at and why it gave nothing. The table has no column for
+  the character count, and one is not added for a diagnostic: no migration.
+
+The ledger is written only when the requirements stage ran, so an unchanged
+tender is not rewritten. It is written *before* extraction, so a read that
+stops at the provider's limit still has a ledger.
+
+`TenderStatus.INCOMPLETE = "incomplete"` is new (`tender.status` is a
+`VARCHAR(64)` with no check constraint, so no migration). A tender is
+`incomplete` when it was read without failing but gave no page, no item or no
+requirement. It is not `failed` (a document that could not be read) and not
+`done` (a document that was read). A run against an `incomplete` tender is
+refused like a run against a failed one, and a re-upload of the same file
+reads it again.
+
+A `SpecificationRead.error` - the file does not exist or cannot be opened -
+fails the requirements stage with that reason. It is a document nobody could
+look at, not a document that states nothing.
+
+The report's declared page count is now the **specification's**, taken from
+the attachment the ledger's pages name, with the wrapper's own count only as
+a fallback. The ledger describes the specification; comparing it with the
+wrapper's 17 pages reported 15 pages nobody read on a two-page specification.
+
+*Why:* the ledger was never written, so every report said "0 of 17 pages"
+and `incomplete_ingestion` was either always true or silently ignored. And
+`done` with zero requirements reads as "this tender states nothing", which is
+the absence-of-evidence trap (PRD 4).
+
+*Alternatives:* Add `chars` and `error` columns - rejected: the error fits
+`skip_reason`, and the character count is a diagnostic nobody reads; a
+migration for it is cost without a decision. Keep the wrapper's page count -
+rejected: it counts a different document. Treat an empty read as `done` -
+rejected: it is the trap the four-state ledger exists to prevent.
+
+---
+
 
 
 

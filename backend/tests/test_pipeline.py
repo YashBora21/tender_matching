@@ -24,7 +24,7 @@ from app.services.pipeline import (
     run_pipeline,
     stage_keys,
 )
-from app.services.tenderingest import SpecificationRead
+from app.services.tenderingest import PageRead, SpecificationRead
 
 
 class FakeSession:
@@ -61,6 +61,7 @@ class FakeRepo:
         self.attachments: list[dict] = []
         self.items: list[dict] = []
         self.requirements: list = []
+        self.pages: list[dict] = []
         # How many requirements each write held, in order.
         self.requirement_writes: list[int] = []
 
@@ -82,6 +83,16 @@ class FakeRepo:
         self.requirements = list(requirements)
         self.requirement_writes.append(len(self.requirements))
         return len(self.requirements)
+
+    def replace_pages(self, tender_id, pages):
+        self.pages = list(pages)
+        return len(self.pages)
+
+    def list_attachments(self, tender_id):
+        return [
+            {"id": "attachment-1", "url": record.get("url"), "path": record.get("path")}
+            for record in self.attachments
+        ]
 
     def save_stage(self, tender_id, section, **kwargs):
         self.stages[section] = kwargs.get("key", "")
@@ -858,3 +869,70 @@ def test_a_clause_the_model_called_unknown_is_re_typed_from_its_own_value(
     assert read.operator == "gte"
     assert read.value == "85"
     assert read.unit == "%"
+
+
+def test_every_page_read_ends_in_the_ledger(tmp_path, monkeypatch):
+    """The ledger accounts for every page, including the one that failed: a
+    failed page is not a page that was processed (FR-T2)."""
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(
+        pipeline,
+        "_read_specification",
+        lambda a, d: SpecificationRead(
+            rows=[
+                {
+                    "row": 1,
+                    "page": 1,
+                    "number": "1",
+                    "title": "GATE VALVE SIZE 150 MM CLASS 150",
+                    "description": "The body shall be cast carbon steel.",
+                }
+            ],
+            pages=[
+                PageRead(
+                    page=1,
+                    tag="technical",
+                    status="parsed",
+                    chars=1100,
+                    method="table",
+                ),
+                PageRead(
+                    page=2,
+                    tag="boilerplate",
+                    status="failed",
+                    error="the OCR read nothing on this page",
+                ),
+            ],
+        ),
+    )
+    repo = FakeRepo()
+
+    result = run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient()
+    )
+
+    assert result.failure is None
+    assert [row["page"] for row in repo.pages] == [1, 2]
+    assert [row["ledger_status"] for row in repo.pages] == ["parsed", "failed"]
+    assert repo.pages[0]["extraction_method"] == "table"
+    assert repo.pages[0]["tags"] == ["technical"]
+    assert repo.pages[0]["attachment_id"] == "attachment-1"
+    assert repo.pages[1]["skip_reason"] == "the OCR read nothing on this page"
+
+
+def test_a_specification_that_cannot_be_opened_is_a_failure(tmp_path, monkeypatch):
+    """A document that could not be opened is not a document with no
+    requirements (PRD 4)."""
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(
+        pipeline,
+        "_read_specification",
+        lambda a, d: SpecificationRead(error="FileNotFoundError: spec.pdf"),
+    )
+
+    result = run_pipeline("T1", directory, attachments, repo=FakeRepo())
+
+    assert result.failure is not None
+    assert "could not be read" in result.failure
+    assert result.stages[STAGE_REQUIREMENTS].status == pipeline.STATUS_FAILED
+    assert result.requirements == []

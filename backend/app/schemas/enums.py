@@ -172,6 +172,13 @@ class TenderStatus(StrEnum):
     PROCESSING = "processing"
     DONE = "done"
     FAILED = "failed"
+    # The tender was read, but not in full: no page of the specification was
+    # read, or the bill of quantities gave no items, or the specification
+    # gave no requirements. It is not `failed` (a document that could not be
+    # read) and not `done` (a document that was read): calling either of
+    # those "done" would report a page nobody looked at as a page with
+    # nothing in it (PRD 4).
+    INCOMPLETE = "incomplete"
     # The extraction stage stopped at the provider's limit. The tender is not
     # failed and not complete: what was read is kept, and the next run resumes
     # (D8).

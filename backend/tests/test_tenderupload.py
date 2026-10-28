@@ -265,6 +265,9 @@ def test_reading_a_tender_moves_it_from_processing_to_done(_fakes, monkeypatch):
         failure = None
         rate_limited = False
         rate_limited_detail = None
+        pages_read = 1
+        items = 1
+        requirements = 1
 
     monkeypatch.setattr(
         tenderupload,
@@ -279,6 +282,71 @@ def test_reading_a_tender_moves_it_from_processing_to_done(_fakes, monkeypatch):
         (TenderStatus.PROCESSING.value, None),
         (TenderStatus.DONE.value, None),
     ]
+
+
+def _audit(**values):
+    """A stand-in for what the pipeline audit reports."""
+
+    class Audit:
+        failure = None
+        rate_limited = False
+        rate_limited_detail = None
+        pages_read = 1
+        items = 1
+        requirements = 1
+
+    for name, value in values.items():
+        setattr(Audit, name, value)
+    return Audit()
+
+
+def _ingest_with(monkeypatch, audit):
+    monkeypatch.setattr(
+        tenderupload,
+        "collect_tender",
+        lambda *a, **k: TenderManifest(tender_id="T1", documents=[]),
+    )
+    monkeypatch.setattr(tenderupload, "audit_tender", lambda *a, **k: audit)
+    monkeypatch.setattr("app.repositories.db.session_scope", _scope(FakeSession()))
+    return tenderupload.ingest("T1")
+
+
+def test_a_tender_with_no_page_read_is_not_done(_fakes, monkeypatch):
+    """No page read is a tender nobody looked at, not a tender that states
+    nothing (PRD 4)."""
+    _stored_tender(_fakes)
+
+    status = _ingest_with(monkeypatch, _audit(pages_read=0, requirements=0))
+
+    assert status == TenderStatus.INCOMPLETE.value
+    assert FakeRepo.statuses[-1] == (
+        TenderStatus.INCOMPLETE.value,
+        "no page of the specification was read",
+    )
+
+
+def test_a_tender_with_no_items_is_not_done(_fakes, monkeypatch):
+    _stored_tender(_fakes)
+
+    status = _ingest_with(monkeypatch, _audit(items=0, requirements=0))
+
+    assert status == TenderStatus.INCOMPLETE.value
+    assert FakeRepo.statuses[-1] == (
+        TenderStatus.INCOMPLETE.value,
+        "the bill of quantities gave no items",
+    )
+
+
+def test_a_tender_with_no_requirements_is_not_done(_fakes, monkeypatch):
+    _stored_tender(_fakes)
+
+    status = _ingest_with(monkeypatch, _audit(requirements=0))
+
+    assert status == TenderStatus.INCOMPLETE.value
+    assert FakeRepo.statuses[-1] == (
+        TenderStatus.INCOMPLETE.value,
+        "the specification gave no requirements",
+    )
 
 
 def test_a_rate_limited_tender_is_neither_done_nor_failed(_fakes, monkeypatch):

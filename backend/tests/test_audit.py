@@ -41,6 +41,7 @@ def test_a_rate_limited_tender_is_not_stored_as_done(tmp_path, monkeypatch):
     result = SimpleNamespace(
         items=[],
         requirements=[],
+        pages=[],
         failure=None,
         llm_calls=5,
         llm_cache_hits=0,

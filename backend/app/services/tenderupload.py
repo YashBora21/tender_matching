@@ -232,6 +232,15 @@ def _read(session: Session, tender_id: str) -> tuple[TenderStatus, Optional[str]
         # did read are stored; the tender is resumable, so it is not failed
         # and not done (D8).
         return TenderStatus.RATE_LIMITED, audit.rate_limited_detail
+    # A tender that was read but gave nothing is not `done`: "done" says the
+    # document was read, and an empty requirement list would be read as a
+    # tender that states nothing (PRD 4, D-91).
+    if not audit.pages_read:
+        return TenderStatus.INCOMPLETE, "no page of the specification was read"
+    if not audit.items:
+        return TenderStatus.INCOMPLETE, "the bill of quantities gave no items"
+    if not audit.requirements:
+        return TenderStatus.INCOMPLETE, "the specification gave no requirements"
     return TenderStatus.DONE, None
 
 

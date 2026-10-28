@@ -40,6 +40,9 @@ class TenderAudit:
     attachments_failed: int = 0
     items: int = 0
     requirements: int = 0
+    # The pages of the specification that were read. A tender with none was
+    # not read, whatever its requirements say.
+    pages_read: int = 0
     # The reason the tender could not be read, when it could not.
     failure: Optional[str] = None
     llm_calls: int = 0
@@ -202,6 +205,7 @@ def audit_tender(
         ),
         items=len(result.items),
         requirements=len(result.requirements),
+        pages_read=len(result.pages),
         failure=result.failure,
         llm_calls=result.llm_calls,
         llm_cache_hits=result.llm_cache_hits,

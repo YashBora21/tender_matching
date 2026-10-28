@@ -26,10 +26,13 @@ class FakeRunRepo:
 
 
 class FakeTenderRepo:
-    def __init__(self, requirements, items, pages=None, tender=None, stage=None) -> None:
+    def __init__(
+        self, requirements, items, pages=None, tender=None, stage=None, attachments=None
+    ) -> None:
         self.requirements = requirements
         self.items = items
         self.pages = pages or []
+        self.attachments = attachments or []
         self.stage = stage
         self.tender = tender if tender is not None else {
             "id": TENDER_ID,
@@ -52,6 +55,9 @@ class FakeTenderRepo:
 
     def list_pages(self, tender_id):
         return list(self.pages)
+
+    def list_attachments(self, tender_id):
+        return list(self.attachments)
 
 
 REQUIREMENTS = [
@@ -142,7 +148,9 @@ RUN = {
 }
 
 
-def _report(results=None, pages=None, tender=None, requirements=None, stage=None):
+def _report(
+    results=None, pages=None, tender=None, requirements=None, stage=None, attachments=None
+):
     results = (
         results
         if results is not None
@@ -175,6 +183,7 @@ def _report(results=None, pages=None, tender=None, requirements=None, stage=None
             pages,
             tender,
             stage,
+            attachments,
         ),
     )
 
@@ -244,6 +253,40 @@ def test_a_ledger_short_of_the_page_count_is_incomplete_too():
 def test_a_fully_read_tender_is_not_incomplete():
     pages = _report()["tender"]["pages"]
     assert pages["accounted"] == 2
+    assert pages["unaccounted"] == 0
+    assert pages["incomplete_ingestion"] is False
+
+
+def test_the_declared_count_is_the_specifications_not_the_wrappers():
+    """The ledger's pages come from the specification. A two-page
+    specification inside a seventeen-page wrapper is two pages, and comparing
+    it with seventeen would report fifteen pages nobody read (D-91)."""
+    report = _report(
+        pages=[
+            {
+                "page": 1,
+                "ledger_status": "parsed",
+                "skip_reason": None,
+                "attachment_id": "attachment-1",
+            },
+            {
+                "page": 2,
+                "ledger_status": "parsed",
+                "skip_reason": None,
+                "attachment_id": "attachment-1",
+            },
+        ],
+        tender={
+            "id": TENDER_ID,
+            "filename": "tender.pdf",
+            "sha256": "a" * 64,
+            "page_count": 17,
+        },
+        attachments=[{"id": "attachment-1", "url": "upload://spec.pdf", "pages": 2}],
+    )
+
+    pages = report["tender"]["pages"]
+    assert pages["declared"] == 2
     assert pages["unaccounted"] == 0
     assert pages["incomplete_ingestion"] is False
 

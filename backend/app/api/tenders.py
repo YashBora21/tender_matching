@@ -123,6 +123,7 @@ async def upload_tender(
     if not uploaded.duplicate or uploaded.status in (
         TenderStatus.FAILED.value,
         TenderStatus.RATE_LIMITED.value,
+        TenderStatus.INCOMPLETE.value,
     ):
         background.add_task(ingest, uploaded.tender_id)
 

@@ -495,6 +495,21 @@ def test_a_run_against_a_tender_that_could_not_be_read_is_a_conflict(monkeypatch
         create_run(FakeSession(), TENDER_ID)
 
 
+def test_a_run_against_an_incomplete_tender_is_a_conflict(monkeypatch):
+    """A tender with no page, no item or no requirement was not read in full.
+    A run over it would report unread requirements as missing capabilities
+    (PRD 4, D-91)."""
+
+    class Incomplete(FakeTenderRepo):
+        def get_tender(self, tender_id):
+            return {"id": TENDER_ID, "status": "incomplete"}
+
+    monkeypatch.setattr("app.services.runs.TenderRepo", lambda session: Incomplete([]))
+
+    with pytest.raises(ConflictError):
+        create_run(FakeSession(), TENDER_ID)
+
+
 def test_a_run_against_a_rate_limited_tender_is_allowed(monkeypatch):
     """The read stopped at the provider's limit and kept what it read. A run
     over it is labelled incomplete, not refused (D8, D-75)."""
