@@ -55,6 +55,10 @@ def run_migrations_online() -> None:
             connection=existing,
             target_metadata=target_metadata,
             compare_type=True,
+            # Where the version table lives, when the caller says so. A test
+            # that migrates a schema of its own must not read the version in
+            # `public` and conclude there is nothing to do.
+            version_table_schema=config.get_main_option("version_table_schema"),
         )
         with context.begin_transaction():
             context.run_migrations()
@@ -68,6 +72,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             compare_type=True,
+            version_table_schema=config.get_main_option("version_table_schema"),
         )
         with context.begin_transaction():
             context.run_migrations()

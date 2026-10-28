@@ -1,13 +1,19 @@
-"""Embeddings: the local model is the default, the HTTP shape still works."""
+"""Embeddings: the local model is the default, the HTTP shape still works, and
+a batch is written in one statement."""
 
 from __future__ import annotations
 
 import json
+from uuid import UUID
 
 import pytest
+from sqlalchemy import create_engine, event, select
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.services import llm
+from app.repositories.postgres import PostgresDocumentRepo
+from app.repositories.schema import chunk
+from app.services import embeddings, llm
 
 
 class _Response:
@@ -85,3 +91,86 @@ def test_an_unknown_backend_is_refused(monkeypatch):
         llm.embed(["a"])
 
     assert "unknown embedding backend" in str(caught.value)
+
+
+def test_a_vector_literal_keeps_full_precision():
+    """The stored vector must be the one the model produced.
+
+    `repr` of a float round-trips, so parsing the literal gives the same
+    numbers back; a formatted copy would not.
+    """
+    vector = [0.1, -1.0 / 3.0, 1e-7, 0.0]
+
+    literal = embeddings._vector_literal(vector)
+
+    assert literal.startswith("[") and literal.endswith("]")
+    assert [float(part) for part in literal[1:-1].split(",")] == vector
+
+
+@pytest.fixture
+def rollback_session(test_database_url: str):
+    """A session whose writes are rolled back at the end."""
+    engine = create_engine(test_database_url, future=True)
+    with Session(engine, future=True) as db:
+        transaction = db.begin()
+        yield db
+        transaction.rollback()
+    engine.dispose()
+
+
+@pytest.mark.integration
+def test_a_batch_of_embeddings_is_written_in_one_statement(rollback_session):
+    """One round trip per batch, not one per chunk.
+
+    The local database hides the difference: a round trip there costs almost
+    nothing. Against Neon one round trip measured 300 ms, so a batch of 32 spent
+    9 s waiting on the network around 30 ms of encoding (D-83).
+    """
+    repo = PostgresDocumentRepo(rollback_session)
+    document_id = repo.upsert_document(
+        {
+            "manufacturer": "Acme Valves",
+            "url": "https://acme.example/embeddings.pdf",
+            "sha256": "c" * 64,
+            "doc_type": "datasheet",
+            "path": "raw/embeddings.pdf",
+        }
+    )
+    repo.insert_chunks(
+        document_id, [{"page": 1, "text": f"chunk number {index}"} for index in range(32)]
+    )
+    rollback_session.flush()
+
+    ids = [
+        row[0]
+        for row in rollback_session.execute(
+            select(chunk.c.id).where(chunk.c.document_id == UUID(document_id))
+        ).all()
+    ]
+    assert len(ids) == 32
+
+    statements: list[str] = []
+
+    def record(connection, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().lower().startswith("update"):
+            statements.append(statement)
+
+    engine = rollback_session.get_bind()
+    event.listen(engine, "before_cursor_execute", record)
+    vectors = [[index / 1000.0] * 384 for index in range(32)]
+    try:
+        embeddings._write_embeddings(rollback_session, list(zip(ids, vectors)))
+        rollback_session.flush()
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+
+    assert len(statements) == 1, "a batch must cost one round trip, not one per chunk"
+
+    stored = {
+        row[0]: [float(value) for value in row[1]]
+        for row in rollback_session.execute(
+            select(chunk.c.id, chunk.c.embedding).where(chunk.c.id.in_(ids))
+        ).all()
+    }
+    assert len(stored) == 32
+    assert all(stored[chunk_id] == vector for chunk_id, vector in zip(ids, vectors))

@@ -1335,4 +1335,77 @@ one unparseable page, and the report already carries the `incomplete_ingestion`
 label (D-75).
 
 
+---
+
+**D-83 - A batch of embeddings is written with one statement, because the
+round trip is the cost, not the encoding.**
+
+*Decision:* `embeddings._write_embeddings` stores a whole batch with one
+`UPDATE ... FROM (SELECT unnest(:ids::uuid[]), unnest(:vectors::text[])::vector)`,
+instead of one `UPDATE` per chunk. The vector is serialised with `repr` per
+float, which round-trips exactly; the stored text form was compared to the input
+and is identical.
+
+*Why:* Measured against Neon from this machine, one round trip is 300 ms. The
+old loop issued 32 of them per batch and committed once: 9.55 s per batch of 32,
+which capped the job at 2.8 chunks/s while the RTX 3050 encoded the same batch
+in about 30 ms (1,011 chunks/s steady state). The local database hid this
+completely, because a round trip there costs almost nothing. After the change
+the same job ran at ~24 chunks/s, 8.5 times faster; the remaining time is the
+one commit per batch and the fetch, not the model.
+
+*Alternatives:* One transaction per chunk - rejected: more round trips, not
+fewer. `executemany` - rejected: psycopg sends it as a client-side loop, so it
+is the same 32 round trips. A larger `BATCH_SIZE` - rejected: it would also
+raise peak memory on the CPU path, and the gain is now small next to the commit.
+A throwaway script instead of the service - rejected: Neon is the deployment
+database, so the same wall would be hit again on the next ingestion there.
+
+---
+
+**D-84 - The migration test tells alembic where its version table is.**
+
+*Decision:* `alembic/env.py` passes `version_table_schema` from the config to
+`context.configure` when it is set, and `test_migrations` sets it to the schema
+it migrates.
+
+*Why:* The test migrates a schema of its own with `search_path=<test>,public`
+(public is needed so the `vector` type resolves). Alembic then found
+`public.alembic_version` at head and ran no migration at all, so the test
+asserted on an empty schema. It only failed when `TEST_DATABASE_URL` pointed at
+a database that had already been migrated, which is exactly what that variable
+is documented to point at; the default run skips it, so the defect was hidden.
+
+*Alternatives:* Drop the `public` search path - rejected: `vector` would stop
+resolving. Delete or stamp the public version table - rejected: that is the
+application's own history, and D11 says a test must not touch it.
+
+---
+
+**D-85 - The corpus is English; the Devanagari check is closed, and `eng` OCR
+is a stated limit, not a silent one.**
+
+*Decision:* Keep `INGEST_OCR_LANGUAGE=eng` and keep BGE-M3 parked (D-72). The
+twelve PDFs with no text layer (6 DelVal, 6 Valmatic) were re-OCRed outside the
+pipeline with `hin+eng` to test the blind spot. All twelve produced Devanagari
+codepoints, and every one of them is noise.
+
+*Why:* The original claim ("no Devanagari in the corpus") could not hold for
+those twelve, because `eng` cannot emit a Devanagari codepoint even when the
+page is Hindi. Re-OCR with Hindi data gives 1,023 Devanagari letters and 364
+Devanagari digits (26% of all Devanagari characters) over 12 English engineering
+drawings, in 781 fragments of which 667 are one or two characters long; the
+longest runs are matra spam (`प्स्स्स्ल्लल`, `तततततत्त्`) and no Hindi word
+appears in a sentence. Tesseract maps dimension ticks, arrows and hatching onto
+Devanagari glyphs when it is given the language. So the corpus is English, and a
+Hindi tender would need `hin.traineddata` installed, the twelve (and any other
+scanned pages) re-OCRed with `hin+eng`, and their chunks re-embedded.
+
+*Alternatives:* OCR everything with `hin+eng` now - rejected: it would degrade
+the English text on 70 documents to fix nothing, and `hin.traineddata` is not
+installed next to Tesseract. Declare the corpus clean without the check -
+rejected: that is the blind spot this closes.
+
+
+
 

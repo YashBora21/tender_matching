@@ -1460,4 +1460,90 @@ makes the work visible without letting a partial list pass for a complete one.
   re-read it yet; re-uploading the same file is the current path (D-74).
 
 
+## Phase 14 - The Neon corpus re-embed, and the ground truth for the next one (D-83 to D-85)
+
+**Built**
+
+- `embeddings._write_embeddings` writes a whole batch with one statement
+  (D-83). `embed_corpus` still encodes in batches of 32 and commits once per
+  batch; only the write changed.
+- `alembic/env.py` passes `version_table_schema` when the caller sets it, and
+  `test_migrations` sets it to the schema it migrates (D-84).
+- Nothing in the matching path was touched. No filter was added: the point of
+  this phase was to make the next change measurable, not to change it.
+
+**Measured**
+
+- The venv had the CPU wheel of torch (`2.14.1+cpu`), so CUDA was unusable as
+  installed. Replaced with `torch==2.14.1+cu130` from the pytorch index; no code
+  change, because `embed()` already lets `SentenceTransformer` pick the device.
+  On the RTX 3050 (6 GB): 1,011 chunks/s steady state, 32 s first-call warmup,
+  160 MB peak VRAM. The CPU path was 15.8 chunks/s.
+- Neon re-embed, from 3,904/20,891: **20,891/20,891, 0 failed, 462 batches**,
+  14,779 chunks in this run. The first 2,048 chunks ran on the old per-chunk
+  write at 2.84 chunks/s (measured: one round trip 300 ms, 32 per batch = 9.55 s);
+  after the change the same job ran at 22.5 chunks/s, 7.9 times faster. The
+  remaining time is the commit per batch, not the model.
+- The local database is unchanged: `python -m app.services.embeddings` reports
+  0 embedded, 20,892 already embedded, 0 failed.
+- The twelve documents with no text layer (6 DelVal, 6 Valmatic, 212 chunks)
+  were re-OCRed outside the pipeline with `hin+eng`: 1,023 Devanagari letters,
+  364 Devanagari digits, all noise (D-85). Tesseract 5.4.0 is installed at
+  `C:\Program Files\Tesseract-OCR` but not on `PATH`, and it ships `eng` and
+  `osd` only; `hin.traineddata` was fetched to a temporary tessdata directory
+  for this check.
+- Neon's switch-back checklist: 20,891/20,891 chunks embedded, **0/70 documents
+  linked to a product** (65 products exist), 0 tender pages, 14 tenders, schema
+  `0010_stage_detail`. The local database has 70/70 linked, so the product filter
+  is only blocked on Neon.
+- `ix_chunk_embedding` is an HNSW index (`vector_cosine_ops`). On CIRCOR's 79
+  chunks the indexed scan and the exact scan return the same rows in the same
+  order at limits 3, 20 and 50, so the filter/hnsw trap is not visible at this
+  corpus size yet.
+- The category filter admits **all 70 documents** for every item: the documents
+  carry a manufacturer slug in `document.category` (`xylem`, `emerson`,
+  `flowserve`, `circor`) or nothing, never a product category (`valves`,
+  `pumps`, `motors`), and `_category_filter` keeps a document whose category is
+  null or is not one of the *other* product categories. FR-16/FR-17 scoping is
+  therefore inert today, and only the manufacturer filter narrows anything.
+
+**Tested**
+
+- `test_a_batch_of_embeddings_is_written_in_one_statement` asserts one `UPDATE`
+  for a 32-row batch and an exact element-by-element round trip of the stored
+  vector; `test_a_vector_literal_keeps_full_precision` covers the literal.
+- `test_migrations` now passes against an already-migrated database, which it
+  could not before: alembic read `public.alembic_version` through the test's
+  search path, found it at head, and migrated nothing.
+- Full suite with `TEST_DATABASE_URL` set (integration included): **417 passed**.
+- Live: `/api/health` ok on the restarted server; the app stays on the local
+  Docker database (D-81).
+
+**Left open**
+
+- **Neon is re-embedded but not ready to serve**: 0/70 documents are linked to a
+  product and `tender_page` is empty, so a run there would still retrieve without
+  a product scope and have no page ledger. Switching back needs both, and the
+  app stays local until then.
+- **The category filter does nothing** (above). Making it work means
+  `document.category` holding a product category, or the filter reading the
+  product's category instead; that is a decision, not a one-line fix, and it
+  comes after the gold labels, because it changes what retrieval can see.
+- **Five of the 21 slice pairs are `unsupported_requirement` for a tooling
+  reason, not a PRD reason**: `class` resolves to no value type, `cast carbon
+  steel` is not a recognised grade, and two comparisons had a value on one side
+  only. PRD 4 reserves Unsupported for clauses no document could answer, so these
+  are mislabelled; D-73 already sends a failed verification to
+  `no_evidence_found`, and the same reasoning applies.
+- **The gold labels are the blocker.** The 21 pairs of `GEM_9671792_Valve`
+  against CIRCOR are exported and waiting for the reviewer; recall@3 and
+  recall@20 cannot be measured until they come back.
+- Filters are still not visible in the snapshot or the report. That is the next
+  change, and it is cheap: record which filters ran and how many chunks each
+  removed, before adding any.
+- `backend/data/catalogue.zip` (458 MB) is still untracked and deliberately not
+  committed.
+
+
+
 

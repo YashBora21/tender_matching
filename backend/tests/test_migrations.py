@@ -56,6 +56,10 @@ def test_migration_creates_all_prd_tables(test_database_url: str) -> None:
         cfg = Config("alembic.ini")
         cfg.set_main_option("script_location", "alembic")
         cfg.set_main_option("sqlalchemy.url", test_database_url)
+        # The version table belongs to this schema. Without this alembic reads
+        # the version in `public`, which is on the search path, finds it at
+        # head, and creates nothing here.
+        cfg.set_main_option("version_table_schema", schema)
 
         with engine.begin() as conn:
             # The migration runs on this connection, whose search_path puts

@@ -8,15 +8,19 @@ semantic one.
 The embedding is done in batches, and a batch that fails is retried, because
 the local model encodes on this machine and a large batch can exhaust its
 memory.
+
+A batch is written with one statement. Encoding is cheap next to the write when
+the database is on another machine: measured against Neon, a batch of 32 took
+30 ms to encode and 9 s of round trips, one per chunk (D-83).
 """
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Sequence
 
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
@@ -28,6 +32,41 @@ logger = get_logger(__name__)
 # How many chunks are embedded at once. The local model runs out of memory on
 # a large batch, and a smaller one is only a little slower.
 BATCH_SIZE = 32
+
+
+# One statement for a whole batch. `unnest` of two arrays pairs them by
+# position, so the ids and their vectors arrive together instead of as one
+# statement per chunk.
+_WRITE_EMBEDDINGS = text(
+    "update chunk set embedding = batch.embedding "
+    "from (select unnest(cast(:ids as uuid[])) as id, "
+    "             unnest(cast(:vectors as text[]))::vector as embedding) as batch "
+    "where chunk.id = batch.id"
+)
+
+
+def _vector_literal(vector: Sequence[float]) -> str:
+    """The text form pgvector reads, at full float precision.
+
+    `repr` of a float round-trips, so the stored vector is the one the model
+    produced rather than a rounded copy of it.
+    """
+    return "[" + ",".join(repr(float(value)) for value in vector) + "]"
+
+
+def _write_embeddings(
+    session: Session, rows: list[tuple[object, Sequence[float]]]
+) -> None:
+    """Store a batch of embeddings in one round trip."""
+    if not rows:
+        return
+    session.execute(
+        _WRITE_EMBEDDINGS,
+        {
+            "ids": [str(chunk_id) for chunk_id, _ in rows],
+            "vectors": [_vector_literal(vector) for _, vector in rows],
+        },
+    )
 
 
 @dataclass
@@ -91,11 +130,10 @@ def embed_corpus(
             report.failed += len(batch) - len(vectors)
             continue
 
-        for (chunk_id, _), vector in zip(batch, vectors):
-            session.execute(
-                update(chunk).where(chunk.c.id == chunk_id).values(embedding=vector)
-            )
-            report.embedded += 1
+        _write_embeddings(
+            session, [(chunk_id, vector) for (chunk_id, _), vector in zip(batch, vectors)]
+        )
+        report.embedded += len(vectors)
         session.commit()
         logger.info("embedded %d of %d chunks", report.embedded, len(rows))
 
