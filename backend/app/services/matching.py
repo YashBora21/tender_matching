@@ -21,6 +21,7 @@ coverage and not towards the score. It is never a missing capability
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import select
@@ -105,12 +106,13 @@ def match_requirement(
     manufacturer_name: Optional[str] = None,
     model: Optional[str] = None,
     category: Optional[str] = None,
-    limit: int = 20,
+    limit: Optional[int] = None,
     client: Optional[LLMClient] = None,
 ) -> MatchResult:
     """Answer one requirement from the corpus."""
     result = MatchResult(requirement_text=requirement_text)
     settings = get_settings()
+    limit = limit or settings.match_max_candidates
 
     # The fact cache is checked first: a fact that was verified once is the
     # answer, and the passage it came from has not changed (FR-21).
@@ -155,6 +157,12 @@ def match_requirement(
         result.llm_calls += outcome.llm_calls
         if best is None or _is_better(outcome, best):
             best = outcome
+        if best.status is RequirementStatus.FULL_MATCH:
+            # A verified full match is the best answer a passage can give, so
+            # the remaining passages would only cost calls to confirm it
+            # (D19). A weaker result keeps searching: another passage may
+            # answer better.
+            break
 
     if best is None:
         result.reason = "no passage stated a capability for this requirement"
@@ -260,9 +268,19 @@ def _match_candidate(
     result.review_reason = "; ".join(report.reasons) or None
 
     if not report.passed:
-        result.status = RequirementStatus.MISSING_CAPABILITY
-        result.reason = "; ".join(report.reasons) or "the claim could not be verified"
+        # The claim could not be checked against the page, the product or the
+        # attribute. That is not the tender saying the capability is absent:
+        # an unverified claim proves nothing about the manufacturer, so the
+        # requirement is *no evidence found* and goes to review (PRD 4,
+        # AGENTS #1, D14). Recording it as missing would turn a failed check
+        # into a statement about the product.
+        result.status = RequirementStatus.NO_EVIDENCE_FOUND
+        result.reason = "the claim could not be verified: " + (
+            "; ".join(report.reasons) or "no layer confirmed it"
+        )
         result.confidence = ConfidenceLevel.LOW
+        result.review_required = True
+        result.review_reason = result.reason
         return result
 
     value_type = _value_type(fact.attribute)
@@ -559,8 +577,16 @@ def _corpus_file(relative: str) -> Optional[Path]:
     candidate = Path(relative)
     if candidate.is_absolute():
         return candidate
-    # The corpus keeps the files under the manufacturer's own directory.
-    for base in (data_dir / "manufacturers", data_dir / "tenders"):
+    # The corpus keeps the files under the manufacturer's own directory, in
+    # either layout: the collector's `manufacturers/` tree and the catalogue
+    # the seed reads. A stored path that is only a file name is looked for in
+    # both, because a document whose page cannot be found cannot have its
+    # quote checked, and an unchecked quote is not evidence.
+    for base in (
+        data_dir / "manufacturers",
+        data_dir / "catalogue",
+        data_dir / "tenders",
+    ):
         for found in base.glob(f"*/raw/{relative}"):
             return found
         for found in base.glob(f"*/{relative}"):

@@ -30,7 +30,10 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-sentence-transformers}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://localhost:11434}
+      EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-384}
     ports:
       - "8000:8000"
     volumes:

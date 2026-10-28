@@ -126,6 +126,10 @@ class RunStatus(StrEnum):
     VERIFYING = "verifying"
     SCORING = "scoring"
     DONE = "done"
+    # The provider's rate limit stopped the run before it had answered every
+    # requirement. Distinct from `failed`: nothing is wrong with the run, and
+    # the answers it already has are kept.
+    RATE_LIMITED = "rate_limited"
     FAILED = "failed"
 
 
@@ -143,6 +147,10 @@ class TenderStatus(StrEnum):
     PROCESSING = "processing"
     DONE = "done"
     FAILED = "failed"
+    # The extraction stage stopped at the provider's limit. The tender is not
+    # failed and not complete: what was read is kept, and the next run resumes
+    # (D8).
+    RATE_LIMITED = "rate_limited"
 
 
 class ConfidenceLevel(StrEnum):

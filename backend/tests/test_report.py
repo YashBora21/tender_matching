@@ -26,10 +26,11 @@ class FakeRunRepo:
 
 
 class FakeTenderRepo:
-    def __init__(self, requirements, items, pages=None, tender=None) -> None:
+    def __init__(self, requirements, items, pages=None, tender=None, stage=None) -> None:
         self.requirements = requirements
         self.items = items
         self.pages = pages or []
+        self.stage = stage
         self.tender = tender if tender is not None else {
             "id": TENDER_ID,
             "filename": "tender.pdf",
@@ -39,6 +40,9 @@ class FakeTenderRepo:
 
     def get_tender(self, tender_id):
         return dict(self.tender)
+
+    def get_stage(self, tender_id, section):
+        return dict(self.stage) if self.stage is not None else None
 
     def list_requirements(self, tender_id):
         return list(self.requirements)
@@ -138,7 +142,7 @@ RUN = {
 }
 
 
-def _report(results=None, pages=None, tender=None, requirements=None):
+def _report(results=None, pages=None, tender=None, requirements=None, stage=None):
     results = (
         results
         if results is not None
@@ -170,6 +174,7 @@ def _report(results=None, pages=None, tender=None, requirements=None):
             ITEMS,
             pages,
             tender,
+            stage,
         ),
     )
 
@@ -241,6 +246,31 @@ def test_a_fully_read_tender_is_not_incomplete():
     assert pages["accounted"] == 2
     assert pages["unaccounted"] == 0
     assert pages["incomplete_ingestion"] is False
+
+
+def test_an_extraction_that_stopped_short_is_not_a_final_report():
+    """A complete ledger over a tender whose requirements were only half read
+    is still an incomplete ingestion.
+
+    Every page parsed, so the ledger looks whole, but the extraction hit the
+    provider's limit. A report produced from that tender covers the
+    requirements read before the stop, and has to say so (D16).
+    """
+    report = _report(
+        stage={
+            "status": "rate_limited",
+            "detail": "the model is rate limited",
+            "key": "k",
+        }
+    )
+
+    assert report["tender"]["pages"]["incomplete_ingestion"] is True
+    assert report["tender"]["extraction"]["complete"] is False
+    assert report["incomplete_ingestion"] is True
+    page = render_html(report)
+    assert "the extraction of requirements stopped short" in page
+    assert "the model is rate limited" in page
+    assert "This is not a final compatibility report" in page
 
 
 def test_a_skipped_page_keeps_its_reason():

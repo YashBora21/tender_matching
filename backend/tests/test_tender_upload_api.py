@@ -8,6 +8,7 @@ replaced by a fake repository, so the tests describe the API, not SQL.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -200,6 +201,21 @@ def test_a_duplicate_whose_earlier_read_failed_is_read_again(client, scheduled):
     assert scheduled == [TENDER_ID, TENDER_ID]
 
 
+def test_a_duplicate_whose_read_was_rate_limited_is_read_again(client, scheduled):
+    """The read stopped at the provider's limit. Uploading the same file again
+    is the caller asking for the rest, and the stages that stopped are the ones
+    the next read resumes (D8, D-69)."""
+    assert _upload(client).status_code == 202
+    FakeRepo.rows[TENDER_ID]["status"] = "rate_limited"
+    FakeRepo.rows[TENDER_ID]["error"] = "the model was rate limited; retry in 24.9s"
+
+    response = _upload(client)
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "rate_limited"
+    assert scheduled == [TENDER_ID, TENDER_ID]
+
+
 def test_a_duplicate_that_is_still_reading_is_left_alone(client, scheduled):
     assert _upload(client).status_code == 202
     FakeRepo.rows[TENDER_ID]["status"] = "processing"
@@ -257,17 +273,45 @@ def test_the_requirements_of_a_read_tender_are_returned_with_their_item(client):
     assert body["requirements"][0]["category"] == "valve"
 
 
-def test_a_tender_that_has_not_been_read_yet_is_a_conflict(client):
+def test_a_tender_that_is_still_being_read_returns_what_it_has_read(client, tmp_path):
+    """A partial list is not a complete one, and the answer says which it is.
+
+    The requirement rows are written while the extraction reads (D-82), so the
+    route answers with them instead of a 409. `partial` is what stops a caller
+    from reading the short list as the document stating little (PRD 4).
+    """
     assert _upload(client).status_code == 202
     FakeRepo.rows[TENDER_ID]["status"] = "processing"
+    FakeRepo.requirements[TENDER_ID] = [
+        {
+            "item_id": "1",
+            "text": "The body shall be stainless steel",
+            "page": 2,
+            "type": "material",
+            "mandatory": True,
+            "review_required": False,
+        }
+    ]
 
     response = client.get(f"/api/tenders/{TENDER_ID}/requirements")
 
-    # An empty list would say the tender states no requirement, which is a
-    # different fact from "nobody has finished reading it" (PRD 4).
-    assert response.status_code == 409
-    assert response.json()["code"] == "conflict"
-    assert response.json()["detail"]["status"] == "processing"
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "processing"
+    assert body["partial"] is True
+    assert body["counts"]["requirements"] == 1
+    assert body["requirements"][0]["item_id"] == "1"
+    # The item still travels with the requirement it belongs to.
+    assert body["requirements"][0]["item_title"] is None
+
+
+def test_a_tender_that_has_been_read_is_not_partial(client):
+    assert _upload(client).status_code == 202
+    FakeRepo.rows[TENDER_ID]["status"] = "done"
+
+    body = client.get(f"/api/tenders/{TENDER_ID}/requirements").json()
+
+    assert body["partial"] is False
 
 
 def test_a_tender_that_could_not_be_read_says_why(client):
@@ -297,3 +341,111 @@ def test_a_malformed_id_is_not_found_rather_than_a_server_error(client):
 
     assert response.status_code == 404
     assert response.json()["code"] == "not_found"
+
+
+# --- the live stream (D-82) ------------------------------------------------
+
+
+def test_the_stream_of_an_unknown_tender_is_not_found(client):
+    response = client.get(
+        "/api/tenders/00000000-0000-0000-0000-000000000000/requirements/stream"
+    )
+
+    # Checked before the stream opens: an endless connection saying nothing is
+    # worse than a 404.
+    assert response.status_code == 404
+    assert response.json()["code"] == "not_found"
+
+
+def test_the_stream_is_an_event_stream(client, monkeypatch):
+    assert _upload(client).status_code == 202
+    monkeypatch.setattr(
+        "app.api.tenders._requirements_events",
+        lambda tender_id: iter(['event: end\ndata: {"tender_id": "x"}\n\n']),
+    )
+
+    with client.stream(
+        "GET", f"/api/tenders/{TENDER_ID}/requirements/stream"
+    ) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        # A proxy that buffers would hold every event until the read finished.
+        assert response.headers["x-accel-buffering"] == "no"
+        assert "event: end" in "".join(response.iter_text())
+
+
+class _ReadingTender:
+    """A tender that has read one more requirement each time it is looked at."""
+
+    def __init__(self, steps: list[tuple[str, list[str]]]) -> None:
+        self.steps = steps
+        self.looks = 0
+        self.rows: list[dict] = []
+
+    def get_tender(self, tender_id):
+        status, texts = self.steps[min(self.looks, len(self.steps) - 1)]
+        self.looks += 1
+        self.rows = [
+            {"id": f"r{index}", "item_id": "1", "text": text, "review_required": False}
+            for index, text in enumerate(texts)
+        ]
+        return {
+            "id": tender_id,
+            "filename": "tender.pdf",
+            "status": status,
+            "error": None,
+            "page_count": 1,
+        }
+
+    def list_items(self, tender_id):
+        return [{"item_id": "1", "name": "Gate valve", "category": "valve"}]
+
+    def list_requirements(self, tender_id):
+        return self.rows
+
+
+def _events(body: str) -> list[tuple[str, dict]]:
+    """The events in an SSE body, in order. Comments are not events."""
+    events: list[tuple[str, dict]] = []
+    for frame in body.split("\n\n"):
+        name = None
+        data = None
+        for line in frame.splitlines():
+            if line.startswith("event: "):
+                name = line[len("event: ") :]
+            elif line.startswith("data: "):
+                data = json.loads(line[len("data: ") :])
+        if name:
+            events.append((name, data))
+    return events
+
+
+def test_the_stream_sends_a_snapshot_then_each_change_then_the_end(monkeypatch):
+    from contextlib import contextmanager
+
+    from app.api import tenders as tenders_api
+
+    read = ["The body shall be stainless steel"]
+    also = read + ["The end connection shall be flanged"]
+    repo = _ReadingTender([("processing", read), ("processing", also), ("done", also)])
+
+    @contextmanager
+    def scope():
+        yield object()
+
+    monkeypatch.setattr(tenders_api, "session_scope", lambda: scope())
+    monkeypatch.setattr(tenders_api, "TenderRepo", lambda session: repo)
+    monkeypatch.setenv("STREAM_INTERVAL_SECONDS", "0")
+    get_settings.cache_clear()
+
+    events = _events("".join(tenders_api._requirements_events(TENDER_ID)))
+
+    assert [name for name, _ in events] == ["snapshot", "requirements", "end"]
+    # The snapshot is what is already read; the next event is the change.
+    assert len(events[0][1]["requirements"]) == 1
+    assert len(events[1][1]["requirements"]) == 2
+    assert events[1][1]["partial"] is True
+    assert events[1][1]["requirements"][1]["item_title"] == "Gate valve"
+    # The tender stopped reading, so the stream says so and closes.
+    assert events[2][1]["status"] == "done"
+    assert repo.looks == 3

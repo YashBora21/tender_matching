@@ -114,6 +114,24 @@ def _pages(tender_repo: TenderRepo, tender_id: str, page_count: Optional[int]) -
     }
 
 
+def _extraction(tender_repo: TenderRepo, tender_id: str) -> dict:
+    """Whether the requirements were read in full.
+
+    The page ledger says what happened to every page; the extraction stage
+    says whether the reading of those pages finished. A tender can have a
+    complete ledger and an extraction that stopped at the provider's limit,
+    and that tender's report covers only the requirements read before the
+    stop (D16).
+    """
+    stage = tender_repo.get_stage(tender_id, "extraction") or {}
+    status = stage.get("status") or ""
+    return {
+        "status": status,
+        "detail": stage.get("detail"),
+        "complete": status in ("", "done", "skipped"),
+    }
+
+
 def build_report(
     session: Session,
     run_id: str,
@@ -211,6 +229,12 @@ def build_report(
                 )
 
     expected = len(requirements) * len(run["manufacturers"])
+    pages = _pages(tender_repo, run["tender_id"], tender.get("page_count"))
+    extraction = _extraction(tender_repo, run["tender_id"])
+    # Either half of the reading can be short, and one is enough to make the
+    # report a partial one.
+    incomplete = pages["incomplete_ingestion"] or not extraction["complete"]
+    pages["incomplete_ingestion"] = incomplete
     return {
         "run": {
             "id": run["id"],
@@ -226,8 +250,13 @@ def build_report(
             "filename": tender.get("filename"),
             "sha256": tender.get("sha256"),
             "page_count": tender.get("page_count"),
-            "pages": _pages(tender_repo, run["tender_id"], tender.get("page_count")),
+            "pages": pages,
+            "extraction": extraction,
         },
+        # A report over a tender that was not read in full is not the final
+        # word on that tender: it says so at the top, where a consumer looks
+        # before it reads a score (PRD 4, D16).
+        "incomplete_ingestion": incomplete,
         # The config is the run's own snapshot: what it was scored with, not
         # what the settings say now (FR-34).
         "config": run["config_snapshot"],
@@ -443,6 +472,7 @@ def _unsupported_table(report: dict) -> str:
 def _banner(report: dict) -> str:
     parts: list[str] = []
     pages = report["tender"]["pages"]
+    extraction = report["tender"].get("extraction") or {}
     if pages["incomplete_ingestion"]:
         detail = []
         if pages["unresolved"]:
@@ -452,12 +482,22 @@ def _banner(report: dict) -> str:
             )
         if pages["unaccounted"]:
             detail.append(f"{pages['unaccounted']} page(s) not in the ledger")
+        if extraction and not extraction.get("complete", True):
+            detail.append(
+                "the extraction of requirements stopped short"
+                + (
+                    f" ({extraction['detail']})"
+                    if extraction.get("detail")
+                    else ""
+                )
+            )
         parts.append(
             '<div class="banner bad"><strong>Incomplete ingestion.</strong> '
             "This tender was not read in full ("
             + _escape("; ".join(detail))
             + "), so a requirement marked <em>no evidence found</em> may be a page "
-            "nobody read rather than a capability nobody documents.</div>"
+            "nobody read rather than a capability nobody documents. This is not a "
+            "final compatibility report.</div>"
         )
     if report["run"].get("error"):
         parts.append(

@@ -227,6 +227,11 @@ def _read(session: Session, tender_id: str) -> tuple[TenderStatus, Optional[str]
     )
     if audit.failure:
         return TenderStatus.FAILED, audit.failure
+    if audit.rate_limited:
+        # The extraction stopped at the provider's limit. The requirements it
+        # did read are stored; the tender is resumable, so it is not failed
+        # and not done (D8).
+        return TenderStatus.RATE_LIMITED, audit.rate_limited_detail
     return TenderStatus.DONE, None
 
 

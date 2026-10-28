@@ -275,6 +275,20 @@ def test_a_report_of_a_run_still_working_is_a_conflict(client, monkeypatch):
     assert response.json()["detail"]["progress"]["status"] == "retrieving"
 
 
+def test_a_report_of_a_rate_limited_run_is_served(client, monkeypatch):
+    """A rate-limited run has stopped, so its partial report is its answer.
+    Refusing it would hide the rows that were found (D5)."""
+    monkeypatch.setattr(
+        "app.api.runs.run_progress",
+        lambda session, run_id: _progress(status="rate_limited", results=1),
+    )
+    monkeypatch.setattr("app.api.runs.build_report", lambda *a, **k: REPORT)
+
+    response = client.get(f"/api/runs/{RUN_ID}/report")
+
+    assert response.status_code == 200
+
+
 @pytest.fixture
 def finished(client, monkeypatch):
     monkeypatch.setattr(

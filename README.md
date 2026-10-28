@@ -78,8 +78,9 @@ frontend's `VITE_API_URL` — see the build-time caveat below.
 The image migrates the schema but does not ingest the corpus. Once the stack is
 up, `make ingest` parses `backend/data/manufacturers/` into PostgreSQL and
 `make embed` builds the vectors; both stay explicit steps because they need the
-corpus on disk and the embedding provider. Without them the app starts with an
-empty corpus and reports it as empty.
+corpus on disk and the embedding model's weights (the first `make embed`
+downloads them, ~130 MB for the default `BAAI/bge-small-en-v1.5`). Without them
+the app starts with an empty corpus and reports it as empty.
 
 ### Locally
 
@@ -141,7 +142,7 @@ docker run -d --name tender-backend --network tender \
   -e DATABASE_URL=postgresql+psycopg://tender:tender@tender-db:5432/tender \
   -e CORS_ORIGINS=http://localhost:3000 \
   -e LLM_API_KEY="$LLM_API_KEY" -e LLM_MODEL="$LLM_MODEL" \
-  -e EMBEDDING_MODEL="$EMBEDDING_MODEL" \
+  -e EMBEDDING_BACKEND="$EMBEDDING_BACKEND" -e EMBEDDING_MODEL="$EMBEDDING_MODEL" \
   -v "$PWD/backend/data:/app/data" \
   <user>/tender-backend
 

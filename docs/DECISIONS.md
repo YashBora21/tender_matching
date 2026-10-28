@@ -71,6 +71,8 @@ yet, and pgvector requires the dimension to create a vector column with a
 dimension. An index is a Phase 1/retrieval-phase decision once the model is fixed.
 *Shortcut:* no ANN index and no dimension means brute-force cosine only; add the
 dimension and an HNSW index in the retrieval phase, and backfill existing chunks.
+*Resolved:* migration 0009 fixes the column at `vector(384)` for the local
+`BAAI/bge-small-en-v1.5` model and creates the HNSW index — see D-68.
 
 ---
 
@@ -713,6 +715,8 @@ Matching the joined form only — rejected, a corpus writes both ways.
 ---
 
 **D-52 — The embedding model is the local one.**
+*Superseded by D-68: the model is still local, but it is loaded through
+`sentence-transformers` rather than served by Ollama.*
 *Decision:* The corpus is embedded with the local Ollama's
 `nomic-embed-text` (768 dimensions), which is served without an account.
 *Why:* The HuggingFace router needs a token *and* credits: the account
@@ -1025,5 +1029,310 @@ that a rebuild solves. Baking the API URL into the image and calling it
 "configurable" — rejected, it is only configurable at build time. Publishing the
 images from here — not possible without credentials, and a README command for an
 image that does not exist would be a lie.
+
+---
+
+**D-68 — Embeddings are computed locally by `sentence-transformers`.**
+*Decision:* `EMBEDDING_BACKEND=sentence-transformers` is the default. The
+backend loads `BAAI/bge-small-en-v1.5` in its own process and encodes with
+`normalize_embeddings=True`; the vectors are 384-dimensional. `embed()` keeps an
+`http` backend for an OpenAI-compatible endpoint (a local Ollama is one).
+Migration `0009_embedding_384` drops the old HNSW index, clears the 768-dim
+vectors, changes `chunk.embedding` to `vector(384)` and rebuilds the index;
+`make embed --force` re-embeds the corpus. This supersedes D-52.
+*Why:* The HuggingFace token authenticates (whoami answers 200, fine-grained,
+`isPro:false`) but the account has no inference credits: `pipeline/feature-extraction`
+answers 402, and the OpenAI-shaped `/v1/embeddings` route is 404, so HF is not
+usable without a purchase. Public sentence-transformers weights need no account
+and no credits, and the library removes the second service that Ollama required.
+bge is trained for cosine similarity, so normalising makes the operator's
+assumption explicit rather than implied. Batches are filled shortest-first:
+the model pads every text to the longest in its batch, and on this corpus that
+alone moved the run from 2.8 to 15.8 chunks/s (20892 chunks: 124 -> 22
+minutes), while the vectors are unchanged because encode is per text.
+*Alternatives:* HuggingFace Inference Providers — rejected, 402 with no credits.
+Keeping Ollama as the default — rejected, it works but needs a daemon running and
+the library is the same computation in-process. Reusing the 768-dim
+`nomic-embed-text` vectors — rejected: vectors from two models are not
+comparable, so the migration clears them and the corpus is re-embedded.
+
+---
+
+**D-69 — A stage that stopped at the provider's limit is recorded as
+`rate_limited`, with the reason, at all three levels (defects D8 and D9).**
+*Decision:* `TenderStatus.RATE_LIMITED` is a fifth tender state, next to
+`queued`, `processing`, `done` and `failed`. `audit_tender` writes it on the
+tender row when the extraction stage stopped at the limit, `tenderupload._read`
+returns it to the upload route instead of `done`, the corpus report exports
+`rate_limited_detail`, and `extraction_batch` gains a `detail` column
+(migration `0010_stage_detail`) that `save_stage` fills from the stage's own
+reason. A run already had `RunStatus.RATE_LIMITED` from D5; this closes the same
+hole for the read.
+*Why:* Before this the run said `rate_limited` and the tender said `done`, with
+the provider's message only in a log line, so the next command — a report, an
+export, a resumed run — could not tell a tender that was read in full from one
+whose reading stopped after eleven items. That is the absence-of-evidence trap
+(AGENTS #3, #4) at the level of the whole tender: a stage that did not finish is
+not a stage that found nothing. `done` also made the upload route refuse to
+schedule a re-read, because `done` never is rescheduled; the new state is
+resumable by construction. The detail column exists because "rate limited" alone
+does not say for how long, and the provider does say ("try again in 24.9s").
+*Alternatives:* Reusing `failed` — rejected: a limit is not a failure of the
+tender, and the requirements already read would be labelled as a failed read.
+Leaving the state at `done` and reporting the limit only in the run — rejected,
+it is the read that was cut short. Storing the retry hint only in `tender.error`
+— rejected, the stage is what a resumed run reads, and the row it reads is
+`extraction_batch`.
+
+---
+
+**D-70 — Logs go to stderr (defect D7).**
+*Decision:* `configure_logging` attaches its handler to `sys.stderr`, not
+`sys.stdout`. `backend/tests/test_logging.py` asserts the stream.
+*Why:* `corpus.py --json` and `ingestion.py` print their result to stdout for a
+caller to parse; a log record interleaved with that JSON makes the output
+unparseable, and the failure looks like corrupt data rather than a log line.
+stdout stays the program's result, stderr stays the operator's record.
+*Alternatives:* Logging to a file — rejected, it hides the record from the
+operator running the command. Filtering the JSON through a tolerant parser —
+rejected, it moves the work to every caller.
+
+---
+
+**D-71 — No test drops `public`, and no test reads the whole corpus (defect
+D11).**
+*Decision:* `test_migrations.py` creates a schema of its own
+(`migration_test_<hex>`), points alembic at a connection whose `search_path`
+puts that schema first, asserts on it, and drops only that schema. The
+ingestion integration tests scope every read to the rows they wrote (by
+document id, hash or name) instead of counting the whole table.
+*Why:* As written, the migration test ran `DROP SCHEMA public CASCADE` against
+whatever `TEST_DATABASE_URL` named, and the ingestion tests asserted
+`count(*) == 2` on `chunk`. Together they deleted a corpus of 9 manufacturers,
+70 documents and 20,892 vectors from the run database while the run was being
+prepared — the tests passed and the evidence a report would be built from was
+gone. A test that needs an empty database has to make one, not take one.
+*Alternatives:* A container per test session — better, and heavier than this
+phase needs; the isolated schema gives the same guarantee for the tables alembic
+creates. Running the tests only against a throwaway database — rejected, the
+defect is that the test *can* be pointed at a real one, and a mistake in an
+environment variable is exactly how it happened.
+
+---
+
+**D-72 — The embedding model stays `bge-small-en-v1.5` at 384 dimensions
+(English corpus); BGE-M3 is measured and deferred.**
+*Decision:* No change to D-68. `BAAI/bge-m3` (multilingual, 1024 dimensions,
+MIT, 2.27 GB) is not adopted now. Hindi work stays as it is: a line whose
+script the English half cannot represent is kept and flagged unreadable, never
+matched (D-6, D-63).
+*Why:* Measured on this machine, on the same 128 corpus texts: BGE-M3 encodes
+2.08 chunks/s at batch 16, `bge-small-en-v1.5` 28.2 chunks/s at batch 32. On the
+real chunk distribution (mean 216 characters, p90 446, sampled through
+`parse_document`) BGE-M3 managed 7.0 chunks/s against bge-small's 147.0 on the
+shortest deciles, i.e. roughly a 20x gap in the same direction, plus 90 s of
+model load and a re-embedding of the whole corpus. The corpus contains no
+Devanagari: 81 PDFs were scanned and none carries a single Devanagari
+codepoint, so the bilingual model would buy nothing today. Adopting it would
+also mean a new 1024-dimension migration, a second re-embed and 2.27 GB of
+weights on a machine with 4.7 GB free on `C:`.
+*Alternatives:* Adopting BGE-M3 now for the Hindi tenders to come — rejected
+for this phase: it costs hours of re-embedding to change nothing measurable on
+this corpus, and the honest gap (Hindi lines are flagged, not matched) is
+already reported. Keeping it as a second backend behind config — rejected, no
+caller asks for it yet. `bge-large-en-v1.5` — rejected, the same 384→1024
+migration cost for English only.
+*Revisit when:* a tender with Hindi requirements is in scope, or a corpus
+document with Devanagari text is collected. The measurement is reproducible:
+`phase12_bge_m3_bench.py` in the phase's temp directory loads the model from
+`D:\hf-cache` and times it on real corpus text.
+
+---
+
+**D-73 — A claim that fails verification is *no evidence found*, and goes to
+review (defect D14).**
+*Decision:* `_match_candidate` returns `no_evidence_found` with
+`review_required=True` whenever the four-layer verifier does not pass. The
+quote, capability text and verification outcome are still stored, so the
+reviewer sees what was claimed and why it was not accepted.
+*Why:* The old code returned `missing_capability` for a failed citation,
+entity or semantic layer. "The quote is not on the page" or "the passage is
+about another product" says nothing about the manufacturer, so publishing it
+as a missing capability states something the evidence does not support — the
+core rule in the PRD (4) and AGENTS #4. A failed verification is a failure of
+*our* check, not a finding about the product.
+*Alternatives:* Keeping `missing_capability` but flagging it for review —
+rejected: the report's status counts, the compatibility percentage and the
+"fails mandatory" flag all read the status, so a flagged missing is still a
+missing in every number a buyer sees.
+
+---
+
+**D-74 — A stage that stopped at the provider's limit is read again on the
+next run (defect D15).**
+*Decision:* `run_pipeline` compares stage *keys* (what the stage read) and
+stage *states* (whether it finished). A stage whose previous state is
+`rate_limited` or `failed` runs again even when its key is unchanged
+(`TenderRepo.stage_statuses`).
+*Why:* An upload that hit the limit reschedules the ingestion with the same
+files, so the hash is the same and a key-only check skipped the extraction and
+marked the tender done — turning a half-read tender into a complete-looking
+one. The key says what was read; only the state says whether the reading
+finished.
+*Alternatives:* Passing `force=True` from the upload route — rejected: force
+would re-read every stage, spending calls on the ones that did finish, and it
+would depend on the caller remembering to pass it.
+
+---
+
+**D-75 — A report over a tender whose extraction stopped short is labelled
+incomplete ingestion (defect D16).**
+*Decision:* `build_report` reads the `extraction` stage. If it is not `done`
+or `skipped`, the report sets `tender.extraction.complete=false`, sets
+`incomplete_ingestion=true` at the top level, and the HTML banner says the
+extraction of requirements stopped short and that this is not a final
+compatibility report. The API and the report page show the same line.
+*Why:* The page ledger and the extraction are two different readings of the
+same tender: every page can parse while the requirement extraction stops at a
+rate limit. A run over such a tender covers only the requirements read before
+the stop, and a reader who saw a compatibility percentage would take it for
+the whole tender. Matching is still allowed — blocking it would have made this
+phase's own run impossible — but its output can never pass as final.
+*Alternatives:* Refusing to start a run until ingestion completes — rejected
+for now: a tender that can never finish (a page that will not parse) would then
+never be measurable, and the honest label already prevents the report from
+being read as final. Revisit if a buyer-facing workflow needs hard gating.
+
+---
+
+**D-76 — The stored requirement operator reaches the comparison (defect
+D17).**
+*Decision:* `runs._assess` passes `requirement["operator"]` to the matcher;
+`TenderRepo.list_requirements` selects the column.
+*Why:* It passed `None`, so a stored "minimum 1500 RPM" was compared as text
+rather than as `gte`. The comparison is the deterministic half of the
+pipeline: dropping the operator changes the answer, silently, for every
+numeric requirement. 13 of this tender's 21 requirements carry an operator.
+*Alternatives:* Inferring the operator from the requirement text at match
+time — rejected: the extraction already decided it, and re-inferring it in a
+second place is a second answer to the same question.
+
+---
+
+**D-77 — The run's config snapshot names the embedding backend (defect D18).**
+*Decision:* `config_snapshot` gains `embedding_backend`. It already named the
+model and the dimension.
+*Why:* The local backend normalises the vectors; the HTTP backend returns
+whatever the server sends. Normalisation decides the cosine order, which
+decides which passages are read, so two runs with the same model name and
+different backends are not the same run. A snapshot that cannot say which one
+produced the results cannot support reproducing them.
+*Alternatives:* Recording the normalisation flag instead — rejected: it is a
+property of the backend, not a separate choice; naming the backend is the
+smallest true statement.
+
+---
+
+**D-78 — How many passages one requirement is read against is config, and is
+in the snapshot (defect D19, part 1).**
+*Decision:* `MATCH_MAX_CANDIDATES` (default 20) replaces the `limit=20` literal
+in `match_requirement`; the snapshot records the value actually used.
+*Why:* Every candidate is an LLM call. At 8,000 tokens a minute a full
+21 x 20 search is hours of wall clock and a large share of the day's tokens,
+so the cap has to be a deliberate, recorded choice — a smaller cap finds less
+evidence, and the report must be able to say so. The Phase 12 run used 3.
+*Alternatives:* Leaving 20 and letting the run stop at the provider's limit —
+rejected: it would produce a `rate_limited` run rather than a measured one.
+
+---
+
+**D-79 — A verified full match ends the search for that requirement (defect
+D19, part 2).**
+*Decision:* The candidate loop breaks as soon as the best result so far is
+`full_match`. A weaker result keeps looking.
+*Why:* No further passage can improve on a verified full match, so reading the
+rest only costs calls. The reported `candidates` count still says how many
+passages retrieval offered, so the cap is not hidden by the early exit.
+*Alternatives:* Stopping on any verified result — rejected: a partial match
+does not beat a full one, and another passage may hold it.
+
+---
+
+**D-80 — A report names a document from the path or address it has (defect
+D20).**
+*Decision:* `RunRepo.results` selects `document.path` instead of a
+`document.filename` column that does not exist, and the report's document name
+is the last segment of the stored path, falling back to the last segment of
+the URL, and `None` when the document has neither.
+*Why:* Every real report raised `AttributeError: filename` while building its
+query, so `GET /api/runs/{id}/report` could never have served a report. The
+unit tests hid it because they used fake repositories that return the rows
+the test wanted; a query built from the real schema is the only thing that
+finds a wrong column name. Found on the first real report of Phase 12.
+*Alternatives:* Adding a `filename` column and a migration — rejected: the
+path already holds the name, and a second copy of it can drift from the file
+on disk. Reading the name from `url` only — rejected: a locally collected
+document has a path and no URL.
+
+---
+
+**D-81 — App work runs against a local Docker Postgres while Neon is
+re-embedded.**
+*Decision:* `DATABASE_URL` in `.env` names the local container
+(`postgresql+psycopg://tender:tender@localhost:55432/tender_test`). The Neon
+line stays in the file, commented, with the condition for switching back
+written next to it.
+*Why:* Neon is the deployment database, but its re-embed (D-68, migration
+`0009_embedding_384`) stopped part-way at 3,904 of 20,891 chunks, and its rows
+predate the current code (`tender_page` empty, `document.product_id` null). No
+tender could be uploaded, read or streamed against it until the model had
+re-encoded the corpus, which is hours of local CPU. The local container already
+holds the same corpus fully embedded (20,892/20,891 chunks), so the app can be
+exercised today. Nothing about the corpus is deleted: Neon is left as it is to
+be resumed, not rebuilt.
+*Switch back when:* `python -m app.services.embeddings` run against Neon reports
+every chunk embedded, and the ingestion has been re-run for `document.product_id`
+and the page ledger. Then uncomment the Neon line and comment the local one.
+*Alternatives:* Waiting for the Neon re-embed before touching the UI — rejected:
+it blocks work that does not depend on the deployment database. Pointing the
+tests at Neon — rejected outright by D-71.
+
+---
+
+**D-82 — A tender being read is streamed to the UI, and a run refuses a
+tender that is not fully read.**
+*Decision:* The extraction publishes what it has read, and two routes serve it.
+`pipeline._extract_all` calls `on_read(read_so_far)` after every requirement;
+`run_pipeline` turns that into a write of the whole set with
+`repo.replace_requirements` **and a commit**, throttled by
+`STREAM_INTERVAL_SECONDS` (default 1.0). `GET /api/tenders/{id}/requirements`
+answers with the rows stored right now plus `partial: true` while the status is
+`queued`/`processing` (it used to answer 409).
+`GET /api/tenders/{id}/requirements/stream` is a `text/event-stream` of the same
+payload: `snapshot` on connect, `requirements` on each change, `end` carrying
+the final payload. The UI subscribes with `EventSource` and falls back to the
+1 s poll when there is no `EventSource`, when a frame cannot be parsed, or when
+the stream errors before the read finishes. `POST /api/runs` refuses a tender
+whose status is `queued`, `processing` or `failed` with a `ConflictError`;
+`rate_limited` is still allowed, because that read did finish as far as it went
+and its report is labelled incomplete (D-75).
+*Why:* Reading a tender is minutes of model calls, and until this change the
+extractor wrote nothing until the last requirement, so the UI could only show a
+spinner: `GET /requirements` answered 409 for the whole read. Writing a
+complete snapshot per interval keeps the table consistent (no half-written
+requirement, no duplicated rows on resume) while making the work visible. The
+run guard follows from the same fact: while the list is partial, a run would
+answer "no evidence found" for requirements nobody has read yet, which is the
+absence-of-evidence error PRD 4 and AGENTS #4 forbid.
+*Alternatives:* Streaming the extractor's in-memory state over a websocket —
+rejected: a second copy of the truth, lost when the connection drops, and it
+cannot answer a client that reconnects. Writing every requirement immediately —
+rejected: one write and commit per requirement, and no bound on the extra
+traffic. Polling only — rejected: the UI already polls, but the point of the
+change was to push, and the endpoint costs one generator. Refusing a run while
+the *page ledger* is incomplete — rejected: that would block every tender with
+one unparseable page, and the report already carries the `incomplete_ingestion`
+label (D-75).
+
 
 

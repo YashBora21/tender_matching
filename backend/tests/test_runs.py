@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.errors import NotFoundError, ValidationError
+from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.schemas.enums import (
     Applicability,
     ConfidenceLevel,
@@ -229,6 +229,29 @@ def test_a_technical_requirement_is_matched_and_a_commercial_one_is_not():
     assert [status for status, _ in repo.history] == ["retrieving", "scoring", "done"]
 
 
+def test_the_stored_operator_reaches_the_comparison():
+    """A stored "minimum 1500 RPM" stays a `gte` comparison.
+
+    Dropping the operator turned every numeric requirement into a text one,
+    which is a different answer, not a cheaper one (D17).
+    """
+    repo = FakeRunRepo()
+    demand = dict(REQUIREMENTS[0], value="1500", unit="rpm", operator="gte")
+    tenders = FakeTenderRepo([demand], ITEMS)
+    calls: list[dict] = []
+
+    _execute(
+        repo,
+        tenders,
+        _recording_matcher(calls),
+        _recording_store(repo, {"mfr-Acme": "Acme"}),
+    )
+
+    assert calls[0]["requirement_value"] == "1500"
+    assert calls[0]["requirement_unit"] == "rpm"
+    assert calls[0]["requirement_operator"] == "gte"
+
+
 def test_an_item_with_no_category_is_searched_unfiltered_and_flagged():
     """A wrong filter would hide evidence and read as a missing capability."""
     repo = FakeRunRepo()
@@ -319,6 +342,83 @@ def test_a_run_that_raises_is_recorded_as_failed_with_its_reason():
     assert repo.history[-1][0] == "failed"
 
 
+def test_a_run_that_hits_the_rate_limit_is_recorded_as_rate_limited():
+    """Not `failed`: nothing is wrong with the run, and the answers it has are
+    kept. The caller can see why it stopped and that it can be resumed."""
+    from app.services.llm import LLMRateLimited
+
+    repo = FakeRunRepo()
+    tenders = FakeTenderRepo(REQUIREMENTS, ITEMS)
+    session = FakeSession()
+
+    outcome = execute_run(
+        RUN_ID,
+        session=session,
+        repo=repo,
+        tender_repo=tenders,
+        matcher=_recording_matcher(
+            [], error=LLMRateLimited("the model is rate limited", retry_after=24.9)
+        ),
+        store=_recording_store(repo, {}),
+    )
+
+    assert outcome.status == RunStatus.RATE_LIMITED.value
+    assert repo.run["status"] == "rate_limited"
+    assert repo.run["error"] == outcome.error
+    assert "rate limited" in (outcome.error or "")
+    assert repo.history[-1][0] == "rate_limited"
+    assert session.rollbacks == 1
+
+
+def test_a_rate_limited_run_is_not_run_again():
+    """The results it holds are the answer; a later run resumes from there."""
+    repo = FakeRunRepo(status="rate_limited")
+    repo.stored = [{"requirement_id": "r1"}]
+    tenders = FakeTenderRepo(REQUIREMENTS, ITEMS)
+    calls: list[dict] = []
+
+    outcome = _execute(
+        repo,
+        tenders,
+        _recording_matcher(calls),
+        _recording_store(repo, {}),
+    )
+
+    assert calls == []
+    assert len(repo.stored) == 1
+    assert outcome.status == RunStatus.RATE_LIMITED.value
+
+
+def test_the_run_reports_what_its_client_spent():
+    """Calls, tokens and retries are reported, not left in the log (D4)."""
+
+    class Counting:
+        calls = 3
+        prompt_tokens = 1200
+        completion_tokens = 300
+        retries = 1
+
+    repo = FakeRunRepo()
+    tenders = FakeTenderRepo(REQUIREMENTS, ITEMS)
+
+    outcome = execute_run(
+        RUN_ID,
+        session=FakeSession(),
+        repo=repo,
+        tender_repo=tenders,
+        matcher=_recording_matcher([]),
+        store=_recording_store(repo, {}),
+        client=Counting(),
+    )
+
+    assert outcome.llm_calls == 3
+    assert outcome.prompt_tokens == 1200
+    assert outcome.completion_tokens == 300
+    assert outcome.llm_retries == 1
+    assert outcome.as_dict()["llm_calls"] == 3
+    assert outcome.as_dict()["prompt_tokens"] == 1200
+
+
 def test_a_finished_run_is_not_run_again():
     """Its results are the answer; running it again would double them."""
     repo = FakeRunRepo(status="done")
@@ -365,6 +465,53 @@ def test_a_run_for_a_tender_that_does_not_exist_is_a_not_found(monkeypatch):
         create_run(FakeSession(), TENDER_ID)
 
 
+def test_a_run_against_a_tender_still_being_read_is_a_conflict(monkeypatch):
+    """The requirement list is partial while the tender is read (D-82).
+
+    Matching it would answer "no evidence" for requirements nobody has read
+    yet, which is the absence-of-evidence error PRD 4 forbids.
+    """
+
+    class Reading(FakeTenderRepo):
+        def get_tender(self, tender_id):
+            return {"id": TENDER_ID, "status": "processing"}
+
+    monkeypatch.setattr("app.services.runs.TenderRepo", lambda session: Reading([]))
+
+    with pytest.raises(ConflictError) as raised:
+        create_run(FakeSession(), TENDER_ID)
+
+    assert raised.value.detail == {"status": "processing"}
+
+
+def test_a_run_against_a_tender_that_could_not_be_read_is_a_conflict(monkeypatch):
+    class Unreadable(FakeTenderRepo):
+        def get_tender(self, tender_id):
+            return {"id": TENDER_ID, "status": "failed"}
+
+    monkeypatch.setattr("app.services.runs.TenderRepo", lambda session: Unreadable([]))
+
+    with pytest.raises(ConflictError):
+        create_run(FakeSession(), TENDER_ID)
+
+
+def test_a_run_against_a_rate_limited_tender_is_allowed(monkeypatch):
+    """The read stopped at the provider's limit and kept what it read. A run
+    over it is labelled incomplete, not refused (D8, D-75)."""
+
+    class Limited(FakeTenderRepo):
+        def get_tender(self, tender_id):
+            return {"id": TENDER_ID, "status": "rate_limited"}
+
+    monkeypatch.setattr("app.services.runs.TenderRepo", lambda session: Limited([]))
+    monkeypatch.setattr(
+        "app.services.runs.list_manufacturers", lambda session: [{"name": "Acme"}]
+    )
+    monkeypatch.setattr("app.services.runs.corpus_hash", lambda session: "hash")
+
+    assert create_run(FakeSession(), TENDER_ID, repo=FakeRunRepo()) == RUN_ID
+
+
 def test_a_run_against_a_manufacturer_the_corpus_lacks_is_a_validation_error(monkeypatch):
     monkeypatch.setattr(
         "app.services.runs.list_manufacturers",
@@ -398,9 +545,15 @@ def test_a_run_without_manufacturers_covers_the_whole_corpus(monkeypatch):
     assert repo.created["manufacturers"] == ["Acme", "Beta"]
     assert repo.created["corpus_hash"] == "hash"
     # The snapshot names what the run will be scored with (FR-34).
-    assert {"scoring_policy_version", "prompt_version", "llm_model"} <= set(
-        repo.created["config_snapshot"]
-    )
+    assert {
+        "scoring_policy_version",
+        "prompt_version",
+        "llm_model",
+        "embedding_model",
+        "embedding_dimension",
+        "embedding_backend",
+        "match_max_candidates",
+    } <= set(repo.created["config_snapshot"])
 
 
 def test_manufacturers_are_deduplicated_in_the_order_asked_for(monkeypatch):
@@ -510,3 +663,85 @@ def test_progress_counts_what_is_stored(monkeypatch):
     assert state.expected == 4
     assert state.results == 1
     assert state.as_dict()["progress_percent"] == 25.0
+
+
+# --- the report query against the real schema -----------------------------
+
+
+class _Rows:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def all(self):
+        return self.rows
+
+
+class _RecordingSession:
+    def __init__(self, rows):
+        self.rows = rows
+        self.statement = None
+
+    def execute(self, statement):
+        self.statement = statement
+        return _Rows(self.rows)
+
+
+def _evidence_row(path, url):
+    """One `results` row, in the order the query selects."""
+    return (
+        "result-1",
+        "req-1",
+        "mfr-1",
+        "Acme",
+        "full_match",
+        "passed",
+        "model_level",
+        1.0,
+        "Body material SS316",
+        "high",
+        False,
+        None,
+        "fact-1",
+        12,
+        "Body: ASTM A351 CF8M",
+        "doc-1",
+        path,
+        "catalogue",
+        "b" * 64,
+        url,
+    )
+
+
+def test_the_report_query_reads_only_columns_the_schema_has():
+    """A document row has no `filename` column (D20).
+
+    The fake repositories in the report tests hid this: the query was built
+    from a column that does not exist, so every real report raised
+    `AttributeError` before it could read anything.
+    """
+    from app.repositories.runs import RunRepo
+
+    session = _RecordingSession([_evidence_row("manufacturers/acme/raw/d-series.pdf", None)])
+    rows = RunRepo(session).results("run-1")
+
+    assert rows[0]["evidence"]["document"] == "d-series.pdf"
+    # The name comes from the stored path, and the query reads that column.
+    from sqlalchemy.dialects import postgresql
+
+    sql = str(session.statement.compile(dialect=postgresql.dialect()))
+    assert "document.path" in sql
+
+
+def test_a_document_with_no_path_is_named_by_its_address():
+    from app.repositories.runs import RunRepo, _document_name
+
+    assert _document_name(None, "https://manufacturer.test/files/d-series.pdf") == (
+        "d-series.pdf"
+    )
+    assert _document_name(None, None) is None
+    assert _document_name(r"C:\corpus\acme\datasheet.pdf", None) == "datasheet.pdf"
+    # And the same through the row the report reads.
+    session = _RecordingSession(
+        [_evidence_row(None, "https://manufacturer.test/files/d-series.pdf")]
+    )
+    assert RunRepo(session).results("run-1")[0]["evidence"]["document"] == "d-series.pdf"

@@ -152,16 +152,16 @@ chunk = Table(
     # it was read with.
     Column("confidence", Float, nullable=False, server_default="1.0"),
     # FR-11: keyword search. The column is generated from the text, so it can
-    # never drift from it. The vector column and its ANN index wait for the
-    # embedding model to be chosen (D-6).
+    # never drift from it. The vector column has the dimension of the chosen
+    # model; the ANN index is created by migration 0009 (D-6).
     Column(
         "search_vector",
         TSVECTOR,
         Computed("to_tsvector('english', text)", persisted=True),
     ),
-    # Dimension is left unset until EMBEDDING_MODEL is chosen; the ANN index is
-    # added in the retrieval phase, once the dimension is fixed.
-    Column("embedding", Vector()),
+    # The dimension is the one the migrated column has: an embedding from a
+    # different model is a different vector space, not a wider one (D-6, 0009).
+    Column("embedding", Vector(384)),
     Index("ix_chunk_document_id", "document_id"),
     Index("ix_chunk_search_vector", "search_vector", postgresql_using="gin"),
 )
@@ -348,6 +348,9 @@ extraction_batch = Table(
     Column("section", String(255)),
     Column("status", String(64), nullable=False),
     Column("attempts", Integer, nullable=False, server_default="0"),
+    # Why the stage stopped, when it did not finish: the provider's limit
+    # message and retry hint for `rate_limited` (D9).
+    Column("detail", Text),
     Column("extractor_version", String(64)),
     Column("prompt_version", String(64)),
     Column("output_hash", String(64)),

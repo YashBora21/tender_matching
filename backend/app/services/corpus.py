@@ -149,6 +149,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                     "totals": report.totals,
                     "llm_calls": report.llm_calls,
                     "llm_cache_hits": report.llm_cache_hits,
+                    "prompt_tokens": report.prompt_tokens,
+                    "completion_tokens": report.completion_tokens,
+                    "llm_retries": report.llm_retries,
                     "failure_causes": report.failure_causes,
                     "tenders": [
                         {
@@ -160,6 +163,12 @@ def main(argv: Optional[list[str]] = None) -> int:
                             "items": tender.items,
                             "requirements": tender.requirements,
                             "llm_calls": tender.llm_calls,
+                            "prompt_tokens": tender.prompt_tokens,
+                            "completion_tokens": tender.completion_tokens,
+                            "llm_retries": tender.llm_retries,
+                            "rate_limited": tender.rate_limited,
+                            "rate_limited_detail": tender.rate_limited_detail,
+                            "stages": tender.stages,
                             "failure": tender.failure,
                         }
                         for tender in report.tenders

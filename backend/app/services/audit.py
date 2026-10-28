@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.core.logging import get_logger
+from app.schemas.enums import TenderStatus
 from app.services.tendercollect import read_manifest
 from app.services.pipeline import PipelineResult, resolve_roles, run_pipeline
 
@@ -43,6 +44,15 @@ class TenderAudit:
     failure: Optional[str] = None
     llm_calls: int = 0
     llm_cache_hits: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    llm_retries: int = 0
+    # True when the provider's limit stopped the extraction. The stage is
+    # resumable, so this is not a failure of reading. `rate_limited_detail`
+    # carries what the provider said, so the next run knows when to resume
+    # (D9).
+    rate_limited: bool = False
+    rate_limited_detail: Optional[str] = None
     stages: dict = field(default_factory=dict)
 
 
@@ -53,6 +63,9 @@ class AuditReport:
     tenders: list[TenderAudit] = field(default_factory=list)
     llm_calls: int = 0
     llm_cache_hits: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    llm_retries: int = 0
 
     @property
     def failure_causes(self) -> list[tuple[str, int]]:
@@ -72,6 +85,7 @@ class AuditReport:
             "requirements": sum(t.requirements for t in self.tenders),
             "tenders_with_requirements": sum(1 for t in self.tenders if t.requirements),
             "tenders_failed": sum(1 for t in self.tenders if t.failure),
+            "tenders_rate_limited": sum(1 for t in self.tenders if t.rate_limited),
         }
 
     def as_table(self) -> str:
@@ -87,7 +101,8 @@ class AuditReport:
                 f"{'yes' if tender.spec_found else 'no':5} "
                 f"{'yes' if tender.boq_found else 'no':4} "
                 f"{tender.attachments:4} {tender.items:6} {tender.requirements:5} "
-                f"{tender.llm_calls:6} {tender.failure or ''}"
+                f"{tender.llm_calls:6} "
+                f"{tender.failure or ('rate_limited' if tender.rate_limited else '')}"
             )
         return "\n".join(lines)
 
@@ -99,6 +114,9 @@ class AuditReport:
             lines.append(f"  {key:28} {value}")
         lines.append(f"  {'llm_calls':28} {self.llm_calls}")
         lines.append(f"  {'llm_cache_hits':28} {self.llm_cache_hits}")
+        lines.append(f"  {'prompt_tokens':28} {self.prompt_tokens}")
+        lines.append(f"  {'completion_tokens':28} {self.completion_tokens}")
+        lines.append(f"  {'llm_retries':28} {self.llm_retries}")
 
         causes = self.failure_causes
         lines.append("")
@@ -161,6 +179,15 @@ def audit_tender(
         )
 
     roles = resolve_roles(attachments)
+    if result.rate_limited and repo is not None:
+        # The stage stopped at the provider's limit: the tender is neither
+        # done nor failed. Recording it here keeps the row honest, because
+        # the pipeline writes stages, not the tender's own state (D8).
+        repo.set_status(
+            tender_id,
+            TenderStatus.RATE_LIMITED,
+            error=result.rate_limited_detail,
+        )
     return TenderAudit(
         tender_id=tender_id,
         filename=manifest.get("filename") or tender_dir.name,
@@ -178,6 +205,11 @@ def audit_tender(
         failure=result.failure,
         llm_calls=result.llm_calls,
         llm_cache_hits=result.llm_cache_hits,
+        prompt_tokens=result.prompt_tokens,
+        completion_tokens=result.completion_tokens,
+        llm_retries=result.llm_retries,
+        rate_limited=result.rate_limited,
+        rate_limited_detail=result.rate_limited_detail,
         stages={
             name: state.status for name, state in result.stages.items()
         },
@@ -227,6 +259,9 @@ def audit_corpus(
         report.tenders.append(tender)
         report.llm_calls += tender.llm_calls
         report.llm_cache_hits += tender.llm_cache_hits
+        report.prompt_tokens += tender.prompt_tokens
+        report.completion_tokens += tender.completion_tokens
+        report.llm_retries += tender.llm_retries
     return report
 
 

@@ -395,6 +395,20 @@ select {
   font-size: 0.9rem;
 }
 
+/* The requirements a tender has been read up to, while it is still being read
+   (D-82). Each line is one requirement, so the list is scannable while it
+   grows. */
+.live-list {
+  list-style: none;
+  padding: 0;
+}
+
+.live-list li {
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--line);
+  line-height: 1.5;
+}
+
 /* --- run progress ------------------------------------------------------ */
 
 .run-head {

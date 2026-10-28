@@ -17,9 +17,10 @@ from __future__ import annotations
 
 import json
 import shutil
+import time
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Iterator, Optional
 
 from fastapi import (
     APIRouter,
@@ -31,12 +32,14 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_session
 from app.core.config import get_settings
-from app.core.errors import ConflictError, NotFoundError
+from app.core.errors import NotFoundError
 from app.core.logging import get_logger
+from app.repositories.db import session_scope
 from app.repositories.tender import TenderRepo
 from app.schemas.enums import TenderStatus
 from app.services.tenderupload import (
@@ -113,9 +116,14 @@ async def upload_tender(
     # own session, and it must be able to see the row it was told to read.
     session.commit()
 
-    # A new file is read now. A duplicate is read again only when its earlier
-    # reading failed — a tender already reading is left to finish.
-    if not uploaded.duplicate or uploaded.status == TenderStatus.FAILED.value:
+    # A new file is read now. A duplicate is read again when its earlier
+    # reading stopped short — it failed, or the provider's limit cut it off —
+    # because that read is resumable and this is the caller asking for it. A
+    # tender already reading is left to finish.
+    if not uploaded.duplicate or uploaded.status in (
+        TenderStatus.FAILED.value,
+        TenderStatus.RATE_LIMITED.value,
+    ):
         background.add_task(ingest, uploaded.tender_id)
 
     logger.info("tender %s accepted (%s)", uploaded.tender_id, name)
@@ -132,25 +140,59 @@ def get_requirements(
 ) -> dict:
     """The tender's parsed atomic requirements (PRD 11).
 
-    A tender that is still being read is a conflict, not an empty list: an
-    empty answer would say the document states no requirement, which is a
-    different fact from "nobody has read it yet" (PRD 4).
+    A tender that is still being read answers with what has been read so far
+    and says so in `partial` (D-82). The rows are real requirements, never a
+    guess at what the rest of the document says, and the status is what stops a
+    reader from taking a short list for a complete one (PRD 4).
     """
     identifier = _identifier(tender_id)
     repo = TenderRepo(session)
     tender = repo.get_tender(identifier)
     if tender is None:
         raise NotFoundError(f"no tender with id {tender_id}")
+    return _requirements_payload(repo, tender)
 
-    if tender["status"] in (TenderStatus.QUEUED.value, TenderStatus.PROCESSING.value):
-        raise ConflictError(
-            f"tender {tender_id} has not been read yet (status {tender['status']})",
-            {"status": tender["status"]},
-        )
 
-    items = {item["item_id"]: item for item in repo.list_items(identifier)}
+@router.get("/{tender_id}/requirements/stream")
+def stream_requirements(tender_id: str) -> StreamingResponse:
+    """Push the requirements while the tender is being read (D-82).
+
+    The same payload as the route above, sent as `text/event-stream`: a
+    `snapshot` when the client connects, a `requirements` event whenever what
+    is stored changes, and an `end` when the tender stops reading. A client
+    that cannot read a stream falls back to polling the plain route.
+    """
+    identifier = _identifier(tender_id)
+    # Checked before the stream starts, so a wrong id is a 404 and not a
+    # connection that stays open saying nothing.
+    with session_scope() as session:
+        tender = TenderRepo(session).get_tender(identifier)
+    if tender is None:
+        raise NotFoundError(f"no tender with id {tender_id}")
+
+    return StreamingResponse(
+        _requirements_events(identifier),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            # A proxy that buffers would hold every event until the read
+            # finished, which is the wait this endpoint exists to remove.
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# The states in which a tender is still being read, and its requirement list is
+# therefore partial.
+_READING = (TenderStatus.QUEUED.value, TenderStatus.PROCESSING.value)
+
+
+def _requirements_payload(repo: TenderRepo, tender: dict) -> dict:
+    """What the requirements routes answer, from the rows stored right now."""
+    items = {item["item_id"]: item for item in repo.list_items(tender["id"])}
     requirements = []
-    for row in repo.list_requirements(identifier):
+    for row in repo.list_requirements(tender["id"]):
         item = items.get(row.get("item_id")) or {}
         requirements.append(
             {
@@ -161,11 +203,14 @@ def get_requirements(
         )
 
     return {
-        "tender_id": identifier,
+        "tender_id": str(tender["id"]),
         "filename": tender.get("filename"),
         "status": tender["status"],
         "error": tender.get("error"),
         "page_count": tender.get("page_count"),
+        # A short list while the read is running is not the document stating
+        # few requirements: the flag is what tells the two apart.
+        "partial": tender["status"] in _READING,
         "counts": {
             "items": len(items),
             "requirements": len(requirements),
@@ -173,6 +218,50 @@ def get_requirements(
         },
         "requirements": requirements,
     }
+
+
+def _sse(event: str, data: dict) -> str:
+    """One server-sent event."""
+    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+
+
+def _requirements_events(tender_id: str) -> Iterator[str]:
+    """The tender's requirements, as they are read (D-82).
+
+    The extraction writes a snapshot of what it has read so far, so the stream
+    is a read of that table at an interval rather than a second copy of the
+    extraction's state. That is what lets a client reconnect and still be shown
+    everything, and what keeps the list correct when the read stops short.
+    """
+    interval = get_settings().stream_interval_seconds
+    previous: Optional[dict] = None
+
+    while True:
+        with session_scope() as session:
+            repo = TenderRepo(session)
+            tender = repo.get_tender(tender_id)
+            payload = None if tender is None else _requirements_payload(repo, tender)
+
+        if payload is None:
+            yield _sse("error", {"tender_id": tender_id, "message": "the tender is gone"})
+            return
+
+        # The final state is an event of its own, carrying the same payload:
+        # the client replaces its list and knows the read has stopped. A
+        # tender that had already finished before the client connected ends
+        # immediately instead of opening with a snapshot and closing.
+        if not payload["partial"]:
+            yield _sse("end", payload)
+            return
+
+        if payload != previous:
+            yield _sse("snapshot" if previous is None else "requirements", payload)
+            previous = payload
+
+        # A comment is not an event. It keeps the connection alive while the
+        # model is thinking and nothing has changed yet.
+        yield ": keep-alive\n\n"
+        time.sleep(interval)
 
 
 @router.get("/{tender_id}/attachments")

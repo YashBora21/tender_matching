@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 from sqlalchemy import create_engine, func, select, text
@@ -35,7 +36,9 @@ def rollback_session(test_database_url: str):
     """A session whose writes are rolled back at the end.
 
     The tests run the real SQL against a real database and leave nothing
-    behind, so they need no disposable database of their own.
+    behind. Their reads are scoped to the rows they wrote, so a database that
+    already holds a corpus is not read as if the test's two chunks were all of
+    it (D11).
     """
     engine = create_engine(test_database_url, future=True)
     with Session(engine, future=True) as db:
@@ -69,7 +72,11 @@ def test_a_document_and_its_chunks_are_written(rollback_session):
     rollback_session.flush()
 
     assert written == 2
-    rows = rollback_session.execute(select(chunk.c.text, chunk.c.page, chunk.c.is_table)).all()
+    rows = rollback_session.execute(
+        select(chunk.c.text, chunk.c.page, chunk.c.is_table).where(
+            chunk.c.document_id == UUID(document_id)
+        )
+    ).all()
     assert len(rows) == 2
     assert {row.page for row in rows} == {1, 2}
 
@@ -88,7 +95,11 @@ def test_the_same_document_is_not_written_twice(rollback_session):
     rollback_session.flush()
 
     assert first == second
-    count = rollback_session.execute(select(func.count()).select_from(document)).scalar()
+    count = rollback_session.execute(
+        select(func.count())
+        .select_from(document)
+        .where(document.c.sha256 == "b" * 64)
+    ).scalar()
     assert count == 1
 
 
@@ -110,7 +121,9 @@ def test_re_ingesting_replaces_the_old_chunks(rollback_session):
     repo.insert_chunks(document_id, [{"page": 1, "text": "new text"}])
     rollback_session.flush()
 
-    rows = rollback_session.execute(select(chunk.c.text)).all()
+    rows = rollback_session.execute(
+        select(chunk.c.text).where(chunk.c.document_id == UUID(document_id))
+    ).all()
     assert [row.text for row in rows] == ["new text"]
 
 
@@ -120,7 +133,11 @@ def test_the_manufacturer_is_created_once(rollback_session):
     repo.get_manufacturer_id("Acme Valves")
     rollback_session.flush()
 
-    count = rollback_session.execute(select(func.count()).select_from(manufacturer)).scalar()
+    count = rollback_session.execute(
+        select(func.count())
+        .select_from(manufacturer)
+        .where(manufacturer.c.name == "Acme Valves")
+    ).scalar()
     assert count == 1
 
 
@@ -143,9 +160,8 @@ def test_the_keyword_index_finds_a_chunk(rollback_session):
 
     found = rollback_session.execute(
         select(chunk.c.text).where(
-            chunk.c.search_vector.op("@@")(
-                func.to_tsquery("english", "stainless")
-            )
+            chunk.c.document_id == UUID(document_id),
+            chunk.c.search_vector.op("@@")(func.to_tsquery("english", "stainless")),
         )
     ).all()
     assert len(found) == 1

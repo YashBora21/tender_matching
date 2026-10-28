@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     app_name: str = "tender-backend"
     app_version: str = "0.1.0"
     log_level: str = "INFO"
+    # How often a tender being read is written down and streamed to the UI
+    # (D-82). It bounds both the extra database writes and how stale the live
+    # list can be: the extraction asks the model once per requirement, so a
+    # smaller value would write on nearly every requirement read.
+    stream_interval_seconds: float = 1.0
 
     # --- database (PostgreSQL + pgvector) ---
     database_url: str = "postgresql+psycopg://tender:tender@localhost:5432/tender"
@@ -64,10 +69,10 @@ class Settings(BaseSettings):
     category_vocabulary_path: Optional[str] = None
 
     # --- llm / embeddings ---
-    # The LLM and the embedding model are reached over an OpenAI-compatible
-    # API, so the provider is a base URL and not a library. Groq serves
-    # gpt-oss; a local Ollama serves the embedding model; the HuggingFace
-    # router serves both if the account has credits.
+    # The LLM is reached over an OpenAI-compatible API, so the provider is a
+    # base URL and not a library (Groq serves gpt-oss). The embedding model is
+    # local by default: sentence-transformers loads public weights, with no
+    # account and no inference credits.
     llm_api_key: Optional[str] = None
     # gpt-oss-20b over gpt-oss-120b: the provider's daily token limit is
     # per model, and 20b is the cheaper and faster of the two.
@@ -81,11 +86,24 @@ class Settings(BaseSettings):
     llm_max_tokens: int = 2048
     llm_timeout_seconds: int = 120
     llm_temperature: float = 0.0
-    embedding_model: Optional[str] = "nomic-embed-text"
+    # The embedding model runs locally through sentence-transformers by
+    # default: public weights, no account and no inference credits. The
+    # alternative is `http`, which speaks the OpenAI embeddings shape and is
+    # what a local Ollama serves.
+    embedding_backend: str = "sentence-transformers"
+    embedding_model: Optional[str] = "BAAI/bge-small-en-v1.5"
+    # Only the `http` backend reads this.
     embedding_base_url: str = "http://localhost:11434"
     # The dimension of the embedding model's vectors. It is a property of the
-    # model, so changing the model means a migration (D-6).
-    embedding_dimension: int = 768
+    # model, and the migrated column is vector(384): changing the model means
+    # a migration and re-embedding (D-6).
+    embedding_dimension: int = 384
+
+    # --- matching ---
+    # How many retrieved passages one requirement may be read against. Every
+    # passage is a model call, so this is the cost ceiling of a match, and a
+    # smaller number is a recall/cost trade the report has to name (FR-22).
+    match_max_candidates: int = 20
 
     # --- fetching attachments ---
     # A tender links to documents on other hosts, and the collector follows

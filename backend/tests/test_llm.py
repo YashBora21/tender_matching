@@ -200,3 +200,98 @@ class _FakeResponse:
 
     def __exit__(self, *exc):
         return False
+
+
+def test_the_client_counts_the_calls_and_the_tokens(monkeypatch):
+    """What a run cost is measured, not left in the log (FR-34)."""
+
+    def fake_urlopen(request, timeout=None):
+        return _FakeResponse(
+            {
+                "choices": [{"message": {"content": '{"ok": true}'}}],
+                "usage": {"prompt_tokens": 120, "completion_tokens": 30},
+            }
+        )
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "openai/gpt-oss-20b")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    client = LLMClient()
+    client.complete_json("system", "user")
+    client.complete_json("system", "user")
+
+    assert client.calls == 2
+    assert client.prompt_tokens == 240
+    assert client.completion_tokens == 60
+    assert client.tokens == 300
+    assert client.retries == 0
+
+
+def test_a_rate_limit_that_outlasts_the_budget_is_raised_not_swallowed(monkeypatch):
+    """The caller has to stop, and the limit is not an ordinary failure: the
+    passage was never read."""
+    import io
+    import urllib.error
+
+    from app.services.llm import LLMRateLimited
+
+    attempts = []
+
+    def fake_urlopen(request, timeout=None):
+        attempts.append(request.full_url)
+        raise urllib.error.HTTPError(
+            request.full_url,
+            429,
+            "Too Many Requests",
+            {},
+            io.BytesIO(b'{"error": "Rate limit reached. Please try again in 3.5s."}'),
+        )
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "openai/gpt-oss-20b")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "1")
+    monkeypatch.setenv("LLM_RETRY_SECONDS", "0")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    client = LLMClient()
+    with pytest.raises(LLMRateLimited) as caught:
+        client.chat("system", "user")
+
+    # The provider's advice is carried out with the error, so a stopped run
+    # can say when it is worth trying again.
+    assert caught.value.retry_after == 3.5
+    assert client.calls == 2
+    assert client.retries == 1
+    assert len(attempts) == 2
+
+
+def test_no_retries_left_raises_the_limit_on_the_first_attempt(monkeypatch):
+    """`LLM_MAX_RETRIES=0` is the Phase 12 rule: stop at the first limit."""
+    import urllib.error
+
+    from app.services.llm import LLMRateLimited
+
+    def fake_urlopen(request, timeout=None):
+        raise urllib.error.HTTPError(request.full_url, 429, "rate limited", {}, None)
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "openai/gpt-oss-20b")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "0")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    client = LLMClient()
+    with pytest.raises(LLMRateLimited):
+        client.chat("system", "user")
+
+    assert client.calls == 1
+    assert client.retries == 0

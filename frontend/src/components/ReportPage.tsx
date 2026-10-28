@@ -154,6 +154,14 @@ export function ReportPage({
                   Pages skipped: {pages.skipped.map((page) => page.page).join(', ')}.
                 </li>
               )}
+              {report.tender.extraction && !report.tender.extraction.complete && (
+                <li>
+                  The extraction of requirements stopped short
+                  {report.tender.extraction.detail
+                    ? `: ${report.tender.extraction.detail}`
+                    : '.'}
+                </li>
+              )}
             </ul>
           </Notice>
         )}

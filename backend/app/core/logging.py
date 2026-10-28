@@ -12,7 +12,10 @@ def configure_logging(level: str = "INFO") -> None:
     global _CONFIGURED
     if _CONFIGURED:
         return
-    handler = logging.StreamHandler(sys.stdout)
+    # Logs go to stderr so a command that prints machine-readable output
+    # (`--json`) keeps stdout parseable (D7). A consumer redirecting stdout
+    # then gets JSON and nothing else.
+    handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)-8s %(name)s | %(message)s")
     )

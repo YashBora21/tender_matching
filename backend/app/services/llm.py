@@ -6,8 +6,9 @@ it, so a malformed or truncated answer is a failed extraction rather than a
 requirement that was never stated.
 
 The client speaks the OpenAI-compatible API, so the provider is a base URL:
-Groq serves gpt-oss, a local Ollama serves an embedding model, and the
-HuggingFace router serves either.
+Groq serves gpt-oss. Embeddings are local by default (sentence-transformers,
+public weights, no account); the alternative `http` backend speaks the same
+OpenAI shape, which a local Ollama serves.
 """
 
 from __future__ import annotations
@@ -31,6 +32,22 @@ _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 class LLMError(Exception):
     """The LLM could not be used. The reason is reported, not raised past."""
+
+
+class LLMRateLimited(LLMError):
+    """The provider's limit was hit and the caller has to stop.
+
+    Separate from `LLMError` because a rate limit is not a bad answer: the
+    passage was never read. An extraction layer that caught this as an
+    ordinary failure would turn "we could not ask" into "the document says
+    nothing", which is exactly the confusion the project forbids.
+    """
+
+    def __init__(self, message: str, *, retry_after: Optional[float] = None):
+        super().__init__(message)
+        # What the provider said to wait, when it said anything. Recorded so a
+        # stopped run can say when it is worth trying again.
+        self.retry_after = retry_after
 
 
 class _RateLimited(Exception):
@@ -107,12 +124,25 @@ class LLMClient:
             raise LLMError("no LLM model is configured")
         if not self.api_key:
             raise LLMError("no LLM api key is configured")
+        # What this client has spent. Kept here so a caller can report the
+        # calls, tokens and retries a run cost (FR-34), instead of the numbers
+        # disappearing into the log.
+        self.calls = 0
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.retries = 0
+
+    @property
+    def tokens(self) -> int:
+        return self.prompt_tokens + self.completion_tokens
 
     def chat(self, system: str, user: str, *, max_tokens: Optional[int] = None) -> LLMResult:
         """Ask the model one question and get one answer.
 
-        A rate-limited call is retried: the provider's limit is per minute
-        and per day, and a burst of calls is a normal way to hit it (PRD 13).
+        A rate-limited call is retried only while the retry budget allows it.
+        When the budget is spent the limit is raised as `LLMRateLimited`, not
+        folded into a generic failure: the caller must stop and record it,
+        not carry on reading lines it cannot ask about.
         """
         settings = get_settings()
         last_error: Optional[str] = None
@@ -122,9 +152,10 @@ class LLMClient:
                 result = self._chat_once(system, user, max_tokens=budget)
             except _RateLimited as exc:
                 last_error = str(exc)
-                if attempt >= settings.llm_max_retries:
-                    break
                 wait = _retry_after(exc, settings.llm_retry_seconds * (attempt + 1))
+                if attempt >= settings.llm_max_retries:
+                    raise LLMRateLimited(last_error, retry_after=wait) from exc
+                self.retries += 1
                 logger.warning(
                     "the model is rate limited, retrying in %.0fs (%d/%d)",
                     wait,
@@ -139,6 +170,7 @@ class LLMClient:
                 last_error = "the model spent its whole budget reasoning"
                 if attempt >= settings.llm_max_retries:
                     break
+                self.retries += 1
                 budget = int(budget * 2)
                 logger.warning(
                     "the model answered nothing, retrying with %d tokens", budget
@@ -171,6 +203,9 @@ class LLMClient:
                 "User-Agent": _USER_AGENT,
             },
         )
+        # Every HTTP attempt is a call, including one that comes back 429: the
+        # account is charged for it, so the report has to count it.
+        self.calls += 1
         try:
             with urllib.request.urlopen(request, timeout=settings.llm_timeout_seconds) as response:
                 data = json.loads(response.read())
@@ -188,11 +223,15 @@ class LLMClient:
             raise LLMError("the model's answer had no message") from exc
 
         usage = data.get("usage") or {}
+        prompt_tokens = int(usage.get("prompt_tokens") or 0)
+        completion_tokens = int(usage.get("completion_tokens") or 0)
+        self.prompt_tokens += prompt_tokens
+        self.completion_tokens += completion_tokens
         return LLMResult(
             content=message.get("content") or "",
             reasoning=message.get("reasoning"),
-            prompt_tokens=int(usage.get("prompt_tokens") or 0),
-            completion_tokens=int(usage.get("completion_tokens") or 0),
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
         )
 
     def complete_json(self, system: str, user: str, *, max_tokens: Optional[int] = None) -> Any:
@@ -207,17 +246,59 @@ _USER_AGENT = (
 )
 
 
+# Loaded model, keyed by name. `embed` is called once per batch of 32 chunks,
+# and loading the weights on every batch would read the model from disk (and
+# download it once) for no reason.
+_LOCAL_MODELS: dict[str, Any] = {}
+
+
+def _sentence_transformer(name: str):
+    """The local model, loaded once and reused.
+
+    Imported lazily: the HTTP backend does not need torch, and a machine that
+    only talks to a hosted model should not carry it.
+    """
+    model = _LOCAL_MODELS.get(name)
+    if model is None:
+        from sentence_transformers import SentenceTransformer
+
+        logger.info("loading the embedding model %s", name)
+        model = SentenceTransformer(name)
+        _LOCAL_MODELS[name] = model
+    return model
+
+
 def embed(texts: list[str]) -> list[list[float]]:
     """Embed texts with the configured embedding model.
 
-    The model is reached over an OpenAI-compatible endpoint, so the same call
-    serves a local Ollama and a hosted one.
+    Two backends, one vector shape: `sentence-transformers` loads public
+    weights in this process (no account, no credits), and `http` speaks the
+    OpenAI embeddings shape, which is what a local Ollama serves. The choice
+    is config, not code; the dimension is a property of the model and the
+    migrated column (D-6).
     """
     if not texts:
         return []
     settings = get_settings()
     if not settings.embedding_model:
         raise LLMError("no embedding model is configured")
+
+    backend = (settings.embedding_backend or "").strip().lower()
+    if backend == "sentence-transformers":
+        model = _sentence_transformer(settings.embedding_model)
+        # bge models are trained for cosine similarity; normalising here makes
+        # the vector's length irrelevant, which is what the cosine operator
+        # assumes. The batch size keeps a large corpus within memory.
+        vectors = model.encode(
+            texts,
+            batch_size=32,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+        return [[float(value) for value in vector] for vector in vectors]
+    if backend != "http":
+        raise LLMError(f"unknown embedding backend {settings.embedding_backend!r}")
+
     body = json.dumps({"model": settings.embedding_model, "input": texts}).encode("utf-8")
     request = urllib.request.Request(
         f"{settings.embedding_base_url.rstrip('/')}/v1/embeddings",

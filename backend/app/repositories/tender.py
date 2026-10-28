@@ -380,6 +380,7 @@ class TenderRepo:
                 requirement.c.review_reason,
                 requirement.c.value,
                 requirement.c.unit,
+                requirement.c.operator,
                 requirement.c.mandatory,
             )
             .where(requirement.c.tender_id == tender_id)
@@ -397,7 +398,8 @@ class TenderRepo:
                 "review_reason": row[8],
                 "value": row[9],
                 "unit": row[10],
-                "mandatory": bool(row[11]) if row[11] is not None else True,
+                "operator": row[11],
+                "mandatory": bool(row[12]) if row[12] is not None else True,
             }
             for row in rows
         ]
@@ -461,6 +463,7 @@ class TenderRepo:
                 extraction_batch.c.attempts,
                 extraction_batch.c.extractor_version,
                 extraction_batch.c.prompt_version,
+                extraction_batch.c.detail,
             )
             .where(
                 extraction_batch.c.tender_id == tender_id,
@@ -475,12 +478,27 @@ class TenderRepo:
             "attempts": row[2],
             "extractor_version": row[3],
             "prompt_version": row[4],
+            "detail": row[5],
         }
 
     def stage_keys(self, tender_id: str) -> dict[str, str]:
         """The key of every stage that has run for this tender."""
         rows = self.session.execute(
             select(extraction_batch.c.section, extraction_batch.c.output_hash).where(
+                extraction_batch.c.tender_id == tender_id
+            )
+        ).all()
+        return {row[0]: row[1] for row in rows}
+
+    def stage_statuses(self, tender_id: str) -> dict[str, str]:
+        """The state every stage was left in.
+
+        The key says what the stage read; the state says whether it finished.
+        A stage that stopped at the provider's limit has the same key next
+        time, so the state is what tells a resumed run to try it again (D15).
+        """
+        rows = self.session.execute(
+            select(extraction_batch.c.section, extraction_batch.c.status).where(
                 extraction_batch.c.tender_id == tender_id
             )
         ).all()
@@ -496,6 +514,7 @@ class TenderRepo:
         attempts: int = 0,
         extractor_version: Optional[str] = None,
         prompt_version: Optional[str] = None,
+        detail: Optional[str] = None,
     ) -> None:
         """Record what a stage did, so the next run knows what to skip."""
         existing = self.session.execute(
@@ -514,6 +533,7 @@ class TenderRepo:
                     attempts=attempts,
                     extractor_version=extractor_version,
                     prompt_version=prompt_version,
+                    detail=detail,
                 )
             )
             return
@@ -527,6 +547,7 @@ class TenderRepo:
                 attempts=attempts,
                 extractor_version=extractor_version,
                 prompt_version=prompt_version,
+                detail=detail,
             )
         )
 

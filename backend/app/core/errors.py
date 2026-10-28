@@ -33,7 +33,7 @@ class NotFoundError(AppError):
 
 class ValidationError(AppError):
     code = "validation_error"
-    http_status = status.HTTP_422_UNPROCESSABLE_ENTITY
+    http_status = status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 class DependencyUnavailableError(AppError):

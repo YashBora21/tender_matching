@@ -111,7 +111,10 @@ class RunRepo:
                 fact.c.page,
                 fact.c.quote,
                 document.c.id,
-                document.c.filename,
+                # A document has no `filename` column: it is stored under a
+                # path, or known only by the address it was fetched from. The
+                # report names it from whichever of the two it has (D20).
+                document.c.path,
                 document.c.doc_type,
                 document.c.sha256,
                 document.c.url,
@@ -147,7 +150,7 @@ class RunRepo:
                             "page": row[13],
                             "quote": row[14],
                             "document_id": str(row[15]) if row[15] else None,
-                            "document": row[16],
+                            "document": _document_name(row[16], row[19]),
                             "doc_type": row[17],
                             "sha256": row[18],
                             # Where the document came from, so the report can
@@ -163,3 +166,19 @@ class RunRepo:
         return len(
             self.session.execute(select(result.c.id).where(result.c.run_id == run_id)).all()
         )
+
+
+def _document_name(path: Optional[str], url: Optional[str]) -> Optional[str]:
+    """The document's name, from the file it is stored as or its address.
+
+    A document row has no name of its own: the collector stores where the file
+    is and where it came from. The report shows the file name a person
+    recognises, and invents nothing when neither is set.
+    """
+    for value in (path, url):
+        if not value:
+            continue
+        name = value.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+        if name:
+            return name
+    return None

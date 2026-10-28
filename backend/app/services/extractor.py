@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.logging import get_logger
 from app.schemas.enums import RequirementType
-from app.services.llm import LLMClient, LLMError
+from app.services.llm import LLMClient, LLMError, LLMRateLimited
 from app.services.tenderingest import RequirementRecord, english_half, is_mangled
 
 logger = get_logger(__name__)
@@ -177,6 +177,11 @@ def extract_requirements(
         client = client or LLMClient()
         answer = client.complete_json(SYSTEM_PROMPT, readable)
         parsed = ExtractionResponse(**answer)
+    except LLMRateLimited:
+        # The provider's limit is not a failed reading: the line was never
+        # read. Let it out so the stage stops instead of recording a silence
+        # it did not observe.
+        raise
     except (LLMError, ValidationError, TypeError) as exc:
         logger.warning("extraction failed for %s: %s", item_id, exc)
         result.fell_back = True

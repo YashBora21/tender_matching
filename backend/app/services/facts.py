@@ -20,7 +20,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.logging import get_logger
-from app.services.llm import LLMClient, LLMError
+from app.services.llm import LLMClient, LLMError, LLMRateLimited
 
 logger = get_logger(__name__)
 
@@ -102,6 +102,10 @@ def extract_fact(
         client = client or LLMClient()
         answer = client.complete_json(SYSTEM_PROMPT, user)
         parsed = ExtractionResponse(**answer)
+    except LLMRateLimited:
+        # A limit is an unanswered question, not a passage that states
+        # nothing. It stops the run and is recorded as such (Phase 12 rule).
+        raise
     except (LLMError, ValidationError, TypeError) as exc:
         logger.warning("fact extraction failed: %s", exc)
         return FactResult(error=str(exc))

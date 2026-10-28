@@ -32,7 +32,15 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/runs", tags=["runs"])
 
 # A run that has stopped has an answer, even when the answer is that it failed.
-_TERMINAL = frozenset({RunStatus.DONE.value, RunStatus.FAILED.value})
+# A rate-limited run has stopped too: the answers it found are kept, and the
+# report says how far it got.
+_TERMINAL = frozenset(
+    {
+        RunStatus.DONE.value,
+        RunStatus.FAILED.value,
+        RunStatus.RATE_LIMITED.value,
+    }
+)
 
 
 class RunRequest(BaseModel):

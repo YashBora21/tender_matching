@@ -31,7 +31,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.errors import NotFoundError, ValidationError
+from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.repositories.corpus import corpus_hash, list_manufacturers, manufacturer_id
 from app.repositories.runs import RunRepo
@@ -42,8 +42,10 @@ from app.schemas.enums import (
     RequirementStatus,
     RequirementType,
     RunStatus,
+    TenderStatus,
     VerificationOutcome,
 )
+from app.services.llm import LLMClient, LLMRateLimited
 from app.services.scoring import (
     ScoredResult,
     score_manufacturer,
@@ -55,6 +57,17 @@ logger = get_logger(__name__)
 # The clause types a manufacturer can document. Everything else is
 # unsupported and is excluded from the score (FR-14).
 MATCHABLE = frozenset({RequirementType.TECHNICAL, RequirementType.CERTIFICATION})
+
+# A tender in one of these states has no complete requirement list: it is still
+# being read, or the read stopped without finishing. A run against it would
+# report unread requirements as a manufacturer having no evidence (D-82).
+_UNREAD = frozenset(
+    {
+        TenderStatus.QUEUED.value,
+        TenderStatus.PROCESSING.value,
+        TenderStatus.FAILED.value,
+    }
+)
 
 
 @dataclass
@@ -69,6 +82,12 @@ class RunProgress:
     expected: int = 0
     results: int = 0
     error: Optional[str] = None
+    # What the run's own LLM client spent (FR-34). Zero when the matcher was
+    # injected and could not report, which is a fake in a test, not production.
+    llm_calls: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    llm_retries: int = 0
 
     def as_dict(self) -> dict:
         return {
@@ -82,6 +101,10 @@ class RunProgress:
             "progress_percent": (
                 round(self.results / self.expected * 100, 1) if self.expected else 0.0
             ),
+            "llm_calls": self.llm_calls,
+            "prompt_tokens": self.prompt_tokens,
+            "completion_tokens": self.completion_tokens,
+            "llm_retries": self.llm_retries,
             "error": self.error,
         }
 
@@ -104,6 +127,13 @@ def config_snapshot() -> dict:
         "llm_model": settings.llm_model,
         "embedding_model": settings.embedding_model,
         "embedding_dimension": settings.embedding_dimension,
+        # The backend decides whether the query vector is normalised, which
+        # decides the cosine order, which decides which passages are read
+        # (D18).
+        "embedding_backend": settings.embedding_backend,
+        # How many passages a requirement may be read against: a smaller cap
+        # finds less evidence, so the report has to name it (D19).
+        "match_max_candidates": settings.match_max_candidates,
         "scoring": settings.scoring.model_dump(),
         "comparison": settings.comparison.model_dump(),
     }
@@ -154,8 +184,19 @@ def create_run(
     request that starts a run is not the request that waits for it.
     """
     tender_repo = TenderRepo(session)
-    if tender_repo.get_tender(tender_id) is None:
+    tender = tender_repo.get_tender(tender_id)
+    if tender is None:
         raise NotFoundError(f"no tender with id {tender_id}")
+    # A run compares the tender's requirements, and while the read is running
+    # the list is only what has been read so far (D-82). Matching a partial
+    # list would answer "no evidence" for requirements nobody has read yet,
+    # which is the absence-of-evidence error PRD 4 forbids. A read that failed
+    # has no complete list either.
+    if tender.get("status") in _UNREAD:
+        raise ConflictError(
+            f"tender {tender_id} has not been read yet (status {tender.get('status')})",
+            {"status": tender.get("status")},
+        )
 
     names = _manufacturer_names(session, manufacturers)
     run_repo = repo or RunRepo(session)
@@ -223,8 +264,17 @@ def execute_run(
 
     # A finished run is not run again: the results it holds are the answer,
     # and re-running would double them.
-    if run["status"] in (RunStatus.DONE.value, RunStatus.FAILED.value):
+    if run["status"] in (
+        RunStatus.DONE.value,
+        RunStatus.FAILED.value,
+        RunStatus.RATE_LIMITED.value,
+    ):
         return progress
+
+    if matcher is None and client is None:
+        # One client for the run: its counters are what the run spent, and a
+        # client per requirement would lose them (D4).
+        client = LLMClient()
 
     try:
         run_repo.set_status(run_id, RunStatus.RETRIEVING)
@@ -276,7 +326,21 @@ def execute_run(
         )
         run_repo.set_status(run_id, RunStatus.DONE)
         progress.status = RunStatus.DONE.value
+        _record_usage(progress, client)
         session.commit()
+        return progress
+    except LLMRateLimited as exc:
+        # The provider's limit stopped the run before every requirement was
+        # answered. The results already found are committed and kept; the run
+        # records why it stopped, and is distinct from a failed run.
+        session.rollback()
+        message = str(exc)
+        logger.warning("run %s rate limited: %s", run_id, message)
+        run_repo.set_status(run_id, RunStatus.RATE_LIMITED, error=message)
+        session.commit()
+        progress.status = RunStatus.RATE_LIMITED.value
+        progress.error = message
+        _record_usage(progress, client)
         return progress
     except Exception as exc:  # noqa: BLE001 - the state is the report
         # A run that stops says so, with the reason. It is never left
@@ -288,7 +352,18 @@ def execute_run(
         session.commit()
         progress.status = RunStatus.FAILED.value
         progress.error = message
+        _record_usage(progress, client)
         return progress
+
+
+def _record_usage(progress: RunProgress, client) -> None:
+    """What the run's client cost, when it can say."""
+    if client is None:
+        return
+    progress.llm_calls = int(getattr(client, "calls", 0) or 0)
+    progress.prompt_tokens = int(getattr(client, "prompt_tokens", 0) or 0)
+    progress.completion_tokens = int(getattr(client, "completion_tokens", 0) or 0)
+    progress.llm_retries = int(getattr(client, "retries", 0) or 0)
 
 
 def _assess(
@@ -322,7 +397,10 @@ def _assess(
         text,
         requirement_value=requirement.get("value"),
         requirement_unit=requirement.get("unit"),
-        requirement_operator=None,
+        # The stored operator is what makes "minimum 1500 RPM" a `gte`
+        # comparison instead of a text one (D17). Dropping it silently
+        # downgraded every numeric requirement.
+        requirement_operator=requirement.get("operator"),
         manufacturer_name=manufacturer_name,
         category=category,
         client=client,

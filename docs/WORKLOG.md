@@ -1324,4 +1324,123 @@ value, not the compose-internal one.
 - **The corpus is still not in git**, so a fresh clone starts with an empty
   corpus and an empty manufacturer list, which the app reports honestly.
 
+## Phase 12 - The real end-to-end run (PRD 13, FR-34)
+
+**Status: paused.** The first real tender was read and run end to end, and the
+report that came out of it is honest about what it covers. The measured run that
+was meant to finish the phase did not finish, so the write-up's numbers are not
+final yet.
+
+The tender is `GEM_9671792_Valve.pdf` (`2bc8f917-262d-4ea8-a1c9-b2997ef1f256`)
+on the local corpus: 11 items, 21 requirements, of which 16 are technical and 5
+are unsupported. Its extraction stage is `rate_limited`, so the report carries
+`incomplete_ingestion: true` (D-75) rather than reading as final.
+
+Run `7910e15b` (CIRCOR, `MATCH_MAX_CANDIDATES=3`) is what PRD 13 asked for at
+the first limit: it stopped and recorded `rate_limited` with the provider's own
+message rather than retrying past it - "Limit 8000, Used 6658, Requested 2967,
+try again in 12.1875s". The report it produced holds 3 results, 16 requirements,
+5 unsupported and 7 rows in the review queue. No number in it is invented: the
+stopped stages say they stopped.
+
+**Built**
+
+- The corpus was collected and embedded locally: 11 manufacturers, 70 documents,
+  20,892 chunks, all embedded with `bge-small-en-v1.5` at 384 dimensions (D-68,
+  D-72).
+- Thirteen defects found by running the real thing instead of fixtures were
+  fixed and recorded as D-73 to D-80: a failed verification is *no evidence
+  found* (D-73), a stage that stopped is re-read on resume (D-74), a short
+  extraction labels the report incomplete (D-75), the stored operator reaches
+  the comparison (D-76), the snapshot names the embedding backend (D-77), the
+  candidate cap is config and is recorded (D-78), a verified full match ends the
+  search (D-79), and the report names a document from the path it has (D-80).
+- The app now runs against the local Docker Postgres while Neon re-embeds
+  (D-81); the Neon line stays in `.env` with its switch-back condition.
+- A blank gold slice exporter (`phase12_slice.py`) writes the report's
+  requirement/manufacturer pairs to CSV with the label columns empty, for the
+  user to label by hand.
+
+**Tested**
+
+- The report endpoint served a real report over the real corpus: 16 technical
+  requirements plus 5 unsupported, `incomplete_ingestion: true`, and one
+  manufacturer ranked.
+- The full backend suite passes (408 passed, 7 skipped) and the frontend tests
+  and build pass, on the code as it stands after Phase 13.
+
+**Left open**
+
+- **The measured complete run is not done.** Run `5a9d4ecc` was started on 28
+  Oct, paced to the 7,000 TPM budget with the measured prompt reservation, and
+  the machine restarted while it was in `retrieving` with 10 of its results
+  stored. It has no report, so the phase's own numbers (calls, tokens, retries,
+  wall clock) are still the first run's, which stopped at the limit.
+- **The gold slice is not exported or labelled.** The exporter exists; nothing
+  has been labelled, by design - the labels are the user's.
+- **Neon is still half-embedded** (3,904 of 20,891 chunks) and predates the
+  current code (`tender_page` empty, `document.product_id` null). The re-embed
+  is resumable with `python -m app.services.embeddings` under a one-off
+  `DATABASE_URL`, then the ingestion needs re-running before `.env` is switched
+  back (D-81).
+- `tender_page` holds no rows for the local tender, so the page ledger cannot
+  yet be shown as a per-page table; the report says ingestion is incomplete from
+  the extraction stage instead.
+
+## Phase 13 - Watching a tender being read (PRD 12, D-82)
+
+Reading a tender is minutes of model calls, and until this phase the page could
+only show a spinner: the extractor wrote nothing until the last requirement, and
+`GET /api/tenders/{id}/requirements` answered 409 for the whole read. This phase
+makes the work visible without letting a partial list pass for a complete one.
+
+**Built**
+
+- `pipeline._extract_all` takes an `on_read` callback and calls it with what has
+  been read after every requirement. `run_pipeline` writes that set with the same
+  `replace_requirements` the final persist uses, commits it, and throttles the
+  writes by `STREAM_INTERVAL_SECONDS` (default 1.0, `core/config.py`). Every
+  write is a complete snapshot: no half-written requirement, no duplicated rows
+  on resume.
+- `GET /api/tenders/{id}/requirements` answers with the rows stored now and
+  `partial: true` while the status is `queued`/`processing`, instead of a 409.
+- `GET /api/tenders/{id}/requirements/stream` is a `text/event-stream`: a
+  `snapshot` on connect, a `requirements` event on each change, an `end` event
+  carrying the final payload, and a `: keep-alive` comment while nothing moves.
+  An unknown tender is a 404 before the stream opens; `X-Accel-Buffering: no`
+  stops a proxy from holding the events until the read ends.
+- `POST /api/runs` refuses a tender in `queued`, `processing` or `failed` with a
+  409, because a run over a partial list would report unread requirements as
+  "no evidence found". `rate_limited` is still allowed and labelled (D-75).
+- The upload page subscribes with `EventSource` and shows "Requirements read so
+  far" with a growing list and count; the existing 1 s poll is the fallback when
+  there is no `EventSource`, when a frame cannot be parsed, or when the stream
+  breaks mid-read. The connection is closed on unmount and on `end`.
+
+**Tested**
+
+- New backend tests: the progress write and its throttle (fake clock and fake
+  session, no database), the partial payload and its `partial` flag, the SSE
+  frames from the generator (snapshot, change, end) and the 404 before the
+  stream, and the run guard for `processing`/`failed` refused and `rate_limited`
+  allowed. Full suite: 408 passed, 7 skipped.
+- New frontend tests: a fake `EventSource` drives the list from a snapshot to a
+  second requirement and then `end`; a stream error falls back to the route.
+  Frontend: 24 passed; `npm run build` (tsc + vite) passes.
+- To be verified against the live app after the restart: the stream endpoint on
+  a tender with a non-terminal status, and the partial payload on the real DB.
+
+**Left open**
+
+- **A stream is a second reader of the same table**, so the throttle is a
+  trade-off: a requirement read inside the interval is only shown with the next
+  snapshot. One second is the default because the extraction is model-bound.
+- **No browser was driven against the live stream** in this phase; the endpoint
+  was exercised through the generator and the component through a fake
+  `EventSource`. A real connection through Vite's dev proxy is the check that
+  remains.
+- A tender that is `failed` cannot be run, and nothing in the UI offers to
+  re-read it yet; re-uploading the same file is the current path (D-74).
+
+
 

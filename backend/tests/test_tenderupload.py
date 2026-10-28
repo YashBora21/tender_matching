@@ -263,6 +263,8 @@ def test_reading_a_tender_moves_it_from_processing_to_done(_fakes, monkeypatch):
 
     class Audit:
         failure = None
+        rate_limited = False
+        rate_limited_detail = None
 
     monkeypatch.setattr(
         tenderupload,
@@ -279,11 +281,37 @@ def test_reading_a_tender_moves_it_from_processing_to_done(_fakes, monkeypatch):
     ]
 
 
+def test_a_rate_limited_tender_is_neither_done_nor_failed(_fakes, monkeypatch):
+    """The extraction stopped at the provider's limit. What was read is kept,
+    and the tender says so instead of claiming it was read in full (D8)."""
+    _stored_tender(_fakes)
+
+    class Audit:
+        failure = None
+        rate_limited = True
+        rate_limited_detail = "the model was rate limited; retry in 24.9s"
+
+    monkeypatch.setattr(
+        tenderupload,
+        "collect_tender",
+        lambda *a, **k: TenderManifest(tender_id="T1", documents=[]),
+    )
+    monkeypatch.setattr(tenderupload, "audit_tender", lambda *a, **k: Audit())
+    monkeypatch.setattr("app.repositories.db.session_scope", _scope(FakeSession()))
+
+    assert tenderupload.ingest("T1") == TenderStatus.RATE_LIMITED.value
+    status, error = FakeRepo.statuses[-1]
+    assert status == TenderStatus.RATE_LIMITED.value
+    assert "24.9" in error
+
+
 def test_a_tender_that_cannot_be_read_is_failed_with_its_reason(_fakes, monkeypatch):
     _stored_tender(_fakes)
 
     class Audit:
         failure = "no bill of quantities was found: the only attachment is a form"
+        rate_limited = False
+        rate_limited_detail = None
 
     monkeypatch.setattr(
         tenderupload,

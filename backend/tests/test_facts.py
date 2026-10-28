@@ -109,3 +109,18 @@ def test_an_empty_passage_is_not_read():
 
     assert result.found is False
     assert result.error
+
+
+def test_a_rate_limit_is_not_a_passage_that_states_nothing():
+    """The provider's limit is an unanswered question, so it stops the run and
+    is never recorded as a fact that was not found (Phase 12 rule)."""
+    import pytest
+
+    from app.services.llm import LLMRateLimited
+
+    client = FakeClient(LLMRateLimited("the model is rate limited", retry_after=24.9))
+
+    with pytest.raises(LLMRateLimited):
+        extract_fact(
+            "Body shall be SS316", "Body of body shall be SS316", client=client
+        )

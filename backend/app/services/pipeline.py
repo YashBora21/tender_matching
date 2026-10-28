@@ -19,6 +19,7 @@ change to one stage invalidates only what comes after it.
 from __future__ import annotations
 
 import hashlib
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -31,6 +32,7 @@ from app.services.extractor import (
     ExtractedRequirement,
     extract_requirements,
 )
+from app.services.llm import LLMClient, LLMRateLimited
 from app.services.tenderingest import (
     RequirementRecord,
     TenderItem,
@@ -133,6 +135,12 @@ class PipelineResult:
     attachments: list[dict] = field(default_factory=list)
     llm_calls: int = 0
     llm_cache_hits: int = 0
+    # What the extraction cost, and whether it stopped on the provider's limit.
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    llm_retries: int = 0
+    rate_limited: bool = False
+    rate_limited_detail: Optional[str] = None
     # The reason the tender could not be read, when it could not.
     failure: Optional[str] = None
 
@@ -328,9 +336,20 @@ def run_pipeline(
         fetch_config=settings.fetch_allowed_domains,
     )
     previous = repo.stage_keys(tender_id) if repo is not None else {}
+    previous_status = (
+        repo.stage_statuses(tender_id)
+        if repo is not None and hasattr(repo, "stage_statuses")
+        else {}
+    )
 
     def changed(stage: str) -> bool:
-        return force or keys[stage] != previous.get(stage)
+        if force or keys[stage] != previous.get(stage):
+            return True
+        # A stage that stopped short did not finish, even though it read the
+        # same input: its key is unchanged and its state says why it stopped.
+        # Skipping it would turn an incomplete read into a complete one
+        # (AGENTS #3, D15).
+        return previous_status.get(stage) in (STATUS_RATE_LIMITED, STATUS_FAILED)
 
     # --- the attachments ---
     state = StageState(
@@ -426,18 +445,79 @@ def run_pipeline(
         depends_on=keys[STAGE_REQUIREMENTS],
     )
     if changed(STAGE_EXTRACTION):
-        extracted, calls, hits, limited = _extract_all(
-            result.requirements, cache=cache, client=client
+        if client is None:
+            # One client for the whole stage: its counters are the stage's
+            # cost, and a client per line would lose them.
+            client = LLMClient()
+        # A client can outlive a stage (a caller passes one, or a test reuses
+        # one), so what the stage spent is the difference, not the total.
+        before = (
+            int(getattr(client, "calls", 0) or 0),
+            int(getattr(client, "prompt_tokens", 0) or 0),
+            int(getattr(client, "completion_tokens", 0) or 0),
+            int(getattr(client, "retries", 0) or 0),
+        )
+        has_calls = getattr(client, "calls", None) is not None
+        # What has been read so far is written down while the stage runs, so a
+        # caller can watch the requirements appear instead of waiting for the
+        # last one (D-82). The writes are throttled, and each is a complete
+        # snapshot of the requirements read up to that moment: the table never
+        # holds half a requirement.
+        last_write = 0.0
+
+        def report(read_so_far) -> None:
+            nonlocal last_write
+            if repo is None:
+                return
+            now = time.monotonic()
+            if now - last_write < settings.stream_interval_seconds:
+                return
+            last_write = now
+            repo.replace_requirements(
+                tender_id,
+                [
+                    to_stored(
+                        requirement,
+                        tender_id,
+                        model=settings.llm_model,
+                        prompt_version=_prompt_version(),
+                        schema_version=settings.schema_version,
+                    )
+                    for requirement in read_so_far
+                ],
+            )
+            # Committed now: the reader of the live list is another session,
+            # and a write it cannot see is a requirement it cannot show.
+            repo.session.commit()
+
+        extracted, calls, hits, limited, limit_detail = _extract_all(
+            result.requirements, cache=cache, client=client, on_read=report
         )
         result.requirements = extracted
+        after = (
+            int(getattr(client, "calls", 0) or 0),
+            int(getattr(client, "prompt_tokens", 0) or 0),
+            int(getattr(client, "completion_tokens", 0) or 0),
+            int(getattr(client, "retries", 0) or 0),
+        )
+        # The client counts every attempt, including the one the provider
+        # refused, so its counter is the honest cost when it has one. The
+        # loop count is the fallback.
+        if has_calls:
+            calls = after[0] - before[0]
         extraction_state.llm_calls = calls
         result.llm_calls += calls
         result.llm_cache_hits += hits
+        result.prompt_tokens = after[1] - before[1]
+        result.completion_tokens = after[2] - before[2]
+        result.llm_retries = after[3] - before[3]
         if limited:
             # The provider's limit was hit. The stage is resumable: the next
             # run picks it up where it stopped.
             extraction_state.status = STATUS_RATE_LIMITED
-            extraction_state.detail = "the model was rate limited"
+            extraction_state.detail = limit_detail or "the model was rate limited"
+            result.rate_limited = True
+            result.rate_limited_detail = extraction_state.detail
         else:
             extraction_state.status = STATUS_DONE
     else:
@@ -476,6 +556,7 @@ def _save_failed(repo, result: PipelineResult, settings) -> None:
             key=state.key,
             extractor_version=settings.schema_version,
             prompt_version=_prompt_version(),
+            detail=state.detail,
         )
 
 
@@ -508,6 +589,7 @@ def _persist(repo, result: PipelineResult, settings) -> None:
             key=state.key,
             extractor_version=settings.schema_version,
             prompt_version=_prompt_version(),
+            detail=state.detail,
         )
 
 
@@ -577,56 +659,81 @@ def _extract_all(
     *,
     cache: Optional[LLMCache] = None,
     client=None,
-) -> tuple[list[RequirementRecord], int, int, bool]:
+    on_read=None,
+) -> tuple[list[RequirementRecord], int, int, bool, Optional[str]]:
     """Read every requirement with the LLM, using the cache where it fits.
 
     Returns the requirements, the number of calls made, the number of answers
-    that came from the cache, and whether the provider's limit was hit.
+    that came from the cache, whether the provider's limit was hit, and the
+    limit's detail. A line the model could not read is kept and flagged, never
+    dropped: a failure to ask is not an answer that the line states nothing.
+
+    `on_read` is called with the requirements read so far after each line, so
+    the caller can publish a partial read (D-82). It is called on the same
+    thread as the extraction, and it is the caller's job to throttle it.
     """
     enriched: list[RequirementRecord] = []
     calls = 0
     hits = 0
     limited = False
+    limit_detail: Optional[str] = None
 
-    for requirement in requirements:
+    for index, requirement in enumerate(requirements):
+        added: list[RequirementRecord] = []
+        readable = english_half(requirement.text)
+
         if requirement.review_required and not requirement.item_id:
             # An ambiguous mapping is flagged, not read.
-            enriched.append(requirement)
-            continue
-        if is_mangled(requirement.text):
+            added = [requirement]
+        elif is_mangled(requirement.text):
             requirement.unreadable = True
             requirement.review_required = True
             requirement.review_reason = "the line could not be read"
-            enriched.append(requirement)
-            continue
-
-        readable = english_half(requirement.text)
-        if not readable:
+            added = [requirement]
+        elif not readable:
             requirement.unreadable = True
             requirement.review_required = True
             requirement.review_reason = "the line has no readable text"
-            enriched.append(requirement)
-            continue
+            added = [requirement]
+        else:
+            try:
+                outcome, was_call, was_hit, error = _extract_one(
+                    readable, requirement, cache=cache, client=client
+                )
+            except LLMRateLimited as exc:
+                # Stop at the first limit. Everything from here on was never
+                # asked about, so it stays as it was: the stage is resumable,
+                # and dropping the tail would lose requirements the tender
+                # stated. What was read before the limit is already written.
+                limited = True
+                limit_detail = str(exc)
+                enriched.extend(requirements[index:])
+                break
 
-        outcome, was_call, was_hit = _extract_one(
-            readable, requirement, cache=cache, client=client
-        )
-        calls += int(was_call)
-        hits += int(was_hit)
-        if outcome is None:
-            # The line could not be read at all. It is kept and flagged: a
-            # line that was not read is not a requirement that was not there.
-            requirement.review_required = True
-            requirement.review_reason = "the line could not be read"
-            enriched.append(requirement)
-            continue
+            calls += int(was_call)
+            hits += int(was_hit)
+            if outcome is None:
+                # The line could not be read at all. It is kept and flagged: a
+                # line that was not read is not a requirement that was not
+                # there.
+                requirement.review_required = True
+                requirement.review_reason = (
+                    f"the model could not read this line: {error}"
+                    if error
+                    else "the line could not be read"
+                )
+                added = [requirement]
+            else:
+                for extracted in outcome:
+                    extracted.item_id = requirement.item_id
+                    extracted.page = requirement.page
+                    added.append(extracted)
 
-        for extracted in outcome:
-            extracted.item_id = requirement.item_id
-            extracted.page = requirement.page
-            enriched.append(extracted)
+        enriched.extend(added)
+        if on_read is not None:
+            on_read(enriched)
 
-    return enriched, calls, hits, limited
+    return enriched, calls, hits, limited, limit_detail
 
 
 def _extract_one(
@@ -634,8 +741,10 @@ def _extract_one(
 ):
     """Read one line, from the cache when the same input was read before.
 
-    Returns `(requirements, was_a_call, was_a_cache_hit)`. A cached answer is
-    not a call.
+    Returns `(requirements, was_a_call, was_a_cache_hit, error)`. A cached
+    answer is not a call. `requirements` is `None` when the model was asked
+    and did not answer, and `error` says why: the caller keeps the line and
+    flags it rather than reading the failure as an empty answer.
     """
     settings = get_settings()
     model = settings.llm_model or ""
@@ -646,7 +755,7 @@ def _extract_one(
     if cache is not None:
         cached = cache.get(input_hash, model, prompt_version, schema_version)
         if cached is not None:
-            return [_as_record(item) for item in cached], False, True
+            return [_as_record(item) for item in cached], False, True, None
 
     outcome = extract_requirements(
         readable,
@@ -655,6 +764,10 @@ def _extract_one(
         page=requirement.page,
         section=requirement.source_section,
     )
+    if outcome.error:
+        # The model was asked and did not answer. Nothing is cached: the next
+        # run has to ask again.
+        return None, True, False, outcome.error
     if cache is not None and outcome.requirements:
         cache.put(
             input_hash,
@@ -663,7 +776,7 @@ def _extract_one(
             schema_version,
             [_as_dict(item) for item in outcome.requirements],
         )
-    return (list(outcome.requirements), True, False)
+    return list(outcome.requirements), True, False, None
 
 
 def _as_dict(item: RequirementRecord) -> dict:

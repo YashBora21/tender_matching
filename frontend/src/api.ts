@@ -66,9 +66,16 @@ export function uploadTender(file: File): Promise<TenderUpload> {
   return request<TenderUpload>('/api/tenders', { method: 'POST', body })
 }
 
-/** A tender that is still being read answers 409; the caller polls again. */
+/** A tender that is still being read answers with what it has read so far and
+ * says so in `partial`; the caller polls again while that is set. */
 export function getRequirements(tenderId: string): Promise<TenderRequirements> {
   return request<TenderRequirements>(`/api/tenders/${tenderId}/requirements`)
+}
+
+/** The same payload, pushed as it changes: `snapshot`, `requirements`, `end`.
+ * A browser that cannot read the stream polls the route above instead (D-82). */
+export function requirementsStreamUrl(tenderId: string): string {
+  return `${BASE}/api/tenders/${tenderId}/requirements/stream`
 }
 
 export function getManufacturers(): Promise<Manufacturers> {

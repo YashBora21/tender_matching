@@ -25,17 +25,48 @@ from app.services.pipeline import (
 )
 
 
+class FakeSession:
+    """The pipeline's session, counted: a write the stream cannot see does not
+    count, so the progress write has to be committed (D-82)."""
+
+    def __init__(self) -> None:
+        self.commits = 0
+
+    def commit(self) -> None:
+        self.commits += 1
+
+
+class Clock:
+    """A clock the test moves, so the write interval is not a race."""
+
+    def __init__(self, step: float = 0.0) -> None:
+        self.now = 100.0
+        self.step = step
+
+    def monotonic(self) -> float:
+        self.now += self.step
+        return self.now
+
+
 class FakeRepo:
     """A repository that keeps the stage checkpoints in memory."""
 
     def __init__(self):
+        self.session = FakeSession()
         self.stages: dict[str, str] = {}
+        self.statuses: dict[str, str] = {}
+        self.details: dict[str, str] = {}
         self.attachments: list[dict] = []
         self.items: list[dict] = []
         self.requirements: list = []
+        # How many requirements each write held, in order.
+        self.requirement_writes: list[int] = []
 
     def stage_keys(self, tender_id):
         return dict(self.stages)
+
+    def stage_statuses(self, tender_id):
+        return dict(self.statuses)
 
     def upsert_attachment(self, tender_id, record):
         self.attachments.append(record)
@@ -47,10 +78,14 @@ class FakeRepo:
 
     def replace_requirements(self, tender_id, requirements):
         self.requirements = list(requirements)
+        self.requirement_writes.append(len(self.requirements))
         return len(self.requirements)
 
     def save_stage(self, tender_id, section, **kwargs):
         self.stages[section] = kwargs.get("key", "")
+        self.statuses[section] = kwargs.get("status", "")
+        if kwargs.get("detail"):
+            self.details[section] = kwargs["detail"]
 
 
 class FakeCache:
@@ -231,6 +266,7 @@ def test_a_unchanged_tender_is_not_processed_again(tmp_path, monkeypatch):
     client = CountingClient()
 
     repo.stages = _stage_keys_for(attachments)
+    repo.statuses = {section: pipeline.STATUS_DONE for section in repo.stages}
 
     result = run_pipeline(
         "T1", directory, attachments, repo=repo, cache=FakeCache(), client=client
@@ -573,3 +609,193 @@ def test_a_content_hash_is_stable():
     assert content_hash("a", "b") == content_hash("a", "b")
     assert content_hash("a", "b") != content_hash("ab")
     assert content_hash("a", "b") != content_hash("a", "c")
+
+
+class FlakyClient:
+    """A client that fails on a chosen call.
+
+    It carries the counters a real client carries, so the pipeline's reporting
+    is exercised and not just its control flow (D3/D4).
+    """
+
+    def __init__(self, fail_on: int, error: Exception):
+        self.calls = 0
+        self.fail_on = fail_on
+        self.error = error
+        self.prompt_tokens = 0
+        self.completion_tokens = 0
+        self.retries = 0
+
+    def complete_json(self, system, user, **kwargs):
+        self.calls += 1
+        if self.calls == self.fail_on:
+            raise self.error
+        self.prompt_tokens += 60
+        self.completion_tokens += 15
+        return {
+            "requirements": [
+                {
+                    "text": f"read: {user}",
+                    "span": [0, len(user)],
+                    "type": "technical",
+                    "attribute": "body material",
+                    "operator": "eq",
+                    "value": "cast carbon steel",
+                    "unit": None,
+                    "mandatory": True,
+                }
+            ]
+        }
+
+
+def test_a_line_the_model_could_not_read_is_flagged_not_dropped(tmp_path, monkeypatch):
+    """A failed extraction is a gap in the reading, not a line the tender did
+    not state (AGENTS #3, #4). It stays, and it is flagged."""
+    from app.services.llm import LLMError
+
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
+    client = FlakyClient(1, LLMError("the answer was not JSON"))
+
+    result = run_pipeline(
+        "T1", directory, attachments, repo=FakeRepo(), cache=FakeCache(), client=client
+    )
+
+    assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
+    assert result.rate_limited is False
+    # The first line was kept and flagged; the second was read normally.
+    assert len(result.requirements) == 2
+    flagged = [row for row in result.requirements if row.review_required]
+    assert len(flagged) == 1
+    assert "could not read this line" in (flagged[0].review_reason or "")
+    assert result.llm_calls == 2
+
+
+def test_a_rate_limit_stops_the_stage_and_keeps_the_unread_tail(tmp_path, monkeypatch):
+    """The Phase 12 rule: stop at the first limit, record it, resume later.
+
+    The line that was answered and the line that was never asked about are
+    both kept. Dropping the tail would read as a shorter tender than it is.
+    """
+    from app.services.llm import LLMRateLimited
+
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
+    client = FlakyClient(2, LLMRateLimited("the model is rate limited", retry_after=24.9))
+    repo = FakeRepo()
+
+    result = run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=client
+    )
+
+    assert result.rate_limited is True
+    assert "rate limited" in (result.rate_limited_detail or "")
+    assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_RATE_LIMITED
+    # The stage's row carries the reason, so a resumed run can read it (D9).
+    assert "rate limited" in repo.details[STAGE_EXTRACTION]
+    # Both attempts were charged to the account, so both are reported.
+    assert result.llm_calls == 2
+    # The one answer that came back is reported with what it cost.
+    assert result.prompt_tokens == 60
+    assert result.completion_tokens == 15
+    # The answered line and the unread tail are both there; nothing vanished.
+    assert len(result.requirements) == 2
+
+
+def test_a_rate_limit_before_the_first_line_keeps_every_requirement(tmp_path, monkeypatch):
+    """Stopping on the first call must not empty the tender."""
+    from app.services.llm import LLMRateLimited
+
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
+    client = FlakyClient(1, LLMRateLimited("the model is rate limited"))
+
+    result = run_pipeline(
+        "T1", directory, attachments, repo=FakeRepo(), cache=FakeCache(), client=client
+    )
+
+    assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_RATE_LIMITED
+    assert len(result.requirements) == 2
+    assert result.llm_calls == 1
+
+
+def test_a_rate_limited_stage_is_read_again_on_the_next_run(tmp_path, monkeypatch):
+    """Resuming a rate-limited tender re-reads the stage it stopped in.
+
+    A resumed upload has the same attachments, so every stage key is
+    unchanged. The extraction is still unfinished, and a key-only check would
+    skip it and call the tender done (D15).
+    """
+    from app.services.llm import LLMRateLimited
+
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
+    repo = FakeRepo()
+
+    first = run_pipeline(
+        "T1",
+        directory,
+        attachments,
+        repo=repo,
+        cache=FakeCache(),
+        client=FlakyClient(1, LLMRateLimited("the model is rate limited")),
+    )
+    assert first.stages[STAGE_EXTRACTION].status == pipeline.STATUS_RATE_LIMITED
+
+    # The provider's limit has passed; the same files are uploaded again.
+    client = CountingClient()
+    second = run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=client
+    )
+
+    assert second.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
+    assert second.rate_limited is False
+    assert client.calls == 2
+    # Only the stage that stopped short is repeated.
+    assert second.stages[STAGE_ITEMS].status == pipeline.STATUS_SKIPPED
+    assert repo.statuses[STAGE_EXTRACTION] == pipeline.STATUS_DONE
+
+
+# --- the live requirement list (D-82) -------------------------------------
+
+
+def test_the_extraction_writes_what_it_has_read_so_far(tmp_path, monkeypatch):
+    """The UI shows the requirements as they are read, not after the last one.
+
+    Each write is a complete snapshot committed while the stage runs: an
+    uncommitted row is a requirement the streaming reader cannot see.
+    """
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
+    monkeypatch.setattr(pipeline, "time", Clock(step=2.0))
+    repo = FakeRepo()
+
+    result = run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient()
+    )
+
+    assert result.failure is None
+    # One write per requirement read, then the final complete set.
+    assert repo.requirement_writes == [1, 2, 2]
+    assert repo.session.commits == 2
+
+
+def test_the_progress_write_is_no_more_often_than_the_interval(tmp_path, monkeypatch):
+    """A read faster than the interval does not write once per requirement."""
+    monkeypatch.setenv("STREAM_INTERVAL_SECONDS", "5")
+    get_settings.cache_clear()
+
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
+    monkeypatch.setattr(pipeline, "time", Clock(step=0.5))
+    repo = FakeRepo()
+
+    result = run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient()
+    )
+
+    assert result.failure is None
+    # The second requirement is read inside the interval, so it is only in the
+    # final write: a partial snapshot exists to be shown, not to be written.
+    assert repo.requirement_writes == [1, 2]
+    assert repo.session.commits == 1

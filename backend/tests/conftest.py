@@ -41,3 +41,24 @@ def test_database_url() -> str:
     if not url:
         pytest.skip("TEST_DATABASE_URL is not set")
     return url
+
+
+@pytest.fixture(scope="session", autouse=True)
+def migrated_test_database() -> None:
+    """Apply the migrations once before any database-backed test.
+
+    The integration tests assert on a schema, not on migration order. Without
+    this they relied on the migration test happening to run first, and on a
+    fresh database the five ingestion tests ran against an empty schema (D1).
+    """
+    url = os.getenv("TEST_DATABASE_URL")
+    if not url:
+        return
+
+    from alembic import command
+    from alembic.config import Config
+
+    config = Config(str(BACKEND_ROOT / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_ROOT / "alembic"))
+    config.set_main_option("sqlalchemy.url", url)
+    command.upgrade(config, "head")

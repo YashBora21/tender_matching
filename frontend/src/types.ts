@@ -4,7 +4,7 @@
  * is not an error; a missing one the UI assumes is.
  */
 
-export type TenderStatus = 'queued' | 'processing' | 'done' | 'failed'
+export type TenderStatus = 'queued' | 'processing' | 'done' | 'failed' | 'rate_limited'
 
 export interface TenderUpload {
   tender_id: string
@@ -35,6 +35,9 @@ export interface TenderRequirements {
   status: TenderStatus
   error: string | null
   page_count: number | null
+  /** True while the tender is still being read, so the list is what has been
+   * read so far and not the whole document (D-82). */
+  partial?: boolean
   counts: { items: number; requirements: number; flagged: number }
   requirements: RequirementRow[]
 }
@@ -152,7 +155,11 @@ export interface Report {
     sha256: string | null
     page_count: number | null
     pages: PagesLedger
+    extraction?: { status: string; detail: string | null; complete: boolean }
   }
+  /** True when the tender was not read in full, by pages or by extraction. A
+   * report with this set is not a final compatibility report (D16). */
+  incomplete_ingestion?: boolean
   config: Record<string, unknown>
   results: { stored: number; expected: number; complete: boolean }
   manufacturers: ManufacturerSummary[]

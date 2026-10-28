@@ -65,7 +65,7 @@ Policy is the rules a deployment may want to change, so it is in config
 | `alias_confidence_threshold` | How confident an alias has to be before it resolves a name. Below it, the requirement goes to review. |
 | `ingest_*` | The OCR language and resolution, the chunk length, the header band. |
 | `llm_*` | The model, the base URL, the token budget, the retry limit, the timeout. |
-| `embedding_*` | The embedding model, its base URL and its dimension. |
+| `embedding_*` | The embedding backend, model, base URL and dimension. The default backend is `sentence-transformers`, local and account-free; `http` speaks the OpenAI shape (Ollama). |
 | `fetch_*` | The hosts a document may be fetched from, the size and time limits, the cache, and the hosts allowed to be private. |
 | `pipeline_concurrency` | How many tenders are processed at once. The provider's rate limit is shared, so this is the knob that keeps a run inside it. |
 | `schema_version` | The shape of the stored records. A change to it invalidates the records written with the old one. |

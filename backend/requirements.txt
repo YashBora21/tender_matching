@@ -15,3 +15,6 @@ pymupdf>=1.24,<3.0
 pdfplumber>=0.11,<1.0
 # DOCX reading (FR-8).
 python-docx>=1.1,<2.0
+# Embeddings (FR-11): the weights are loaded locally, with no account and no
+# inference credits. This pulls torch, which is the heavy part of the install.
+sentence-transformers>=3.0,<6.0
