@@ -62,6 +62,10 @@ class FakeRepo:
         self.items: list[dict] = []
         self.requirements: list = []
         self.pages: list[dict] = []
+        # What is in the requirement table, in the shape the repository reads
+        # it back in. Ids are minted per write, like the real uuid4 (D-93).
+        self.stored: list[dict] = []
+        self._ids = 0
         # How many requirements each write held, in order.
         self.requirement_writes: list[int] = []
 
@@ -82,7 +86,33 @@ class FakeRepo:
     def replace_requirements(self, tender_id, requirements):
         self.requirements = list(requirements)
         self.requirement_writes.append(len(self.requirements))
+        self.stored = []
+        for item in self.requirements:
+            self._ids += 1
+            self.stored.append(
+                {
+                    "id": f"r{self._ids}",
+                    "item_id": item.item_id,
+                    "text": item.text,
+                    "source_text": item.source_text,
+                    "page": item.page,
+                    "source_section": item.section,
+                    "extraction_method": item.extraction_method,
+                    "type": item.requirement_type,
+                    "attribute": item.attribute,
+                    "review_required": item.review_required,
+                    "review_reason": item.review_reason,
+                    "value": item.value,
+                    "unit": item.unit,
+                    "operator": item.operator,
+                    "confidence": item.confidence,
+                    "mandatory": item.mandatory,
+                }
+            )
         return len(self.requirements)
+
+    def list_requirements(self, tender_id):
+        return [dict(row) for row in self.stored]
 
     def replace_pages(self, tender_id, pages):
         self.pages = list(pages)
@@ -292,6 +322,42 @@ def test_a_unchanged_tender_is_not_processed_again(tmp_path, monkeypatch):
     assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_SKIPPED
 
 
+def test_a_second_run_keeps_the_requirements_the_first_one_stored(tmp_path, monkeypatch):
+    """A run with nothing to do does not re-read the clauses.
+
+    The stored rows are the reader's and the model's output. Rebuilding them
+    from the file would replace every type the model read with `unknown` and
+    give every requirement a new id, so a second run would silently undo the
+    first (D-93).
+    """
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
+    repo = FakeRepo()
+
+    first = run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient()
+    )
+    assert first.llm_calls == 2
+    types = [row["type"] for row in repo.stored]
+    ids = [row["id"] for row in repo.stored]
+    writes = list(repo.requirement_writes)
+    # The model read them, so they are not raw clauses.
+    assert types and all(kind == "technical" for kind in types)
+
+    second = run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient()
+    )
+
+    assert second.stages[STAGE_REQUIREMENTS].status == pipeline.STATUS_SKIPPED
+    assert second.llm_calls == 0
+    # Neither re-read nor rewritten: the types and the ids are the first
+    # run's, and no new write was made.
+    assert [row["type"] for row in repo.stored] == types
+    assert [row["id"] for row in repo.stored] == ids
+    assert repo.requirement_writes == writes
+    assert len(second.requirements) == len(first.requirements)
+
+
 def test_a_changed_attachment_re_reads_the_items_and_the_requirements(tmp_path, monkeypatch):
     """The chain: an attachment's hash changes, so the items and the
     requirements are read again."""
@@ -363,9 +429,12 @@ def test_a_changed_prompt_re_extracts_but_does_not_re_read_the_items(tmp_path, m
     attachments, directory = _attachments(tmp_path)
     monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
     repo = FakeRepo()
+    # The tender was read once, under the old prompt: its requirements are
+    # stored, and a re-extraction reads those, not the file (D-93).
+    run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient()
+    )
     client = CountingClient()
-
-    repo.stages = _stage_keys_for(attachments)
 
     # The prompt version changed: the extraction key changes, the item key
     # does not. It is read from the extractor, which owns the prompt.
@@ -377,6 +446,7 @@ def test_a_changed_prompt_re_extracts_but_does_not_re_read_the_items(tmp_path, m
     )
 
     assert result.stages[STAGE_ITEMS].status == pipeline.STATUS_SKIPPED
+    assert result.stages[STAGE_REQUIREMENTS].status == pipeline.STATUS_SKIPPED
     assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
     assert client.calls == 2
 
@@ -385,9 +455,11 @@ def test_a_changed_model_re_extracts(tmp_path, monkeypatch):
     attachments, directory = _attachments(tmp_path)
     monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
     repo = FakeRepo()
+    run_pipeline(
+        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient()
+    )
     client = CountingClient()
 
-    repo.stages = _stage_keys_for(attachments)
     monkeypatch.setenv("LLM_MODEL", "new-model")
     get_settings.cache_clear()
 
@@ -396,6 +468,9 @@ def test_a_changed_model_re_extracts(tmp_path, monkeypatch):
     )
 
     assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
+    # The stored requirements are read again, and the file is not.
+    assert result.stages[STAGE_REQUIREMENTS].status == pipeline.STATUS_SKIPPED
+    assert client.calls == 2
 
 
 def test_a_changed_vocabulary_re_resolves_only(tmp_path, monkeypatch):

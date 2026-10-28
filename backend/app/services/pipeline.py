@@ -426,62 +426,71 @@ def run_pipeline(
         if repo is not None:
             _save_failed(repo, result, settings)
         return result
-    read = _read_specification(spec, tender_dir)
-    if read.error:
-        # The document could not be opened, so no page of it was looked at.
-        # That is a document that could not be read, not a document with no
-        # requirements (PRD 4).
-        requirements_state.status = STATUS_FAILED
-        requirements_state.detail = f"the specification could not be read: {read.error}"
-        result.stages[STAGE_REQUIREMENTS] = requirements_state
-        result.failure = requirements_state.detail
-        if repo is not None:
-            _save_failed(repo, result, settings)
-        return result
-    result.pages = read.pages
-    result.requirements, unassigned = assign_to_items(read.rows, result.items)
-    for row in unassigned:
-        # A requirement that names no item is kept and flagged: an ambiguous
-        # mapping is never guessed at (FR-T9).
-        tag = row.get("page_tag") or ""
-        classified = is_non_technical(tag) if tag else False
-        result.requirements.append(
-            RequirementRecord(
-                text=row.get("description", ""),
-                item_id="",
-                requirement_type=RequirementType.UNKNOWN,
-                page=row.get("page"),
-                source_section=row.get("title"),
-                extraction_method=row.get("extraction_method") or "table",
-                page_tag=tag or None,
-                review_required=True,
-                review_reason=(
-                    f"{NON_TECHNICAL_REASON} {tag}"
-                    if classified
-                    else "the specification row names no item in the bill of quantities"
-                ),
+    if changed(STAGE_REQUIREMENTS):
+        read = _read_specification(spec, tender_dir)
+        if read.error:
+            # The document could not be opened, so no page of it was looked
+            # at. That is a document that could not be read, not a document
+            # with no requirements (PRD 4).
+            requirements_state.status = STATUS_FAILED
+            requirements_state.detail = (
+                f"the specification could not be read: {read.error}"
             )
-        )
-    # A clause that is a fragment of a line is not a requirement: it is
-    # either the rest of the clause before it, or noise (step 3).
-    result.requirements, fragments = drop_fragments(result.requirements)
-    if fragments.dropped or fragments.merged:
-        # Kept in the stage's detail so the report can say how much of the
-        # tender was noise instead of requirements.
-        requirements_state.detail = json.dumps(
-            {"dropped": fragments.dropped, "merged": fragments.merged}
-        )
-        logger.info(
-            "tender %s: %d fragment(s) dropped, %d merged",
-            tender_id,
-            fragments.dropped,
-            fragments.merged,
-        )
-
-    requirements_state.status = STATUS_DONE if changed(STAGE_REQUIREMENTS) else STATUS_SKIPPED
+            result.stages[STAGE_REQUIREMENTS] = requirements_state
+            result.failure = requirements_state.detail
+            if repo is not None:
+                _save_failed(repo, result, settings)
+            return result
+        result.pages = read.pages
+        result.requirements, unassigned = assign_to_items(read.rows, result.items)
+        for row in unassigned:
+            # A requirement that names no item is kept and flagged: an
+            # ambiguous mapping is never guessed at (FR-T9).
+            tag = row.get("page_tag") or ""
+            classified = is_non_technical(tag) if tag else False
+            result.requirements.append(
+                RequirementRecord(
+                    text=row.get("description", ""),
+                    item_id="",
+                    requirement_type=RequirementType.UNKNOWN,
+                    page=row.get("page"),
+                    source_section=row.get("title"),
+                    extraction_method=row.get("extraction_method") or "table",
+                    page_tag=tag or None,
+                    review_required=True,
+                    review_reason=(
+                        f"{NON_TECHNICAL_REASON} {tag}"
+                        if classified
+                        else "the specification row names no item in the bill of quantities"
+                    ),
+                )
+            )
+        # A clause that is a fragment of a line is not a requirement: it is
+        # either the rest of the clause before it, or noise (step 3).
+        result.requirements, fragments = drop_fragments(result.requirements)
+        if fragments.dropped or fragments.merged:
+            # Kept in the stage's detail so the report can say how much of the
+            # tender was noise instead of requirements.
+            requirements_state.detail = json.dumps(
+                {"dropped": fragments.dropped, "merged": fragments.merged}
+            )
+            logger.info(
+                "tender %s: %d fragment(s) dropped, %d merged",
+                tender_id,
+                fragments.dropped,
+                fragments.merged,
+            )
+        requirements_state.status = STATUS_DONE
+    else:
+        # The stage already ran over this input. The stored rows are its
+        # output, and they carry the model's types: reading the file again
+        # would replace them with raw clauses and give every requirement a new
+        # id, which is not a no-op (D-93).
+        result.requirements = _stored_records(repo, tender_id)
+        requirements_state.status = STATUS_SKIPPED
     requirements_state.rows = len(result.requirements)
     result.stages[STAGE_REQUIREMENTS] = requirements_state
-    if changed(STAGE_REQUIREMENTS) and repo is not None and result.pages:
+    if requirements_state.status == STATUS_DONE and repo is not None and result.pages:
         # The ledger is written with the pages that were just read, so every
         # page the tender declares ends in a state (FR-T2). It is written
         # before the extraction runs: a read that stops at the provider's
@@ -630,20 +639,26 @@ def _persist(repo, result: PipelineResult, settings) -> None:
     The requirements are written once, at the end: they are the output of
     the stages, and writing them per stage would leave a half-read tender in
     the database.
+
+    A run where both the reading and the extraction were skipped produced no
+    new requirement: rewriting them would give every row a new id and drop
+    what the model read, which is not a no-op (D-93). The checkpoints are
+    still saved.
     """
-    repo.replace_requirements(
-        result.tender_id,
-        [
-            to_stored(
-                requirement,
-                result.tender_id,
-                model=settings.llm_model,
-                prompt_version=_prompt_version(),
-                schema_version=settings.schema_version,
-            )
-            for requirement in result.requirements
-        ],
-    )
+    if _requirements_rewritten(result):
+        repo.replace_requirements(
+            result.tender_id,
+            [
+                to_stored(
+                    requirement,
+                    result.tender_id,
+                    model=settings.llm_model,
+                    prompt_version=_prompt_version(),
+                    schema_version=settings.schema_version,
+                )
+                for requirement in result.requirements
+            ],
+        )
 
     for name, state in result.stages.items():
         repo.save_stage(
@@ -655,6 +670,19 @@ def _persist(repo, result: PipelineResult, settings) -> None:
             prompt_version=_prompt_version(),
             detail=state.detail,
         )
+
+
+def _requirements_rewritten(result: PipelineResult) -> bool:
+    """Whether this run produced requirements the database does not have.
+
+    Only a stage that actually ran changes them. If the reader and the
+    extractor both skipped, the stored rows are already the answer.
+    """
+    return any(
+        result.stages.get(name) is None
+        or result.stages[name].status != STATUS_SKIPPED
+        for name in (STAGE_REQUIREMENTS, STAGE_EXTRACTION)
+    )
 
 
 def _no_bill_reason(attachments: list[dict]) -> str:
@@ -925,6 +953,46 @@ def _type_of(value: str) -> RequirementType:
         return RequirementType(value)
     except ValueError:
         return RequirementType.UNKNOWN
+
+
+def _stored_records(repo, tender_id: str) -> list[RequirementRecord]:
+    """The requirements a tender already has, as records.
+
+    A skipped stage produced nothing new: its output is what the last run
+    wrote. Loading the stored rows keeps the model's types and everything the
+    reader recorded, so a second run over an unchanged tender is a no-op
+    instead of a re-read of the raw clauses (D-93).
+
+    The page tag is not a column. It is recovered from the reason the clause
+    carries, which is written from the same constant, so the two cannot drift
+    apart.
+    """
+    records: list[RequirementRecord] = []
+    for row in repo.list_requirements(tender_id):
+        reason = row.get("review_reason") or None
+        tag = None
+        if reason and reason.startswith(NON_TECHNICAL_REASON):
+            tag = reason[len(NON_TECHNICAL_REASON) :].strip() or None
+        records.append(
+            RequirementRecord(
+                text=row.get("text") or row.get("source_text") or "",
+                item_id=row.get("item_id") or "",
+                requirement_type=_type_of(row.get("type")),
+                attribute=row.get("attribute"),
+                operator=row.get("operator"),
+                value=row.get("value"),
+                unit=row.get("unit"),
+                mandatory=bool(row.get("mandatory", True)),
+                page=row.get("page"),
+                source_section=row.get("source_section"),
+                extraction_method=row.get("extraction_method") or "table",
+                page_tag=tag,
+                confidence=row.get("confidence"),
+                review_required=bool(row.get("review_required")),
+                review_reason=reason,
+            )
+        )
+    return records
 
 
 def to_stored(

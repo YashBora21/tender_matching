@@ -1712,6 +1712,43 @@ requirement list must see them.
 
 ---
 
+**D-93 - A skipped requirements stage loads what is stored; a run that skipped
+both the reading and the extraction writes no requirements.**
+
+*Decision:* `run_pipeline` reads the specification, assigns items, drops
+fragments and writes the page ledger only when the requirements stage actually
+ran. When its key is unchanged the stage is `skipped` and its output is loaded
+from the database instead: `_stored_records()` turns `list_requirements` rows
+back into `RequirementRecord`s (type, attribute, operator, value, unit, page,
+section, method, confidence, flags). The page tag is recovered from the reason
+the clause carries (`NON_TECHNICAL_REASON` prefix), because it is not a column.
+
+`_persist` writes requirements only when at least one of the requirements and
+extraction stages ran (`_requirements_rewritten`). A run where both are skipped
+saves its checkpoints and nothing else.
+
+`TenderRepo.list_requirements` also returns `source_section`,
+`extraction_method` and `confidence`, so the resume path (requirements skipped,
+extraction re-run after a rate limit or a prompt change) writes the reader's
+fields back unchanged instead of losing them.
+
+*Why:* a stage marked `skipped` was still rebuilding raw clauses from the file
+and writing them over the model's output. Every no-op run therefore replaced
+the types the extractor read with `unknown` and gave every requirement a new
+`uuid4` - the same rows, but not the same requirements. It also silently
+invalidated anything holding a requirement id, such as a gold slice. A skipped
+stage must be a no-op or it is not skipped.
+
+*Alternatives:* Keep rebuilding but copy the stored types onto the fresh
+records - rejected: ids still change, and matching a rebuilt row to its stored
+one by position or text is a guess. Skip the write only when the whole run is
+skipped but still rebuild the list - rejected: the extraction stage reads that
+list, so a resume would re-ask about raw clauses and lose the earlier answers.
+Add a `page_tag` column - rejected: the reason already carries the tag, and a
+second copy could disagree with it.
+
+---
+
 
 
 

@@ -374,6 +374,8 @@ class TenderRepo:
                 requirement.c.text,
                 requirement.c.source_text,
                 requirement.c.source_page,
+                requirement.c.source_section,
+                requirement.c.extraction_method,
                 requirement.c.type,
                 requirement.c.attribute,
                 requirement.c.review_required,
@@ -381,6 +383,7 @@ class TenderRepo:
                 requirement.c.value,
                 requirement.c.unit,
                 requirement.c.operator,
+                requirement.c.extraction_confidence,
                 requirement.c.mandatory,
             )
             .where(requirement.c.tender_id == tender_id)
@@ -392,14 +395,19 @@ class TenderRepo:
                 "text": row[2],
                 "source_text": row[3],
                 "page": row[4],
-                "type": row[5],
-                "attribute": row[6],
-                "review_required": row[7],
-                "review_reason": row[8],
-                "value": row[9],
-                "unit": row[10],
-                "operator": row[11],
-                "mandatory": bool(row[12]) if row[12] is not None else True,
+                # What the row came from and how it was read, so a stage that
+                # reuses the stored rows can write them back unchanged (D-93).
+                "source_section": row[5],
+                "extraction_method": row[6],
+                "type": row[7],
+                "attribute": row[8],
+                "review_required": row[9],
+                "review_reason": row[10],
+                "value": row[11],
+                "unit": row[12],
+                "operator": row[13],
+                "confidence": row[14],
+                "mandatory": bool(row[15]) if row[15] is not None else True,
             }
             for row in rows
         ]

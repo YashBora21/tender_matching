@@ -1643,6 +1643,14 @@ makes the work visible without letting a partial list pass for a complete one.
   section. Fragments come from the requirements stage `detail`; the reason a
   page was not read comes from `NON_TECHNICAL_REASON`, the same constant the
   pipeline writes.
+- **Step 7 - a skipped stage is a no-op** (`D-93`): the after-audit found that
+  a run with nothing to do still rebuilt the raw clauses from the file and
+  wrote them over the stored requirements, replacing every model-read type
+  with `unknown` and minting new `uuid4`s. A skipped requirements stage now
+  loads the stored rows (`_stored_records`), and `_persist` writes no
+  requirements when both the reading and the extraction were skipped.
+  `list_requirements` also returns `source_section`, `extraction_method` and
+  `confidence`, so the resume path keeps the reader's fields.
 
 **Tested**
 
@@ -1658,7 +1666,10 @@ makes the work visible without letting a partial list pass for a complete one.
 - Step 6: an unknown clause writes no row and is not in `expected`; progress
   counts only assessable clauses; the report lists it as not assessed and the
   banner's three buckets add up.
-- Full suite with `TEST_DATABASE_URL` set: **482 passed** (474 without the
+- Step 7: a second run over an unchanged tender keeps the stored types and ids
+  and makes no requirement write; a prompt change re-extracts the stored
+  requirements instead of re-reading the file.
+- Full suite with `TEST_DATABASE_URL` set: **483 passed** (475 without the
   database).
 
 **Before / after**
