@@ -1445,6 +1445,35 @@ status is still the wrong status. Add a `reason_code` column - rejected: it
 would need a migration to record a fact `verification_outcome` already records,
 and the code is diagnostic detail, not a business outcome.
 
+---
+
+**D-87 - A page is triaged locally, and a non-technical page is recorded but
+never sent to the model.**
+
+*Decision:* `services/pageclassify.py` scores every page against four keyword
+families (commercial/legal, safety/HSE, boilerplate, technical) and tags it
+`technical`, `commercial_legal`, `safety_hse`, `boilerplate` or `mixed`. The
+tag is stored in `tender_page.tags` (JSONB, no migration). Clauses on a page
+tagged `commercial_legal`, `safety_hse` or `boilerplate` are recorded with type
+`unknown` and `review_reason = "page classified as <tag>"`, and the model is
+not called for them. `mixed` and `technical` pages are read.
+
+*Why:* 422 of 422 `unsupported_requirement` results came from `unknown`
+requirements, and the corpus was not the cause. The pages that produced them
+were legal prose and safety instructions, which no manufacturer document could
+ever answer; asking the model about them spends a call on a provider limited to
+8,000 tokens per minute and produces a result that says nothing about the
+product. Tagging them keeps the content visible (the clause is still recorded,
+with the reason) without turning it into an assessment.
+
+*Alternatives:* Send every page and let the model say "unknown" - rejected:
+that is the behaviour being fixed, and it costs a call per line. Drop
+non-technical pages entirely - rejected: the ledger must account for every
+page, and the reviewer has to be able to see that the page was read and why
+it produced no requirement. Ask the model to classify the page first -
+rejected: it doubles the calls and makes a deterministic decision depend on
+the provider.
+
 
 
 
