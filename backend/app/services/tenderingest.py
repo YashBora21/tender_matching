@@ -1110,7 +1110,8 @@ def is_fragment(text: str) -> bool:
     residue than words, a line too short to state anything that names no
     unit and no specification word, a line with no verb and no value, or a
     line that starts in lowercase - which is the tail of a clause whose
-    beginning was lost at a page break or a table cell.
+    beginning was lost at a page break or a table cell. A lowercase line that
+    states a number with a unit is the exception: it is a clause of its own.
     """
     clause = " ".join((text or "").split())
     if not clause:
@@ -1119,7 +1120,10 @@ def is_fragment(text: str) -> bool:
         return True
     if _JUNK_RUN.search(clause) or _junk_share(clause) > FRAGMENT_JUNK_SHARE:
         return True
-    if clause[0].islower():
+    # A table cell often starts in lowercase ("minimum efficiency 85%"). A
+    # clause that states a number with a unit is self-contained evidence, not
+    # the tail of a clause whose beginning was lost, so it is kept.
+    if clause[0].islower() and not NUMBER_WITH_UNIT.search(clause):
         return True
     if (
         len(clause) < FRAGMENT_MIN_CHARS

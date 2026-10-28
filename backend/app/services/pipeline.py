@@ -35,6 +35,7 @@ from app.services.extractor import (
 )
 from app.services.llm import LLMClient, LLMRateLimited
 from app.services.pageclassify import is_non_technical
+from app.services.retyping import retype_technical
 from app.services.tenderingest import (
     RequirementRecord,
     SpecificationRead,
@@ -519,6 +520,15 @@ def run_pipeline(
             result.requirements, cache=cache, client=client, on_read=report
         )
         result.requirements = extracted
+        # The model's `unknown` is a proposal, not a verdict: a clause that
+        # states a value and a direction is technical whatever it was called
+        # (FR-14, FR-15). The re-typing is deterministic and never overrides
+        # a type the model did give.
+        retyped = retype_technical(result.requirements)
+        if retyped:
+            logger.info(
+                "tender %s: %d clause(s) re-typed as technical", tender_id, retyped
+            )
         after = (
             int(getattr(client, "calls", 0) or 0),
             int(getattr(client, "prompt_tokens", 0) or 0),

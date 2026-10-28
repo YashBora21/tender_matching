@@ -61,6 +61,13 @@ def test_a_real_clause_is_kept() -> None:
     )
 
 
+def test_a_lowercase_clause_that_states_a_value_is_kept() -> None:
+    """A table cell often starts in lowercase. A number with a unit makes the
+    clause self-contained evidence, not a lost tail."""
+    assert is_fragment("minimum efficiency 85%") is False
+    assert is_fragment("max working pressure 10 bar") is False
+
+
 def test_a_lowercase_tail_is_joined_to_the_clause_before_it() -> None:
     kept, report = drop_fragments(
         [

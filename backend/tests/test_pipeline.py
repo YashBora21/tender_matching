@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from app.core.config import get_settings
+from app.schemas.enums import RequirementType
 from app.services import pipeline
 from app.services.pipeline import (
     STAGE_ATTACHMENTS,
@@ -806,3 +807,54 @@ def test_the_progress_write_is_no_more_often_than_the_interval(tmp_path, monkeyp
     # final write: a partial snapshot exists to be shown, not to be written.
     assert repo.requirement_writes == [1, 2]
     assert repo.session.commits == 1
+
+
+def test_a_clause_the_model_called_unknown_is_re_typed_from_its_own_value(
+    tmp_path, monkeypatch
+):
+    """The model's unknown is a proposal, not a verdict: a clause that states a
+    value and a direction is technical, and the re-typing fills the fields."""
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(
+        pipeline,
+        "_read_specification",
+        lambda a, d: SpecificationRead(
+            rows=[
+                {
+                    "row": 1,
+                    "page": 1,
+                    "number": "1",
+                    "title": "GATE VALVE SIZE 150 MM CLASS 150",
+                    "description": "minimum efficiency 85%",
+                }
+            ]
+        ),
+    )
+    client = CountingClient(
+        answer={
+            "requirements": [
+                {
+                    "text": "minimum efficiency 85%",
+                    "span": [0, 22],
+                    "type": "unknown",
+                    "attribute": None,
+                    "operator": None,
+                    "value": None,
+                    "unit": None,
+                    "mandatory": True,
+                }
+            ]
+        }
+    )
+
+    result = run_pipeline(
+        "T1", directory, attachments, repo=FakeRepo(), cache=FakeCache(), client=client
+    )
+
+    assert len(result.requirements) == 1
+    read = result.requirements[0]
+    assert read.requirement_type is RequirementType.TECHNICAL
+    assert read.attribute == "efficiency"
+    assert read.operator == "gte"
+    assert read.value == "85"
+    assert read.unit == "%"

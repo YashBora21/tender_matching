@@ -1557,6 +1557,59 @@ verb - rejected: `"Type Flanged ends both side"` is a specification row and
 has no verb. Keep the fragments and mark them unknown - rejected: that is
 the flood this change exists to stop.
 
+---
+
+**D-90 - The model's `unknown` is a proposal, and a deterministic re-typer
+fills it in from the clause's own words.**
+
+*Decision:* `retype_technical` runs on the extracted requirements inside the
+extraction stage, before the stage is recorded. It only ever moves a clause
+from `unknown` to `technical`; it never overrides a type the model gave and
+never decides a match. A clause is re-typed when:
+
+- it names a specification attribute (`size`, `pressure`, `efficiency`, ...)
+  from the `ATTRIBUTE_WORDS` table, **and**
+- it is not on a page classified `commercial_legal`, `safety_hse` or
+  `boilerplate`.
+
+The attribute, operator, value and unit are read from the clause and written
+into the fields the model left empty. The operator is `gte` for
+"minimum/at least/or more", `lte` for "maximum/at most/or less", `gt`/`lt` for
+"greater/less than", `between` for "between", and `eq` when the clause states
+a value with no direction. A clause with an attribute but no readable value
+is still re-typed and flagged for review, because nothing can be compared
+without both sides.
+
+Two guards keep it from inventing a specification:
+
+- a bare number is the attribute's value only when it follows the attribute
+  word directly ("Class 150"), never when it is further away ("... as per API
+  598" is the standard's number, not a pressure);
+- a number written as a range ("10-20 mm") is not one value, and a number
+  with a sign keeps the sign only when the sign is a sign and not a range's
+  dash ("-20 °C" is a temperature, "10-20" is a range). A range leaves the
+  value empty and the clause flagged.
+
+A value with no attribute is not re-typed: "80% of bid quantity" and "300
+Mtr." state numbers, and a number on its own is as likely to be a commercial
+term as a capability.
+
+*Why:* 173 of the 231 requirements in the local corpus were `unknown`, and
+some of them state a limit plainly ("Class 150 (minimum); suitable for 15 bar
+(g) working pressure"). The model's type is not a decision the PRD lets it
+make (FR-14 is classification, and classification feeds matching); the
+re-typer is deterministic, inspectable, and its evidence is in the fields.
+
+*Alternatives:* Re-prompt the model to type again - rejected: it doubles the
+calls on a provider with an 8,000 TPM limit and makes a deterministic
+decision depend on the provider. Treat every unknown clause with a number as
+technical - rejected: it turned "80% of bid quantity" and a safety clause
+into technical requirements. Keep every unknown unknown - rejected: a clause
+that states a size and a limit is a requirement, and the report would count
+it as unparsed.
+
+---
+
 
 
 
