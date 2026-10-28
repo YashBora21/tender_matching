@@ -32,6 +32,11 @@ MIXED = "mixed"
 # The kinds whose clauses are recorded but never sent to the model (D-87).
 NON_TECHNICAL = frozenset({COMMERCIAL_LEGAL, SAFETY_HSE, BOILERPLATE})
 
+# The prefix a requirement's `review_reason` carries when its page was not a
+# specification. The pipeline writes it, the report counts by it, so the two
+# cannot drift apart (D-92).
+NON_TECHNICAL_REASON = "page classified as"
+
 # Weight 2 terms say what the page *is*; weight 1 terms only say what it
 # mentions. A legal page that says "specification" once must not outvote
 # "integrity pact" and "arbitration".

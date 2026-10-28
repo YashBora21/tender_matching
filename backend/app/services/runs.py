@@ -58,6 +58,23 @@ logger = get_logger(__name__)
 # unsupported and is excluded from the score (FR-14).
 MATCHABLE = frozenset({RequirementType.TECHNICAL, RequirementType.CERTIFICATION})
 
+
+def assessable(requirements: list[dict]) -> list[dict]:
+    """The requirements a run assesses: every clause that was given a type.
+
+    An `unknown` clause is one nothing could type - a fragment, a legal line,
+    or a clause the model could not read. There is no attribute to retrieve
+    against, so writing a result for it would turn "we could not read this"
+    into "we checked it and found nothing", which is the absence-of-evidence
+    trap (PRD 4, D-92). It is reported as *not assessed* instead.
+    """
+    return [
+        requirement
+        for requirement in requirements
+        if _requirement_type(requirement.get("type")) is not RequirementType.UNKNOWN
+    ]
+
+
 # A tender in one of these states has no complete requirement list: it is still
 # being read, or the read stopped without finishing. A run against it would
 # report unread requirements as a manufacturer having no evidence (D-82).
@@ -251,6 +268,9 @@ def execute_run(
         raise NotFoundError(f"no run with id {run_id}")
 
     requirements = tenders.list_requirements(run["tender_id"])
+    # Only the clauses that were typed are assessed. An unknown clause has no
+    # attribute to compare, and a row for it would read as a result (D-92).
+    to_assess = assessable(requirements)
     names = run["manufacturers"]
     progress = RunProgress(
         run_id=run_id,
@@ -258,7 +278,7 @@ def execute_run(
         tender_id=run["tender_id"],
         manufacturers=names,
         requirements=len(requirements),
-        expected=len(requirements) * len(names),
+        expected=len(to_assess) * len(names),
         results=run_repo.count_results(run_id),
         error=run["error"],
     )
@@ -286,7 +306,7 @@ def execute_run(
             identifier = manufacturer_id(session, name)
             if identifier is None:  # pragma: no cover - create_run checked it
                 raise ValidationError(f"the corpus has no manufacturer named {name}")
-            for requirement in requirements:
+            for requirement in to_assess:
                 outcome, category = _assess(
                     session,
                     requirement,
@@ -519,14 +539,14 @@ def progress(session: Session, run_id: str, *, repo: Optional[RunRepo] = None) -
     if run is None:
         raise NotFoundError(f"no run with id {run_id}")
 
-    requirements = TenderRepo(session).count_requirements(run["tender_id"])
+    requirements = TenderRepo(session).list_requirements(run["tender_id"])
     return RunProgress(
         run_id=run_id,
         status=run["status"],
         tender_id=run["tender_id"],
         manufacturers=run["manufacturers"],
-        requirements=requirements,
-        expected=requirements * len(run["manufacturers"]),
+        requirements=len(requirements),
+        expected=len(assessable(requirements)) * len(run["manufacturers"]),
         results=run_repo.count_results(run_id),
         error=run["error"],
     )

@@ -1657,6 +1657,61 @@ rejected: it is the trap the four-state ledger exists to prevent.
 
 ---
 
+**D-92 - An `unknown` clause is not assessed, and the report says how much of
+the tender that was.**
+
+*Decision:* a run assesses only the requirements that were given a type.
+`runs.assessable()` filters out `unknown`, and:
+
+- the match loop writes no `result` row for an unknown clause;
+- `RunProgress.expected` and the report's `results.expected` are
+  `assessable × manufacturers`, so a run with no assessable clause is complete
+  with zero results rather than permanently partial;
+- `RunProgress.requirements` stays the tender's total requirement count, so a
+  caller can see how many clauses were not assessed.
+
+The report gains:
+
+- `not_assessed`: every unknown requirement with its item, page and the reason
+  it was not assessed (the page's classification, a missing item, or nothing
+  typed it). It is neither a pass nor a missing capability;
+- `unknown_requirements`: `unknown` of `total`, `percent`, and the split
+  `non_technical_pages` / `fragments` / `unparsed`;
+- a banner line `Requirements typed unknown: N of M (X%)` with that split,
+  shown only when N is not zero, and an HTML *Not assessed* section.
+
+The count is over **clauses**, not only stored requirements:
+
+- `M` = stored requirements + fragments dropped before extraction;
+- `N` = stored unknown requirements + fragments dropped;
+- `non_technical_pages` = stored unknown clauses whose page was classified
+  `commercial_legal`, `safety_hse` or `boilerplate` (recorded in
+  `review_reason`, matched through `NON_TECHNICAL_REASON`);
+- `fragments` = the requirements stage's dropped count, read from its `detail`
+  JSON (D-89);
+- `unparsed` = the rest of the stored unknown clauses.
+
+The three buckets add up to `N`. A **merged** fragment is not counted: it
+became part of the clause before it, and counting it again would count one
+clause twice.
+
+*Why:* writing an `unsupported_requirement` row for every clause nothing could
+type flooded the result list and the CSV with clauses no document was ever
+asked about, and it put a status on them that the PRD reserves for clauses no
+document can answer. The run now says "not assessed", which is what happened,
+and the report states how large that gap is and why.
+
+*Alternatives:* Keep writing `unsupported_requirement` rows - rejected: it is
+a finding about the clause, not about the manufacturer, and 75% of the local
+corpus was in that bucket. Drop the unknown rows silently - rejected: that
+hides the gap (PRD 4). Count dropped fragments as requirements - rejected:
+they are fragments, and the line's `total` is clauses read, which is why the
+label names clauses as well as requirements. Exclude non-technical pages from
+`N` - rejected: they are stored as unknown and a reader comparing N with the
+requirement list must see them.
+
+---
+
 
 
 

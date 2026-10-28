@@ -297,14 +297,14 @@ def test_a_requirement_with_no_item_is_searched_unfiltered_and_flagged():
     assert "was not found" in (repo.stored[0]["review_reason"] or "")
 
 
-def test_an_unknown_clause_type_is_unsupported_and_flagged():
+def test_an_unknown_clause_is_not_assessed_and_writes_no_row():
+    """A clause nothing could type has no attribute to compare. Writing a
+    "not checked" row for it would read as a result (PRD 4, D-92)."""
     repo = FakeRunRepo()
-    tenders = FakeTenderRepo(
-        [dict(REQUIREMENTS[1], id="r3", type="unknown")], ITEMS
-    )
+    tenders = FakeTenderRepo([dict(REQUIREMENTS[1], id="r3", type="unknown")], ITEMS)
     calls: list[dict] = []
 
-    _execute(
+    outcome = _execute(
         repo,
         tenders,
         _recording_matcher(calls),
@@ -312,10 +312,32 @@ def test_an_unknown_clause_type_is_unsupported_and_flagged():
     )
 
     assert calls == []
-    assert repo.stored[0]["status"] == "unsupported_requirement"
-    # Nothing established that an unknown clause is technical, so a person
-    # has to look at it.
-    assert repo.stored[0]["review_required"] is True
+    assert repo.stored == []
+    assert outcome.results == 0
+    assert outcome.expected == 0
+    assert outcome.status == RunStatus.DONE.value
+
+
+def test_an_unknown_clause_does_not_count_towards_the_expected_results():
+    """The run covers the typed clauses; the unknown one is reported as not
+    assessed, not as a result nobody wrote (D-92)."""
+    repo = FakeRunRepo()
+    tenders = FakeTenderRepo(
+        [REQUIREMENTS[0], dict(REQUIREMENTS[1], id="r3", type="unknown")], ITEMS
+    )
+    calls: list[dict] = []
+
+    outcome = _execute(
+        repo,
+        tenders,
+        _recording_matcher(calls),
+        _recording_store(repo, {"mfr-Acme": "Acme"}),
+    )
+
+    assert [row["requirement_id"] for row in repo.stored] == ["r1"]
+    assert outcome.requirements == 2
+    assert outcome.expected == 1
+    assert outcome.results == 1
 
 
 def test_a_run_that_raises_is_recorded_as_failed_with_its_reason():
@@ -678,6 +700,21 @@ def test_progress_counts_what_is_stored(monkeypatch):
     assert state.expected == 4
     assert state.results == 1
     assert state.as_dict()["progress_percent"] == 25.0
+
+
+def test_progress_expects_only_the_assessable_requirements(monkeypatch):
+    """An unknown clause is not assessed, so it is not an assessment a caller
+    waits for (D-92). It is still counted in the tender's requirements."""
+    requirements = [*REQUIREMENTS, {"id": "r3", "type": "unknown", "text": "5.2"}]
+    repo = FakeRunRepo(manufacturers=("Acme", "Beta"))
+    monkeypatch.setattr(
+        "app.services.runs.TenderRepo", lambda session: FakeTenderRepo(requirements)
+    )
+
+    state = progress(object(), RUN_ID, repo=repo)
+
+    assert state.requirements == 3
+    assert state.expected == 4
 
 
 # --- the report query against the real schema -----------------------------

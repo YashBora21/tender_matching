@@ -1592,3 +1592,104 @@ makes the work visible without letting a partial list pass for a complete one.
 
 
 
+
+## Phase 16 - Read the page, not the letterhead: extraction stops flooding the report (D-87 to D-92)
+
+**Built**
+
+- **Step 0 - the audit** (`bae8760`): `scripts/extraction_audit.py` reads the
+  database only and prints, per tender, the requirement count by type, the
+  unknown share, the unknown clauses under 25 characters and the unknown
+  clauses that look technical. `docs/extraction_audit_before.txt` is the
+  baseline.
+- **Step 1 - page triage** (`1e450be`, D-87): `services/pageclassify.py`
+  scores every page against four keyword families and tags it `technical`,
+  `commercial_legal`, `safety_hse`, `boilerplate` or `mixed`. Clauses on a
+  non-technical page are stored as `unknown` with
+  `review_reason = "page classified as <tag>"` and are never sent to the model.
+- **Step 2 - the reader** (`0ed2ba2`, D-88): `read_specification` returns
+  `SpecificationRead(rows, pages, error)`. A table is read as a table only when
+  it is a real grid; prose is joined into paragraphs and split on clause
+  numbers and sentences; all-caps headings are section context, not
+  requirements; OCR runs when the text layer is too thin or pictures cover the
+  page. `ExtractionMethod.TEXT` is new (VARCHAR, no migration) and
+  `READER_VERSION = "3"`.
+- **Step 3 - fragments** (`06b5a0a`, D-89): `drop_fragments` removes pure
+  clause numbers, junk runs, too-short lines with no unit or spec word, and
+  lines with no value, verb or spec word; it merges a lowercase tail into the
+  clause before it only when that clause does not end a sentence. Counts go to
+  the requirements stage `detail` JSON.
+- **Step 4 - re-typing** (`1565932`, D-90): `retype_technical` runs inside the
+  extraction stage and moves a clause from `unknown` to `technical` only when
+  it names a specification attribute and is not on a non-technical page. It
+  fills the attribute, operator, value and unit from the clause's own words,
+  never overrides a type the model gave, and flags a clause whose value it
+  cannot read. Guards: a bare number must follow the attribute word, a range
+  is not one value, a sign is kept only when it is a sign.
+- **Step 5 - the ledger** (`9a6760e`, D-91): the requirements stage writes
+  `tender_page` from the reader's `PageRead` list before extraction (tag,
+  status, method, attachment; a failed page's reason in `skip_reason`). No
+  migration. `TenderStatus.INCOMPLETE` is new (VARCHAR(64), no check
+  constraint) for a tender read without failing but with no page, no item or
+  no requirement; a run against it is refused. A `SpecificationRead.error`
+  fails the requirements stage. The report's declared page count is the
+  specification's, with the wrapper's count as a fallback.
+- **Step 6 - unknown is not a result** (`D-92`): a run assesses only typed
+  requirements, so no `result` row is written for an `unknown` clause and
+  `expected` counts assessable clauses only. The report adds `not_assessed`,
+  `unknown_requirements` (unknown/total/percent and the split
+  non-technical pages / fragments / unparsed), the banner line
+  `Requirements typed unknown: N of M (X%)` and an HTML *Not assessed*
+  section. Fragments come from the requirements stage `detail`; the reason a
+  page was not read comes from `NON_TECHNICAL_REASON`, the same constant the
+  pipeline writes.
+
+**Tested**
+
+- Step 0: audit run against the local database.
+- Step 1: 13 synthetic page-classification tests.
+- Step 2: 5 synthetic PDF reader tests and a single-item fallback test.
+- Step 3: 12 tests in `test_fragments.py`; BHEL `GEM_9915844` read 494 rows,
+  dropped 146, kept 348, merged 0; the valve BOQ read 11 rows and dropped 0.
+- Step 4: 16 tests in `test_retyping.py`, one pipeline test and one fragment
+  test; the re-typer typed 11 of the 173 stored unknown clauses.
+- Step 5: ledger rows and their fields, an unreadable specification, the three
+  incomplete states, the run guard and the declared page count.
+- Step 6: an unknown clause writes no row and is not in `expected`; progress
+  counts only assessable clauses; the report lists it as not assessed and the
+  banner's three buckets add up.
+- Full suite with `TEST_DATABASE_URL` set: **482 passed** (474 without the
+  database).
+
+**Before / after**
+
+Before (step 0, `docs/extraction_audit_before.txt`):
+
+| tender | reqs | unknown | unknown % | <25 chars | looks technical | pages |
+| --- | --- | --- | --- | --- | --- | --- |
+| GEM_9671792_Valve | 21 | 0 | 0% | 0 | 0 | 0/17 |
+| specification_for_gem_... | 31 | 0 | 0% | 0 | 0 | 0/2 |
+| Tender_Matching_Intern_Assignment | 0 | 0 | - | 0 | 0 | 0/2 |
+| GeM-Bidding-9713870 | 82 | 82 | 100% | 14 | 14 | 0/7 |
+| GEM_9935793_Valve | 20 | 20 | 100% | 7 | 6 | 0/7 |
+| GEM_9935572_Pump | 61 | 61 | 100% | 12 | 8 | 0/8 |
+| GEM_9848272_Valve | 16 | 10 | 62% | 1 | 4 | 0/15 |
+| **total** | **231** | **173** | **75%** | **34** | **32** | **0 logged** |
+
+After: **not yet measured.** The audit reads stored requirements, so the new
+reader has to re-ingest a tender to change them, and a re-ingest gives every
+requirement a new `uuid4`. `GEM_9671792_Valve` is the tender whose 21-pair
+gold slice is waiting for retrieval labels, so re-ingesting it now would
+invalidate the ids the reviewer is labelling. The re-ingest is therefore
+pending a decision on where it runs (a copy of the database, or the live one
+followed by a fresh gold-slice export).
+
+**Left open**
+
+- The retrieval baseline (recall@3 / recall@20) waits on the gold labels.
+- The three filter steps (category visibility, document-kind filter,
+  product-link filter) are not started, in that order.
+- `docs/extraction_audit_before.txt` was written by PowerShell redirection as
+  UTF-16 and has been rewritten as UTF-8 with the same content.
+- `backend/data/catalogue.zip` (458 MB) is still untracked and deliberately not
+  committed.

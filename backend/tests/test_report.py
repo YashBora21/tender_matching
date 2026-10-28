@@ -7,6 +7,8 @@ a document's text is shown as text in every rendering.
 
 from __future__ import annotations
 
+import json
+
 from app.services.report import build_report, render_csv, render_html
 
 RUN_ID = "11111111-1111-4111-8111-111111111111"
@@ -27,13 +29,21 @@ class FakeRunRepo:
 
 class FakeTenderRepo:
     def __init__(
-        self, requirements, items, pages=None, tender=None, stage=None, attachments=None
+        self,
+        requirements,
+        items,
+        pages=None,
+        tender=None,
+        stage=None,
+        attachments=None,
+        requirements_stage=None,
     ) -> None:
         self.requirements = requirements
         self.items = items
         self.pages = pages or []
         self.attachments = attachments or []
         self.stage = stage
+        self.requirements_stage = requirements_stage
         self.tender = tender if tender is not None else {
             "id": TENDER_ID,
             "filename": "tender.pdf",
@@ -45,7 +55,8 @@ class FakeTenderRepo:
         return dict(self.tender)
 
     def get_stage(self, tender_id, section):
-        return dict(self.stage) if self.stage is not None else None
+        stage = self.requirements_stage if section == "requirements" else self.stage
+        return dict(stage) if stage is not None else None
 
     def list_requirements(self, tender_id):
         return list(self.requirements)
@@ -149,7 +160,13 @@ RUN = {
 
 
 def _report(
-    results=None, pages=None, tender=None, requirements=None, stage=None, attachments=None
+    results=None,
+    pages=None,
+    tender=None,
+    requirements=None,
+    stage=None,
+    attachments=None,
+    requirements_stage=None,
 ):
     results = (
         results
@@ -184,6 +201,7 @@ def _report(
             tender,
             stage,
             attachments,
+            requirements_stage,
         ),
     )
 
@@ -459,3 +477,84 @@ def test_the_html_explains_every_status():
         assert status in page
     # The distinction the whole system rests on is spelled out.
     assert "Neither a pass nor a fail" in page
+
+
+def _unknown(requirement_id="r3", *, reason=None, page=4):
+    return {
+        "id": requirement_id,
+        "item_id": "1",
+        "text": "The bidder shall submit the documents",
+        "source_text": "The bidder shall submit the documents",
+        "type": "unknown",
+        "mandatory": True,
+        "page": page,
+        "value": None,
+        "unit": None,
+        "review_required": True,
+        "review_reason": reason,
+    }
+
+
+def test_an_unknown_clause_is_listed_as_not_assessed_and_not_as_a_result():
+    """A clause nothing could type was not assessed. It is not a pass, not a
+    missing capability and not a stored result (PRD 4, D-92)."""
+    report = _report(
+        requirements=[REQUIREMENTS[0], _unknown()],
+        results=[_result("r1", "mfr-a", "Acme", "full_match", evidence=EVIDENCE)],
+    )
+
+    assert [row["requirement_id"] for row in report["not_assessed"]] == ["r3"]
+    assert [row["requirement_id"] for row in report["requirements"]] == ["r1"]
+    # The unknown clause is not an assessment a caller waits for.
+    assert report["results"]["expected"] == 1
+    assert report["results"]["complete"] is True
+    page = render_html(report)
+    assert "<h2>Not assessed</h2>" in page
+    assert "The bidder shall submit the documents" in page
+    assert "not a missing capability and not a pass" in page
+
+
+def test_the_unknown_line_splits_what_could_not_be_typed():
+    """The line accounts for clauses, so a dropped fragment is counted with
+    the unknown requirements: it was read and then thrown away (D-92)."""
+    report = _report(
+        requirements=[
+            REQUIREMENTS[0],
+            _unknown("r3", reason="page classified as commercial_legal"),
+            _unknown("r4"),
+        ],
+        results=[_result("r1", "mfr-a", "Acme", "full_match", evidence=EVIDENCE)],
+        requirements_stage={
+            "status": "done",
+            "detail": json.dumps({"dropped": 5, "merged": 2}),
+        },
+    )
+
+    unknown = report["unknown_requirements"]
+    # Two stored unknown clauses plus five dropped fragments, over eight
+    # clauses read in all.
+    assert unknown["unknown"] == 7
+    assert unknown["total"] == 8
+    assert unknown["percent"] == 87.5
+    assert unknown["non_technical_pages"] == 1
+    assert unknown["fragments"] == 5
+    assert unknown["fragments_merged"] == 2
+    assert unknown["unparsed"] == 1
+
+    page = render_html(report)
+    assert "Requirements typed unknown:" in page
+    assert "7 of 8" in page
+    assert "non-technical pages: 1" in page
+    assert "fragments: 5" in page
+    assert "unparsed: 1" in page
+    assert "not counted as missing capabilities" in page
+
+
+def test_a_report_with_no_unknown_clause_has_no_unknown_banner():
+    report = _report()
+
+    assert report["unknown_requirements"]["unknown"] == 0
+    assert report["not_assessed"] == []
+    page = render_html(report)
+    assert "Requirements typed unknown:" not in page
+    assert "<h2>Not assessed</h2><p class=\"muted\">None.</p>" in page

@@ -34,7 +34,7 @@ from app.services.extractor import (
     extract_requirements,
 )
 from app.services.llm import LLMClient, LLMRateLimited
-from app.services.pageclassify import is_non_technical
+from app.services.pageclassify import NON_TECHNICAL_REASON, is_non_technical
 from app.services.retyping import retype_technical
 from app.services.tenderingest import (
     PageRead,
@@ -456,7 +456,7 @@ def run_pipeline(
                 page_tag=tag or None,
                 review_required=True,
                 review_reason=(
-                    f"page classified as {tag}"
+                    f"{NON_TECHNICAL_REASON} {tag}"
                     if classified
                     else "the specification row names no item in the bill of quantities"
                 ),

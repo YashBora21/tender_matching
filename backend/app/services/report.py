@@ -29,6 +29,7 @@ from __future__ import annotations
 import csv
 import html
 import io
+import json
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -36,8 +37,9 @@ from sqlalchemy.orm import Session
 from app.core.errors import NotFoundError
 from app.repositories.runs import RunRepo
 from app.repositories.tender import TenderRepo
-from app.schemas.enums import LedgerStatus, RequirementStatus
-from app.services.runs import summarise
+from app.schemas.enums import LedgerStatus, RequirementStatus, RequirementType
+from app.services.pageclassify import NON_TECHNICAL_REASON
+from app.services.runs import assessable, summarise
 
 # What each status means, in the words of PRD 4. The HTML report carries this so
 # a reader cannot misread "no evidence found" as a failing capability. It is
@@ -161,6 +163,67 @@ def _extraction(tender_repo: TenderRepo, tender_id: str) -> dict:
     }
 
 
+def _fragments(tender_repo: TenderRepo, tender_id: str) -> tuple[int, int]:
+    """The fragments the requirements stage dropped and merged (D-89).
+
+    A dropped fragment was read and recognised as noise, so it is a clause
+    nothing typed. A merged fragment became part of the clause before it, and
+    counting it again would count one clause twice.
+    """
+    stage = tender_repo.get_stage(tender_id, "requirements") or {}
+    detail = stage.get("detail")
+    if not detail:
+        return 0, 0
+    try:
+        parsed = json.loads(detail)
+    except (TypeError, ValueError):
+        return 0, 0
+    if not isinstance(parsed, dict):
+        return 0, 0
+    return int(parsed.get("dropped") or 0), int(parsed.get("merged") or 0)
+
+
+def _unknown_requirements(
+    requirements: list[dict], tender_repo: TenderRepo, tender_id: str
+) -> dict:
+    """How much of what was read could not be typed, and why.
+
+    The count is over clauses, not only stored requirements: a dropped
+    fragment was read and then thrown away, so it is a clause nobody typed and
+    it belongs in the same measure. `unparsed` is what is left after the two
+    explainable buckets, and the three add up to the total.
+    """
+    dropped, merged = _fragments(tender_repo, tender_id)
+    unknown = 0
+    non_technical = 0
+    for requirement in requirements:
+        if _type_of(requirement) is not RequirementType.UNKNOWN:
+            continue
+        unknown += 1
+        if (requirement.get("review_reason") or "").startswith(
+            NON_TECHNICAL_REASON
+        ):
+            non_technical += 1
+    untyped = unknown + dropped
+    total = len(requirements) + dropped
+    return {
+        "unknown": untyped,
+        "total": total,
+        "percent": round(100.0 * untyped / total, 1) if total else 0.0,
+        "non_technical_pages": non_technical,
+        "fragments": dropped,
+        "fragments_merged": merged,
+        "unparsed": unknown - non_technical,
+    }
+
+
+def _type_of(requirement: dict) -> RequirementType:
+    try:
+        return RequirementType(requirement.get("type"))
+    except (TypeError, ValueError):
+        return RequirementType.UNKNOWN
+
+
 def build_report(
     session: Session,
     run_id: str,
@@ -199,6 +262,7 @@ def build_report(
 
     matchable: list[dict] = []
     unsupported: list[dict] = []
+    not_assessed: list[dict] = []
     review_queue: list[dict] = []
 
     for requirement in requirements:
@@ -237,6 +301,16 @@ def build_report(
             ],
         }
 
+        # A clause nothing could type has no assessment to show: a result row
+        # for it would read as "checked and nothing found" (D-92). It is kept
+        # in its own section so the gap stays visible.
+        if _type_of(requirement) is RequirementType.UNKNOWN:
+            entry["reason"] = requirement.get("review_reason") or (
+                "the clause could not be typed as a capability"
+            )
+            not_assessed.append(entry)
+            continue
+
         statuses = {row["status"] for row in rows}
         # A clause is unsupported when the run recorded it as such. The status
         # comes from the requirement's own type, so every manufacturer agrees;
@@ -257,9 +331,10 @@ def build_report(
                     }
                 )
 
-    expected = len(requirements) * len(run["manufacturers"])
+    expected = len(assessable(requirements)) * len(run["manufacturers"])
     pages = _pages(tender_repo, run["tender_id"], tender.get("page_count"))
     extraction = _extraction(tender_repo, run["tender_id"])
+    unknown = _unknown_requirements(requirements, tender_repo, run["tender_id"])
     # Either half of the reading can be short, and one is enough to make the
     # report a partial one.
     incomplete = pages["incomplete_ingestion"] or not extraction["complete"]
@@ -301,6 +376,13 @@ def build_report(
         "unsupported_requirements": sorted(
             unsupported, key=lambda entry: order.get(entry["requirement_id"], 0)
         ),
+        # A clause that could not be typed was not assessed. It is neither a
+        # pass nor a missing capability, and it is listed rather than dropped
+        # (PRD 4, D-92).
+        "not_assessed": sorted(
+            not_assessed, key=lambda entry: order.get(entry["requirement_id"], 0)
+        ),
+        "unknown_requirements": unknown,
         "review_queue": review_queue,
         "status_meanings": STATUS_MEANINGS,
     }
@@ -498,10 +580,46 @@ def _unsupported_table(report: dict) -> str:
     )
 
 
+def _not_assessed_table(report: dict) -> str:
+    rows = []
+    for requirement in report.get("not_assessed") or []:
+        rows.append(
+            "<tr>"
+            f"<td class=\"small\">{_escape(requirement.get('item_id'))}</td>"
+            f"<td>{_escape(requirement.get('text'))}</td>"
+            f"<td class=\"num\">{_escape(requirement.get('page'))}</td>"
+            f"<td>{_escape(requirement.get('reason'))}</td>"
+            "</tr>"
+        )
+    if not rows:
+        return "<h2>Not assessed</h2><p class=\"muted\">None.</p>"
+    return (
+        "<h2>Not assessed</h2>"
+        "<p class=\"muted\">The clause could not be typed as a capability, so no "
+        "manufacturer was assessed against it. It is not a missing capability and "
+        "not a pass: it is a gap in what this tender states, kept visible so it "
+        "can be read by hand.</p>"
+        "<table><thead><tr><th>Item</th><th>Requirement</th><th>Page</th>"
+        f"<th>Why it was not assessed</th></tr></thead><tbody>{''.join(rows)}</tbody></table>"
+    )
+
+
 def _banner(report: dict) -> str:
     parts: list[str] = []
     pages = report["tender"]["pages"]
     extraction = report["tender"].get("extraction") or {}
+    unknown = report.get("unknown_requirements") or {}
+    if unknown.get("unknown"):
+        parts.append(
+            '<div class="banner info"><strong>Requirements typed unknown:</strong> '
+            f"{_escape(unknown['unknown'])} of {_escape(unknown['total'])} "
+            f"({unknown['percent']:g}%) — "
+            f"non-technical pages: {_escape(unknown['non_technical_pages'])}, "
+            f"fragments: {_escape(unknown['fragments'])}, "
+            f"unparsed: {_escape(unknown['unparsed'])}. "
+            "They were not assessed against any manufacturer, and are not counted "
+            "as missing capabilities.</div>"
+        )
     if pages["incomplete_ingestion"]:
         detail = []
         if pages["unresolved"]:
@@ -601,6 +719,7 @@ def render_html(report: dict) -> str:
   .banner {{ padding: .75rem 1rem; border-radius: 4px; margin: 1rem 0; }}
   .banner.bad {{ background: #fdeaea; border: 1px solid #e0a3a3; }}
   .banner.warn {{ background: #fff8e6; border: 1px solid #e5cf8a; }}
+  .banner.info {{ background: #eef4fb; border: 1px solid #b8cfe8; }}
   .flag {{ color: #8a4b00; font-size: .85em; }}
   .status {{ font-weight: 600; }}
   .status-full_match {{ color: #0a6b2d; }}
@@ -642,6 +761,7 @@ values here are not directly comparable (FR-34).</p>
 <h2>Requirements</h2>
 {sections or '<p class="muted">No requirement was assessed.</p>'}
 {_unsupported_table(report)}
+{_not_assessed_table(report)}
 <h2>Statuses</h2>
 <table><thead><tr><th>Status</th><th>Meaning</th></tr></thead>
 <tbody>{status_rows}</tbody></table>
