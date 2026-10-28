@@ -1474,6 +1474,49 @@ it produced no requirement. Ask the model to classify the page first -
 rejected: it doubles the calls and makes a deterministic decision depend on
 the provider.
 
+---
+
+**D-88 - A page is read as a table only when its grid is a real table, and
+prose is joined into clauses before it is split.**
+
+*Decision:* `read_specification` returns a `SpecificationRead` (rows plus one
+`PageRead` per page) and decides per page, not per document:
+
+- **table** - a grid is a real table when it has at least two columns, at
+  least 80% of its rows share the modal width, and at least 30% of its cells
+  hold text when a header (or a header carried from the previous page) proves
+  the grid, 60% when nothing does. The page is read as a table only if the
+  accepted tables hold at least half of the page's characters.
+- **text** - every other page with a text layer. Wrapped lines are joined
+  back into paragraphs (a line that does not end a sentence continues the
+  one before it), then split on clause numbers (`5.2`, `24.3.1`) and
+  sentence boundaries. An all-capitals line that states no obligation and no
+  limit is a heading: it becomes the section of the clauses beneath it and is
+  never emitted as a requirement.
+- **ocr** - a page whose text layer is shorter than 40 characters, or whose
+  pictures cover at least half its area (a scan with a typed letterhead over
+  the page image). OCR is used when it returns anything.
+
+`ExtractionMethod.TEXT = "text"` is new; the column is a `VARCHAR` with no
+check constraint, so no migration is needed. `READER_VERSION` moves to 3.
+`assign_to_items` keeps the row's extraction method and page tag, and a
+tender with exactly one item takes the clauses of a prose specification,
+because that is the only item they can belong to.
+
+*Why:* every requirement in the corpus had `extraction_method = 'table'`,
+including legal prose, and the fragments (`"5.2"`, `"o r violate its
+provisions."`) were table cells that pdfplumber had guessed at. A guessed
+grid is not a table: one column, ragged rows, mostly empty. Reading prose as
+text and splitting it on clauses is what the document actually says.
+
+*Alternatives:* Keep one path and filter the fragments afterwards - rejected:
+the fragments are a symptom; the cause is that a paragraph was cut at every
+line break. Use OCR on every page - rejected: OCR is ~4.5 s a page and a text
+layer is exact. Trust the largest table on the page - rejected: on the BHEL
+specification the largest grid is a sparse page furniture grid with 25% of
+its cells filled.
+
+
 
 
 

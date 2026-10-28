@@ -18,12 +18,19 @@ Two rules shape everything here:
 from __future__ import annotations
 
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 from app.core.logging import get_logger
-from app.schemas.enums import RequirementType
+from app.schemas.enums import ExtractionMethod, LedgerStatus, RequirementType
+from app.services.pageclassify import (
+    BOILERPLATE,
+    NUMBER_WITH_UNIT,
+    classify_page,
+    is_non_technical,
+)
 
 logger = get_logger(__name__)
 
@@ -65,7 +72,9 @@ def is_mangled(text: str) -> bool:
 # The version of the readers below. A change to how a bill of quantities or
 # a specification is read is a change to what the stage produces, so it is
 # part of the stage's key: the stage runs again, and only that stage.
-READER_VERSION = "2"
+# 3: a page is read as a table only when its grid is a real table, and prose
+#    is joined into clauses before it is split (D-88).
+READER_VERSION = "3"
 
 
 @dataclass
@@ -106,6 +115,9 @@ class RequirementRecord:
     page: Optional[int] = None
     source_section: Optional[str] = None
     extraction_method: str = "table"
+    # The triage tag of the page the clause was read from (D-87). A clause
+    # from a non-technical page is recorded, but never sent to the model.
+    page_tag: Optional[str] = None
     # How sure the reading is. A requirement read from a text layer is
     # certain; one read from a scanned page is not (FR-9).
     confidence: Optional[float] = None
@@ -449,117 +461,495 @@ def _cell(row: list[Optional[str]], index: Optional[int]) -> Optional[str]:
     return row[index]
 
 
-def read_specification(path: Path) -> list[dict]:
-    """The specification's rows, with the page each is on.
+# --- how a page is read -----------------------------------------------------
 
-    A specification is a table: "Sr. No. | Item | Descriptions | Qty | Unit".
-    The description column holds the requirement, and the row is what it
-    belongs to.
+# A page whose text layer is shorter than this has no text layer worth
+# reading: a header and a page number are not a page. It is OCRed instead.
+MIN_TEXT_CHARS = 40
+
+# A page that is mostly a picture has a text layer only for the letterhead
+# around the scan. The words that matter are in the image, so the page is
+# OCRed however much text the layer holds.
+OCR_IMAGE_SHARE = 0.5
+
+# A real table has at least two columns, and most of its rows are the same
+# width. pdfplumber guesses at a grid for a page of prose, and the guess is
+# one column wide or ragged - a guessed grid is not a table (FR-T1).
+TABLE_MIN_COLUMNS = 2
+TABLE_WIDTH_SHARE = 0.8
+
+# How much of a table's grid must hold text. A ruled page of prose has
+# borders and a nearly empty grid; a specification table is mostly filled.
+# A table whose header was found is allowed to be sparser, because the header
+# itself proves the grid is a table.
+TABLE_FILL_WITH_HEADER = 0.3
+TABLE_FILL_WITHOUT_HEADER = 0.6
+
+# A page whose tables hold less than this share of its characters is read as
+# prose: the table is a fragment of the page, not the page.
+TABLE_TEXT_SHARE = 0.5
+
+# A clause number at the start of a clause, or after the punctuation that
+# ends the clause before it: 5.2, 24.3.1, 3.4.1.2.
+_CLAUSE_START = re.compile(
+    r"(?:(?<=[.;:])\s+|^)(?=\d{1,2}(?:\.\d{1,2}){1,4}[.)]?\s+[A-Z(])"
+)
+
+# A heading names a section. It is all capitals, short, and states no
+# obligation or limit: "SPECIFICATION DETAILS FOR 75 HP PUMP & MOTOR" is a
+# heading, "125 MM MINIMUM" is a requirement.
+HEADING_MAX_WORDS = 12
+# An obligation word makes a line a requirement, whatever its case.
+_OBLIGATION_WORDS = re.compile(
+    r"\b(?:shall|should|must|required|supply|provide)\b", re.IGNORECASE
+)
+# A limit word makes a line a requirement only when it also states a value:
+# "125 MM MINIMUM" is a requirement, "CERTIFICATION REGARDING MINIMUM LOCAL
+# CONTENT" is the title of one.
+_LIMIT_WORDS = re.compile(
+    r"\b(?:minimum|maximum|not\s+less|not\s+more|at\s+least|at\s+most|min|max)\b",
+    re.IGNORECASE,
+)
+
+# The abbreviations that end with a full stop without ending a sentence.
+_ABBREVIATION = re.compile(
+    r"\b(?:gr|no|nos|sr|fig|dr|m/s|pvt|ltd|co|approx|ref|dt|viz|i\.e|e\.g)\.$",
+    re.IGNORECASE,
+)
+
+
+@dataclass
+class PageRead:
+    """What became of one page (FR-T2)."""
+
+    page: int
+    tag: str
+    status: str
+    chars: int = 0
+    method: Optional[str] = None
+    error: Optional[str] = None
+    skip_reason: Optional[str] = None
+
+
+@dataclass
+class SpecificationRead:
+    """The clauses of a specification, and what happened to each page."""
+
+    rows: list[dict] = field(default_factory=list)
+    pages: list[PageRead] = field(default_factory=list)
+    # Set when the document itself could not be opened: no page of it was
+    # looked at, which is not the same as a document with nothing in it.
+    error: Optional[str] = None
+
+
+def read_specification(path: Path) -> SpecificationRead:
+    """Read a specification page by page, and say what became of each page.
+
+    A page is read one of three ways, and which one is decided by what the
+    page holds, not by the document as a whole:
+
+    - **table**: the page's ruled grid is a real table (several columns, rows
+      of a consistent width, mostly filled) and the table holds most of the
+      page's text. The description column holds the requirement.
+    - **text**: anything else with a text layer. The wrapped lines are joined
+      back into clauses and split on clause numbering and sentence
+      boundaries. Prose is never split on line breaks, because a line break
+      in a PDF is a wrap, not the end of a requirement.
+    - **ocr**: the page has no text layer, so it is read as an image.
 
     The header is not always the first row: a page opens with the title
     ("BOQ", "Name of Supply") and the header is below it. And a table that
     runs over a page break is not repeated, so the columns found on one
     page are carried to the next (FR-T6).
-
-    A scanned specification has no table to find. Its pages are read through
-    OCR and the rows are taken from the text, so a scanned document is read
-    like any other (FR-9).
     """
     import pdfplumber
 
-    rows: list[dict] = []
+    read = SpecificationRead()
     columns: Optional[dict] = None
-    with pdfplumber.open(path) as pdf:
-        for page_number, page in enumerate(pdf.pages, start=1):
-            for table in page.extract_tables() or []:
-                if not table:
-                    continue
-                header_row, found = _find_header_row(table)
-                if found:
-                    columns = found
-                if columns is None:
-                    # No header yet: the rows cannot be read as a table.
-                    continue
-                start = header_row + 1 if found else 0
-                for index, row in enumerate(table[start:], start=start):
-                    description = _clean_cell(_cell(row, columns.get("description")))
-                    if not description:
+    try:
+        pdf = pdfplumber.open(path)
+    except Exception as exc:  # noqa: BLE001 - the error is the answer
+        read.error = f"{type(exc).__name__}: {exc}"
+        return read
+
+    scan = None
+    try:
+        with pdf:
+            for number, page in enumerate(pdf.pages, start=1):
+                text = page.extract_text() or ""
+                method = ExtractionMethod.TEXT
+
+                if _needs_ocr(page, text):
+                    # No text layer worth reading, or the page is a picture
+                    # with a letterhead typed over it.
+                    if scan is None:
+                        scan = _open_scan(path)
+                    ocr_text, ocr_error = _ocr(scan, number)
+                    if ocr_text.strip():
+                        # The page needed OCR, so what the OCR read is the
+                        # page: the text layer, when there was one, was the
+                        # letterhead around the picture.
+                        text, method = ocr_text, ExtractionMethod.OCR
+                    elif not text.strip():
+                        # Nothing was read on this page, and it is not a
+                        # page that states nothing: it is a failed page.
+                        read.pages.append(
+                            PageRead(
+                                page=number,
+                                tag=BOILERPLATE,
+                                status=LedgerStatus.FAILED.value,
+                                error=ocr_error or "the page could not be read",
+                            )
+                        )
                         continue
-                    rows.append(
-                        {
-                            "row": index,
-                            "page": page_number,
-                            "number": _clean_cell(_cell(row, columns.get("number"))),
-                            "title": _clean_cell(_cell(row, columns.get("title"))),
-                            "description": description,
-                            "quantity": _clean_cell(_cell(row, columns.get("quantity"))),
-                            "unit": _clean_cell(_cell(row, columns.get("unit"))),
-                            "row_text": " ".join(
-                                _clean_cell(cell) for cell in row if _clean_cell(cell)
-                            ),
-                        }
+
+                tag = classify_page(text).kind
+
+                if method is ExtractionMethod.OCR:
+                    # An OCRed page has no grid to trust: what the scanner
+                    # saw as columns is the scanner's guess.
+                    rows = _prose_rows(
+                        text, number, tag, method=ExtractionMethod.OCR.value
                     )
+                    read.rows.extend(rows)
+                    read.pages.append(
+                        PageRead(
+                            page=number,
+                            tag=tag,
+                            status=LedgerStatus.OCR.value,
+                            chars=len(text),
+                            method=ExtractionMethod.OCR.value,
+                        )
+                    )
+                    continue
 
-    if not rows:
-        # No table was found. The document may be scanned, and a scanned
-        # page is read through OCR (FR-9).
-        rows = _read_scanned_specification(path)
-    return rows
+                table_rows, columns = _read_tables(
+                    page, text, number, tag, columns
+                )
+                if table_rows is not None:
+                    read.rows.extend(table_rows)
+                    read.pages.append(
+                        PageRead(
+                            page=number,
+                            tag=tag,
+                            status=LedgerStatus.PARSED.value,
+                            chars=len(text),
+                            method=ExtractionMethod.TABLE.value,
+                        )
+                    )
+                    continue
 
-
-def _read_scanned_specification(path: Path) -> list[dict]:
-    """The rows of a specification whose pages are images.
-
-    A scanned page has no table to find, so the pages are read through OCR
-    and the rows are taken from the text.
-    """
-    import pymupdf
-
-    from app.services.docparser import ocr_page
-
-    rows: list[dict] = []
-    try:
-        document = pymupdf.open(path)
-    except Exception:  # noqa: BLE001 - a file that cannot be read has no rows
-        return rows
-    try:
-        for page_number, page in enumerate(document, start=1):
-            text = ocr_page(page)
-            if not text:
-                continue
-            for index, line in enumerate(_ocr_lines(text)):
-                rows.append(
-                    {
-                        "row": index,
-                        "page": page_number,
-                        "number": "",
-                        "title": "",
-                        "description": line,
-                        "quantity": "",
-                        "unit": "",
-                        "row_text": line,
-                    }
+                rows = _prose_rows(text, number, tag)
+                read.rows.extend(rows)
+                read.pages.append(
+                    PageRead(
+                        page=number,
+                        tag=tag,
+                        status=(
+                            LedgerStatus.PARSED.value
+                            if rows
+                            else LedgerStatus.SKIPPED.value
+                        ),
+                        chars=len(text),
+                        method=ExtractionMethod.TEXT.value,
+                        skip_reason=(
+                            None if rows else "the page states no readable clause"
+                        ),
+                    )
                 )
     finally:
-        document.close()
-    return rows
+        if scan is not None:
+            scan.close()
+    return read
 
 
-def _ocr_lines(text: str) -> list[str]:
-    """The readable lines of an OCRed page.
+def _open_scan(path: Path):
+    """The document opened for OCR, or None when it cannot be opened."""
+    import pymupdf
 
-    The lines of a scanned specification are short: a title, a value, a note.
-    The ones worth keeping are the ones that carry a specification.
+    try:
+        return pymupdf.open(path)
+    except Exception:  # noqa: BLE001 - a file that cannot be opened has no text
+        return None
+
+
+def _needs_ocr(page, text: str) -> bool:
+    """True when the page's words are in an image rather than the text layer.
+
+    A scan often carries a typed letterhead over a picture of the page, so
+    the text layer is present and says nothing: the file number and the page
+    number, and the specification itself in the image. The area the pictures
+    cover is what tells the two apart.
     """
-    lines = []
+    if len(" ".join(text.split())) < MIN_TEXT_CHARS:
+        return True
+    return _image_share(page) >= OCR_IMAGE_SHARE
+
+
+def _image_share(page) -> float:
+    """The share of the page's area covered by pictures."""
+    try:
+        area = float(page.width) * float(page.height)
+        covered = sum(
+            (
+                max(0.0, float(image["x1"]) - float(image["x0"]))
+                * max(0.0, float(image["bottom"]) - float(image["top"]))
+            )
+            for image in page.images
+        )
+    except Exception:  # noqa: BLE001 - a page whose pictures cannot be measured
+        return 0.0
+    return covered / area if area else 0.0
+
+
+def _ocr(document, number: int) -> tuple[str, Optional[str]]:
+    """The OCRed text of one page, and why it is empty when it is."""
+    from app.services.docparser import ocr_page
+
+    if document is None:
+        return "", "the document could not be opened for OCR"
+    if number > len(document):
+        return "", f"page {number} is not in the document"
+    try:
+        text = ocr_page(document[number - 1]) or ""
+    except Exception as exc:  # noqa: BLE001 - the failure is the page's state
+        return "", f"{type(exc).__name__}: {exc}"
+    if not text.strip():
+        return "", "the OCR read nothing on this page"
+    return text, None
+
+
+def _is_real_table(
+    table: list[list[Optional[str]]], *, carried: bool = False
+) -> bool:
+    """True when a grid pdfplumber found is a table and not a guess.
+
+    A page of prose has no ruled cells, but pdfplumber still guesses at a
+    grid for it: one column wide, or rows of whatever width the guess gave
+    each line. Reading those guesses as rows is what turned legal paragraphs
+    into requirements. A real table has several columns, rows that agree on
+    their width, and text in most of its cells.
+
+    A table that continues from the previous page has no header of its own,
+    so its grid is proven by the header the caller is carrying.
+    """
+    rows = [[_clean_cell(cell) for cell in row] for row in table if row]
+    if len(rows) < 2:
+        return False
+
+    widths = Counter(len(row) for row in rows)
+    width, count = widths.most_common(1)[0]
+    if width < TABLE_MIN_COLUMNS:
+        return False
+    if count / len(rows) < TABLE_WIDTH_SHARE:
+        return False
+
+    _, found = _find_header_row(table)
+    filled = sum(1 for row in rows for cell in row if cell)
+    cells = sum(len(row) for row in rows)
+    if not cells:
+        return False
+    floor = (
+        TABLE_FILL_WITH_HEADER if (found or carried) else TABLE_FILL_WITHOUT_HEADER
+    )
+    return filled / cells >= floor
+
+
+def _read_tables(
+    page,
+    text: str,
+    page_number: int,
+    tag: str,
+    columns: Optional[dict],
+) -> tuple[Optional[list[dict]], Optional[dict]]:
+    """The rows of the real tables on a page, or None when it is prose.
+
+    The columns are returned as well as the rows, because a table that runs
+    over a page break has no header of its own and the next page needs them.
+    """
+    accepted: list[tuple[list[list[Optional[str]]], int, Optional[dict]]] = []
+    found_columns = columns
+    for table in page.extract_tables() or []:
+        if not table:
+            continue
+        if not _is_real_table(table, carried=found_columns is not None):
+            continue
+        header_row, found = _find_header_row(table)
+        if found:
+            found_columns = found
+        accepted.append((table, header_row, found))
+
+    if not accepted or found_columns is None:
+        return None, columns
+    if (
+        found_columns.get("description") is None
+        and found_columns.get("title") is None
+    ):
+        return None, columns
+
+    # A page with a table and a lot of prose is a prose page: the table is a
+    # fragment of it. Counting the characters is how the two are told apart.
+    held = sum(
+        len(_clean_cell(cell))
+        for table, _, _ in accepted
+        for row in table
+        for cell in row
+    )
+    page_chars = len(" ".join(text.split()))
+    if page_chars and held < TABLE_TEXT_SHARE * page_chars:
+        return None, columns
+
+    rows: list[dict] = []
+    for table, header_row, found in accepted:
+        start = header_row + 1 if found else 0
+        for index, row in enumerate(table[start:], start=start):
+            description = _clean_cell(_cell(row, found_columns.get("description")))
+            if not description:
+                # Some buyers name the row in the item column and describe it
+                # in the description column; a row with only the first is
+                # still a requirement.
+                description = _clean_cell(_cell(row, found_columns.get("title")))
+            if not description:
+                continue
+            rows.append(
+                {
+                    "row": index,
+                    "page": page_number,
+                    "number": _clean_cell(_cell(row, found_columns.get("number"))),
+                    "title": _clean_cell(_cell(row, found_columns.get("title"))),
+                    "description": description,
+                    "quantity": _clean_cell(_cell(row, found_columns.get("quantity"))),
+                    "unit": _clean_cell(_cell(row, found_columns.get("unit"))),
+                    "row_text": " ".join(
+                        _clean_cell(cell) for cell in row if _clean_cell(cell)
+                    ),
+                    "extraction_method": ExtractionMethod.TABLE.value,
+                    "page_tag": tag,
+                }
+            )
+    return rows, found_columns
+
+
+def _prose_rows(
+    text: str,
+    page_number: int,
+    tag: str,
+    method: str = ExtractionMethod.TEXT.value,
+) -> list[dict]:
+    """The clauses of a page of prose, one row each."""
+    return [
+        {
+            "row": index,
+            "page": page_number,
+            "number": "",
+            "title": section or "",
+            "description": clause,
+            "quantity": "",
+            "unit": "",
+            "row_text": clause,
+            "extraction_method": method,
+            "page_tag": tag,
+        }
+        for index, (section, clause) in enumerate(_prose_clauses(text))
+    ]
+
+
+def _prose_clauses(text: str) -> list[tuple[Optional[str], str]]:
+    """The clauses of a page, and the heading each sits under.
+
+    A line break in a PDF is a wrap, not the end of a clause: the lines that
+    do not end a sentence are joined back together before anything is split.
+    An all-capitals line that states no limit is a heading, and it is the
+    section the clauses below it belong to - not a requirement of its own.
+    """
+    found: list[tuple[Optional[str], str]] = []
+    section: Optional[str] = None
+    buffer = ""
+
+    def flush() -> None:
+        nonlocal buffer
+        paragraph = buffer.strip()
+        buffer = ""
+        if not paragraph:
+            return
+        for clause in _split_clauses(paragraph):
+            found.append((section, clause))
+
     for raw in text.split("\n"):
         line = " ".join(raw.split())
-        if len(line) < 8:
+        if not line:
+            flush()
             continue
-        if not re.search(r"\d", line):
+        if _is_heading(line):
+            flush()
+            section = line
             continue
-        lines.append(line)
-    return lines
+        if not buffer:
+            buffer = line
+        elif buffer.endswith((".", "!", "?", ":")):
+            flush()
+            buffer = line
+        else:
+            buffer = f"{buffer} {line}"
+    flush()
+    return found
+
+
+def _is_heading(line: str) -> bool:
+    """True when a line names a section rather than stating a requirement."""
+    words = line.split()
+    if not words or len(words) > HEADING_MAX_WORDS:
+        return False
+    if line.endswith((".", ";", ":", ",")):
+        return False
+    letters = [character for character in line if character.isalpha()]
+    if not letters or not all(character.isupper() for character in letters):
+        return False
+    if _OBLIGATION_WORDS.search(line):
+        return False
+    if _LIMIT_WORDS.search(line) and NUMBER_WITH_UNIT.search(line):
+        return False
+    # A short line that is only a value ("125 MM") is a requirement; a
+    # heading names something ("... 75 HP PUMP & MOTOR").
+    if len(words) <= 3 and NUMBER_WITH_UNIT.search(line):
+        return False
+    return True
+
+
+def _split_clauses(paragraph: str) -> list[str]:
+    """Split a paragraph into clauses on clause numbers and sentences."""
+    clauses: list[str] = []
+    for piece in _CLAUSE_START.split(paragraph):
+        piece = piece.strip()
+        if not piece:
+            continue
+        clauses.extend(_split_sentences(piece))
+    return clauses
+
+
+def _split_sentences(paragraph: str) -> list[str]:
+    """Split a paragraph into sentences, keeping abbreviations together."""
+    sentences: list[str] = []
+    start = 0
+    for match in re.finditer(r"(?<=[.!?])\s+", paragraph):
+        sentence = paragraph[start:match.start()]
+        following = paragraph[match.end():]
+        if not following:
+            break
+        if not (
+            following[0].isupper()
+            or following[0].isdigit()
+            or following[0] in "(\"'"
+        ):
+            continue
+        if _ABBREVIATION.search(sentence):
+            continue
+        sentences.append(sentence.strip())
+        start = match.end()
+    tail = paragraph[start:].strip()
+    if tail:
+        sentences.append(tail)
+    return [sentence for sentence in sentences if sentence]
 
 
 def _find_header_row(table: list[list[Optional[str]]]) -> tuple[int, Optional[dict]]:
@@ -591,9 +981,14 @@ def assign_to_items(
     matched against the item titles. A requirement that matches no item is
     **not** guessed at: it is returned separately, so the ambiguity is
     visible (FR-T9).
+
+    The one assignment that is not a guess is a tender with a single item: a
+    prose specification has no item column, and every clause it states is a
+    clause of that item.
     """
     by_number = {item.item_id.rsplit(":", 1)[-1]: item for item in items}
     by_title = {_title_key(item.title): item for item in items if item.title}
+    only_item = items[0] if len(items) == 1 else None
 
     assigned: list[RequirementRecord] = []
     unassigned: list[dict] = []
@@ -608,16 +1003,31 @@ def assign_to_items(
             item = by_title.get(_title_key(row.get("title") or ""))
         if item is None:
             item = by_title.get(_title_key(row.get("description") or ""))
+        if item is None and only_item is not None:
+            item = only_item
         if item is None:
             unassigned.append(row)
             continue
+
+        tag = row.get("page_tag")
+        classified = is_non_technical(tag) if tag else False
         assigned.append(
             RequirementRecord(
                 text=row["description"],
                 item_id=item.item_id,
-                extraction_method="table",
+                # A clause on a page that is not a specification is recorded,
+                # but it is not a capability a document could state (D-87).
+                requirement_type=(
+                    RequirementType.UNKNOWN if classified else RequirementType.TECHNICAL
+                ),
+                extraction_method=row.get("extraction_method") or "table",
                 page=row.get("page"),
-                source_section=item.title or None,
+                source_section=(
+                    (row.get("title") or "").strip() or item.title or None
+                ),
+                page_tag=tag,
+                review_required=classified,
+                review_reason=f"page classified as {tag}" if classified else None,
             )
         )
     return assigned, unassigned

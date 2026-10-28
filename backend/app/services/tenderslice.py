@@ -28,6 +28,7 @@ from app.core.logging import get_logger
 from app.schemas.enums import RequirementType
 from app.services.tenderingest import (
     RequirementRecord,
+    SpecificationRead,
     TenderItem,
     assign_to_items,
     english_half,
@@ -160,16 +161,16 @@ def run_slice(tender_id: str, tender_dir: Path) -> SliceResult:
 
     if specification is not None:
         try:
-            rows = read_specification(specification)
+            read = read_specification(specification)
         except Exception as exc:  # noqa: BLE001 - a file that cannot be read is not a reason to stop
             # A malformed file is a file that cannot be read. The tender is
             # still read from the other attachment.
             logger.warning("could not read %s: %s", specification, exc)
             result.unreadable.append(f"{specification.name}: {type(exc).__name__}")
-            rows = []
+            read = SpecificationRead(error=f"{type(exc).__name__}: {exc}")
 
         result.page_count = _page_count(specification)
-        assigned, unassigned = assign_to_items(rows, result.items)
+        assigned, unassigned = assign_to_items(read.rows, result.items)
         result.requirements = assigned
         result.unassigned = unassigned
 

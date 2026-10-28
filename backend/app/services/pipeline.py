@@ -33,8 +33,10 @@ from app.services.extractor import (
     extract_requirements,
 )
 from app.services.llm import LLMClient, LLMRateLimited
+from app.services.pageclassify import is_non_technical
 from app.services.tenderingest import (
     RequirementRecord,
+    SpecificationRead,
     TenderItem,
     assign_to_items,
     english_half,
@@ -416,11 +418,13 @@ def run_pipeline(
         if repo is not None:
             _save_failed(repo, result, settings)
         return result
-    rows = _read_specification(spec, tender_dir)
-    result.requirements, unassigned = assign_to_items(rows, result.items)
+    read = _read_specification(spec, tender_dir)
+    result.requirements, unassigned = assign_to_items(read.rows, result.items)
     for row in unassigned:
         # A requirement that names no item is kept and flagged: an ambiguous
         # mapping is never guessed at (FR-T9).
+        tag = row.get("page_tag") or ""
+        classified = is_non_technical(tag) if tag else False
         result.requirements.append(
             RequirementRecord(
                 text=row.get("description", ""),
@@ -428,9 +432,13 @@ def run_pipeline(
                 requirement_type=RequirementType.UNKNOWN,
                 page=row.get("page"),
                 source_section=row.get("title"),
+                extraction_method=row.get("extraction_method") or "table",
+                page_tag=tag or None,
                 review_required=True,
                 review_reason=(
-                    "the specification row names no item in the bill of quantities"
+                    f"page classified as {tag}"
+                    if classified
+                    else "the specification row names no item in the bill of quantities"
                 ),
             )
         )
@@ -646,11 +654,13 @@ def assign_categories(items: list[TenderItem]) -> list[TenderItem]:
     return items
 
 
-def _read_specification(attachment: dict, tender_dir: Path) -> list[dict]:
-    """The rows of a specification."""
+def _read_specification(attachment: dict, tender_dir: Path) -> SpecificationRead:
+    """The clauses of a specification, and what happened to each page."""
     path = tender_dir / (attachment.get("path") or "")
     if not path.exists():
-        return []
+        return SpecificationRead(
+            error=f"the specification file {path.name} does not exist"
+        )
     return read_specification(path)
 
 
@@ -684,6 +694,11 @@ def _extract_all(
 
         if requirement.review_required and not requirement.item_id:
             # An ambiguous mapping is flagged, not read.
+            added = [requirement]
+        elif requirement.page_tag and is_non_technical(requirement.page_tag):
+            # The page is not a specification: legal prose, a safety annex or
+            # boilerplate. The clause is recorded, and the model is not asked
+            # about it (D-87).
             added = [requirement]
         elif is_mangled(requirement.text):
             requirement.unreadable = True

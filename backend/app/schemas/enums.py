@@ -105,6 +105,10 @@ class ExtractionMethod(StrEnum):
     """PRD 5.3.1 - how a requirement or page was read."""
 
     TABLE = "table"
+    # A prose page: the text layer is joined into clauses and split on clause
+    # numbering and sentence boundaries, never on line breaks (D-88).
+    TEXT = "text"
+    # The atomizer's split of a compound clause.
     PROSE = "prose"
     OCR = "ocr"
 

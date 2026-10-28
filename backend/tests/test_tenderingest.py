@@ -6,15 +6,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.schemas.enums import RequirementType
+from app.schemas.enums import ExtractionMethod, LedgerStatus, RequirementType
 from app.services.tenderingest import (
     RequirementRecord,
     TenderItem,
+    assign_to_items,
     english_half,
     is_mangled,
     item_id_for,
     read_boq_csv,
     read_boq_table,
+    read_specification,
 )
 
 
@@ -226,3 +228,189 @@ def test_a_scanned_bill_of_quantities_with_inline_numbers(monkeypatch, tmp_path)
 
     assert [item.item_id for item in items] == ["1"]
     assert items[0].title.startswith("GATE VALVE")
+
+
+# --- how a page is read (step 2) -------------------------------------------
+#
+# Every PDF below is synthetic: it is drawn by the test, not taken from a
+# tender.
+
+
+def _prose_pdf(path: Path, lines: list[str]) -> None:
+    """A page with a text layer and no rules: a prose page."""
+    import pymupdf
+
+    document = pymupdf.open()
+    page = document.new_page()
+    top = 60
+    for line in lines:
+        page.insert_text((60, top), line, fontsize=9)
+        top += 14
+    document.save(path)
+    document.close()
+
+
+def _table_pdf(path: Path, rows: list[list[str]]) -> None:
+    """A page whose text is laid out in a ruled table."""
+    import pymupdf
+
+    document = pymupdf.open()
+    page = document.new_page()
+    columns = (55, 95, 235, 430, 465, 510)
+    top = 60
+    for row in rows:
+        for index, cell in enumerate(row):
+            page.insert_text((columns[index], top), cell, fontsize=7)
+        top += 18
+    bottom = top
+    for index in range(len(columns) - 1):
+        page.draw_line(
+            pymupdf.Point(columns[index], 40),
+            pymupdf.Point(columns[index], bottom),
+            width=0.5,
+        )
+    page.draw_line(
+        pymupdf.Point(columns[-1], 40), pymupdf.Point(columns[-1], bottom), width=0.5
+    )
+    for y in list(range(40, bottom, 18)):
+        page.draw_line(
+            pymupdf.Point(columns[0], y), pymupdf.Point(columns[-1], y), width=0.5
+        )
+    document.save(path)
+    document.close()
+
+
+def test_a_prose_page_is_read_as_clauses_not_as_lines(tmp_path):
+    """A line break in a PDF is a wrap. The wrapped lines are joined before
+    anything is split, so a clause is never cut in half."""
+    path = tmp_path / "spec.pdf"
+    _prose_pdf(
+        path,
+        [
+            "5.2 The pump shall be tested at a pressure of 10 bar",
+            "and the impeller material shall be stainless steel.",
+        ],
+    )
+
+    read = read_specification(path)
+
+    assert [row["extraction_method"] for row in read.rows] == [
+        ExtractionMethod.TEXT.value
+    ]
+    assert read.rows[0]["description"] == (
+        "5.2 The pump shall be tested at a pressure of 10 bar and the "
+        "impeller material shall be stainless steel."
+    )
+    assert read.pages[0].status == LedgerStatus.PARSED.value
+    assert read.pages[0].method == ExtractionMethod.TEXT.value
+
+
+def test_a_section_heading_is_context_and_not_a_requirement(tmp_path):
+    """An all-capitals heading names the scope of the clauses under it. It is
+    not a capability, and it is not emitted as a requirement."""
+    path = tmp_path / "spec.pdf"
+    _prose_pdf(
+        path,
+        [
+            "SPECIFICATION DETAILS FOR 75 HP PUMP & MOTOR",
+            "5.1 The pump shall be of vertical submersible type.",
+        ],
+    )
+
+    read = read_specification(path)
+
+    assert len(read.rows) == 1
+    assert read.rows[0]["title"] == "SPECIFICATION DETAILS FOR 75 HP PUMP & MOTOR"
+    assert read.rows[0]["description"].startswith("5.1 The pump")
+
+
+def test_a_sparse_ruled_grid_is_not_read_as_a_table(tmp_path):
+    """A ruled page of prose is a grid with almost nothing in it. Reading its
+    cells as rows is what turned legal paragraphs into requirements."""
+    path = tmp_path / "spec.pdf"
+    _table_pdf(
+        path,
+        [
+            ["", "BHARAT HEAVY ELECTRICALS LIMITED", "HPE-21101-01"],
+            ["", "", ""],
+            ["", "The Bidder(s) will not offer any inducement.", ""],
+            ["COPYRIGHT & CONFIDENTIAL", "", ""],
+            ["", "", ""],
+        ],
+    )
+
+    read = read_specification(path)
+
+    assert read.rows
+    assert all(
+        row["extraction_method"] != ExtractionMethod.TABLE.value for row in read.rows
+    )
+
+
+def test_a_ruled_table_is_read_as_a_table(tmp_path):
+    """A real table has several columns, consistent rows and text in most of
+    its cells. Its description column holds the requirements."""
+    path = tmp_path / "spec.pdf"
+    _table_pdf(
+        path,
+        [
+            ["Sr. No.", "Item", "Descriptions", "Qty", "Unit"],
+            ["1", "GATE VALVE", "Cast carbon steel body", "13", "Nos."],
+            ["2", "CHECK VALVE", "Wafer type, 8 bar", "4", "Nos."],
+        ],
+    )
+
+    read = read_specification(path)
+
+    assert [row["number"] for row in read.rows] == ["1", "2"]
+    assert read.rows[0]["description"] == "Cast carbon steel body"
+    assert read.pages[0].method == ExtractionMethod.TABLE.value
+    assert read.pages[0].status == LedgerStatus.PARSED.value
+
+
+def test_a_page_that_is_mostly_a_picture_is_ocred(monkeypatch, tmp_path):
+    """A scan often carries a typed letterhead over a picture of the page. The
+    text layer is present and says nothing; the words that matter are in the
+    image, so the page is read through OCR."""
+    import pymupdf
+
+    path = tmp_path / "scan.pdf"
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text(
+        (60, 60),
+        "File No. NH-SPS-TS016/29/2026-TWN (Computer No. 175321)",
+        fontsize=9,
+    )
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 8, 8))
+    pixmap.set_rect(pixmap.irect, (255, 255, 255))
+    page.insert_image(pymupdf.Rect(0, 0, page.rect.width, page.rect.height), pixmap=pixmap)
+    document.save(path)
+    document.close()
+
+    monkeypatch.setattr(
+        "app.services.docparser.ocr_page",
+        lambda page: "5.1 The pump shall deliver 50 m3/h at 30 m head.",
+    )
+
+    read = read_specification(path)
+
+    assert read.pages[0].method == ExtractionMethod.OCR.value
+    assert read.rows[0]["extraction_method"] == ExtractionMethod.OCR.value
+    assert read.rows[0]["description"].startswith("5.1 The pump shall deliver")
+
+
+def test_a_single_item_tender_takes_its_prose_clauses(tmp_path):
+    """A prose specification has no item column. A tender with one item is
+    not a guess: every clause of the specification is a clause of it."""
+    path = tmp_path / "spec.pdf"
+    _prose_pdf(path, ["5.1 The pump shall deliver 50 m3/h at 30 m head."])
+    rows = read_specification(path).rows
+
+    assigned, unassigned = assign_to_items(
+        rows, [TenderItem(item_id="1", title="SUBMERSIBLE PUMP")]
+    )
+
+    assert not unassigned
+    assert assigned[0].item_id == "1"
+    assert assigned[0].extraction_method == ExtractionMethod.TEXT.value

@@ -23,6 +23,7 @@ from app.services.pipeline import (
     run_pipeline,
     stage_keys,
 )
+from app.services.tenderingest import SpecificationRead
 
 
 class FakeSession:
@@ -158,24 +159,26 @@ def _stage_keys_for(attachments: list[dict]) -> dict[str, str]:
     )
 
 
-def _spec_rows() -> list[dict]:
+def _spec_rows() -> SpecificationRead:
     """The rows of a specification: one per item in the bill of quantities."""
-    return [
-        {
-            "row": 1,
-            "page": 1,
-            "number": "1",
-            "title": "GATE VALVE SIZE 150 MM CLASS 150",
-            "description": "Cast carbon steel Face to face distance 267mm",
-        },
-        {
-            "row": 2,
-            "page": 1,
-            "number": "2",
-            "title": "CHECK VALVE 100 MM",
-            "description": "Wafer check valve Working pressure 8 bar",
-        },
-    ]
+    return SpecificationRead(
+        rows=[
+            {
+                "row": 1,
+                "page": 1,
+                "number": "1",
+                "title": "GATE VALVE SIZE 150 MM CLASS 150",
+                "description": "Cast carbon steel Face to face distance 267mm",
+            },
+            {
+                "row": 2,
+                "page": 1,
+                "number": "2",
+                "title": "CHECK VALVE 100 MM",
+                "description": "Wafer check valve Working pressure 8 bar",
+            },
+        ]
+    )
 
 
 def _spec_pdf(path: Path) -> None:
@@ -471,15 +474,17 @@ def test_a_requirement_that_names_no_item_is_flagged_not_guessed(tmp_path, monke
     monkeypatch.setattr(
         pipeline,
         "_read_specification",
-        lambda a, d: [
-            {
-                "row": 1,
-                "page": 1,
-                "number": "99",
-                "title": "SOMETHING ELSE",
-                "description": "A requirement that names no item",
-            }
-        ],
+        lambda a, d: SpecificationRead(
+            rows=[
+                {
+                    "row": 1,
+                    "page": 1,
+                    "number": "99",
+                    "title": "SOMETHING ELSE",
+                    "description": "A requirement that names no item",
+                }
+            ]
+        ),
     )
 
     result = run_pipeline("T1", directory, attachments, repo=FakeRepo())
@@ -496,15 +501,17 @@ def test_a_line_that_cannot_be_read_is_flagged_not_dropped(tmp_path, monkeypatch
     monkeypatch.setattr(
         pipeline,
         "_read_specification",
-        lambda a, d: [
-            {
-                "row": 1,
-                "page": 1,
-                "number": "1",
-                "title": "GATE VALVE SIZE 150 MM CLASS 150",
-                "description": "� mangled �",
-            }
-        ],
+        lambda a, d: SpecificationRead(
+            rows=[
+                {
+                    "row": 1,
+                    "page": 1,
+                    "number": "1",
+                    "title": "GATE VALVE SIZE 150 MM CLASS 150",
+                    "description": "� mangled �",
+                }
+            ]
+        ),
     )
 
     result = run_pipeline("T1", directory, attachments, repo=FakeRepo())
