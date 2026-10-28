@@ -1376,6 +1376,14 @@ stopped stages say they stopped.
   the machine restarted while it was in `retrieving` with 10 of its results
   stored. It has no report, so the phase's own numbers (calls, tokens, retries,
   wall clock) are still the first run's, which stopped at the limit.
+- **The tender row was repaired on 28 Oct.** The killed run left
+  `GEM_9671792_Valve` at `processing` while its own extraction stage said
+  `rate_limited` - the process died between the last stage write and the status
+  write. Its status was set to `rate_limited`, which is what the stage says and
+  what keeps the report labelled incomplete; the requirements were not touched.
+  A crash inside that window leaves a tender that the run guard (D-82) refuses
+  and that a re-upload does not reschedule, which is recorded in Phase 13 as an
+  open gap rather than worked around in the data layer.
 - **The gold slice is not exported or labelled.** The exporter exists; nothing
   has been labelled, by design - the labels are the user's.
 - **Neon is still half-embedded** (3,904 of 20,891 chunks) and predates the
@@ -1439,6 +1447,15 @@ makes the work visible without letting a partial list pass for a complete one.
   was exercised through the generator and the component through a fake
   `EventSource`. A real connection through Vite's dev proxy is the check that
   remains.
+- **A tender left at `processing` by a crash is stuck.** The status is written
+  after the stages, so a process that dies in between leaves a row that says
+  `processing` while its extraction stage is terminal. The stream then reports
+  `partial: true` forever, a run is refused (D-82), and a re-upload does not
+  reschedule it, because only a `failed` or `rate_limited` duplicate is read
+  again (D-74). Found on the Phase 12 tender on 28 Oct and repaired by hand;
+  the fix is to write the status from the stage states at read time or to
+  reschedule a duplicate whose stages are all terminal, and it is not in this
+  phase.
 - A tender that is `failed` cannot be run, and nothing in the UI offers to
   re-read it yet; re-uploading the same file is the current path (D-74).
 
