@@ -1,0 +1,14 @@
+tender                                         status       pages       reqs  tech  cert  comm  elig  info  unk   unk%   <25   looks tech method                    
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+GEM_9671792_Valve.pdf                          rate_limite  2/2         35    35    0     0     0     0     0     0%     0     0          table=35                  
+specification_for_gem_2026-07-28-13-19-47_24   rate_limite  2/2         35    35    0     0     0     0     0     0%     0     0          table=35                  
+Tender_Matching_Intern_Assignment.pdf          failed       0/2         0     0     0     0     0     0     0     -      0     0                                    
+GeM-Bidding-9713870.pdf                        done         22/49       336   26    0     0     0     0     310   92%    0     16         ocr=1 text=335            
+GEM_9935793_Valve.pdf                          incomplete   2/2         2     1     0     0     0     0     1     50%    0     1          text=2                    
+GEM_9935572_Pump.pdf                           done         8/8         90    2     0     0     0     0     88    98%    0     5          text=90                   
+GEM_9848272_Valve.pdf                          done         22/22       230   69    2     0     0     0     159   69%    9     20         ocr=191 table=15 text=24  
+
+7 tenders, 728 requirements, 558 unknown (77% of requirements)
+unknown with a number+unit or a spec keyword: 42 (an upper bound on mislabelled technical clauses)
+unknown shorter than 25 characters: 9 (fragments)
+tenders with 0 pages logged: 1 of 7

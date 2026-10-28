@@ -1687,20 +1687,71 @@ Before (step 0, `docs/extraction_audit_before.txt`):
 | GEM_9848272_Valve | 16 | 10 | 62% | 1 | 4 | 0/15 |
 | **total** | **231** | **173** | **75%** | **34** | **32** | **0 logged** |
 
-After: **not yet measured.** The audit reads stored requirements, so the new
-reader has to re-ingest a tender to change them, and a re-ingest gives every
-requirement a new `uuid4`. `GEM_9671792_Valve` is the tender whose 21-pair
-gold slice is waiting for retrieval labels, so re-ingesting it now would
-invalidate the ids the reviewer is labelling. The re-ingest is therefore
-pending a decision on where it runs (a copy of the database, or the live one
-followed by a fresh gold-slice export).
+After (the re-ingest ran on a copy of the database, `tender_audit`, so the live
+ids and the gold slice stay valid; `docs/extraction_audit_after.txt`):
+
+| tender | reqs | typed | unknown | unknown % | <25 chars | looks technical | pages |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| GEM_9671792_Valve (rate limited) | 35 | 35 | 0 | 0% | 0 | 0 | 2/2 |
+| specification_for_gem_... (rate limited) | 35 | 35 | 0 | 0% | 0 | 0 | 2/2 |
+| Tender_Matching_Intern_Assignment | 0 | 0 | 0 | - | 0 | 0 | 0/2 |
+| GeM-Bidding-9713870 | 336 | 26 | 310 | 92% | 0 | 16 | 22/49 |
+| GEM_9935793_Valve (incomplete) | 2 | 1 | 1 | 50% | 0 | 1 | 2/2 |
+| GEM_9935572_Pump | 90 | 2 | 88 | 98% | 0 | 5 | 8/8 |
+| GEM_9848272_Valve | 230 | 71 | 159 | 69% | 9 | 20 | 22/22 |
+| **total** | **728** | **170** | **558** | **77%** | **9** | **42** | **6 of 7 logged** |
+
+What the numbers say, and what they do not:
+
+- **The fragments are gone**: 34 unknown clauses under 25 characters became 9,
+  and the reader now reads 728 clauses where the old one read 231. The drop is
+  not "fewer clauses": it is 3x more clauses with a quarter of the fragments.
+- **Pages are accounted for**: 0 of 7 tenders had a ledger before, 6 of 7 do
+  now. The seventh is the PRD PDF, which has no attachments.
+- **Typed clauses went from 58 to 170**, and the unknown clauses that still
+  look technical fell from 18% of the unknown mass to 7.5% (32 of 173, then
+  42 of 558).
+- **The unknown share barely moved (75% to 77%)**, and that is the honest
+  headline: the remaining unknown mass is no longer fragments or legal prose.
+  Of 558 unknown clauses, 369 name no BOQ item and 188 are on non-technical
+  pages (one is neither). The reader now reads far more of a multi-item
+  tender's specification than the old table reader did, and most of what it
+  reads cannot be attached to an item, so it is recorded and not assessed
+  (FR-T9).
+- **Two tenders are still rate limited**: the provider's limit is 200,000
+  tokens *per day*, and the day was spent. `GEM_9671792_Valve` read 2 of its
+  pages and the specification PDF read both, but their extractions stopped.
+  Their rows above are therefore a partial read, not a final one.
+- `GeM-Bidding-9713870` reads 22 of a declared 49 pages, which is not the
+  reader: two of its attachments share the path `raw/slafds`, so the collector
+  wrote one over the other and the 49-page document is not on disk. The
+  ledger is complete for the 22-page document it did read.
+
+**What the after-audit found**
+
+- **A skipped stage was not a no-op** (fixed, D-93). Every pass that had
+  nothing to do re-read the file and wrote raw clauses over the model's
+  output, replacing every type with `unknown` and giving every requirement a
+  new `uuid4`. The first after-audit run measured that bug, not the pipeline.
+- **`GEM_9935793_Valve` reads 0 BOQ items**, and that is correct: all seven of
+  its attachments are classified `spec`, so it has no bill of quantities. The
+  new `incomplete` status says so instead of calling the tender done.
+- **A two-column datasheet without ruling lines is read as one 2,066-character
+  clause** (`GEM_9935793_Valve`, page 1). The lines are `Label  Value` pairs
+  with no terminal punctuation, so the prose joiner merges the whole page, and
+  the re-typer then mines "15 bar" out of it as `diameter = 15 bar`. This is a
+  reader regression from step 2, not fixed yet.
 
 **Left open**
 
 - The retrieval baseline (recall@3 / recall@20) waits on the gold labels.
 - The three filter steps (category visibility, document-kind filter,
   product-link filter) are not started, in that order.
-- `docs/extraction_audit_before.txt` was written by PowerShell redirection as
-  UTF-16 and has been rewritten as UTF-8 with the same content.
+- The label/value split for datasheets with no ruling lines, and the
+  re-typer's guard against a clause that is a whole page.
+- The collector writes two attachments with the same URL-derived name to one
+  path (`raw/slafds`), so one document is lost.
+- The two rate-limited tenders need a day with tokens left before their
+  extraction can finish.
 - `backend/data/catalogue.zip` (458 MB) is still untracked and deliberately not
   committed.

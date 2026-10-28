@@ -94,8 +94,31 @@ def _dsn(url: str) -> str:
 
 
 def _counts(cur, tender_id: str) -> TenderCounts:
-    cur.execute("select filename, status, page_count from tender where id = %s", (tender_id,))
-    filename, status, page_count = cur.fetchone()
+    cur.execute("select filename, status from tender where id = %s", (tender_id,))
+    filename, status = cur.fetchone()
+
+    # The ledger describes the specification, whose page count is not the
+    # wrapper's. A ledger of 22 pages for a 7-page wrapper is right, not an
+    # over-read (D-91): the declared count is the document that was read.
+    cur.execute(
+        """
+        select coalesce(
+            (
+                select a.pages
+                from tender_attachment a
+                where a.id = (
+                    select p.attachment_id
+                    from tender_page p
+                    where p.tender_id = %(tender)s and p.attachment_id is not null
+                    limit 1
+                )
+            ),
+            (select t.page_count from tender t where t.id = %(tender)s)
+        )
+        """,
+        {"tender": tender_id},
+    )
+    page_count = cur.fetchone()[0]
 
     cur.execute(
         """
