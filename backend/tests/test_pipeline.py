@@ -481,7 +481,7 @@ def test_a_requirement_that_names_no_item_is_flagged_not_guessed(tmp_path, monke
                     "page": 1,
                     "number": "99",
                     "title": "SOMETHING ELSE",
-                    "description": "A requirement that names no item",
+                    "description": "The valve shall be supplied with a test certificate",
                 }
             ]
         ),

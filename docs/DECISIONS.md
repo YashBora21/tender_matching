@@ -1516,6 +1516,47 @@ layer is exact. Trust the largest table on the page - rejected: on the BHEL
 specification the largest grid is a sparse page furniture grid with 25% of
 its cells filled.
 
+---
+
+**D-89 - A fragment is dropped or joined to the clause before it, and never
+sent to the model.**
+
+*Decision:* `drop_fragments` runs on the requirement rows after they are
+assigned to items and before the extraction stage. A clause is a fragment
+when any of these holds:
+
+- it is only a clause number (`5.2`, `24.13.10`, `3.`);
+- it holds a run of two or more characters no document prints (`|`, `_`,
+  `[`, `]`), or more than 35% of its characters are those;
+- it is shorter than 25 characters and names no unit and no specification
+  word;
+- it has no value, no verb from the requirement vocabulary and no
+  specification word;
+- it starts in lowercase, which is the tail of a clause whose beginning was
+  lost at a page break or in a table cell.
+
+A fragment is joined to the clause before it when that clause is the same
+item and page and does **not** end a sentence; otherwise it is dropped. Both
+conditions are required: the task's "starts lowercase, or the previous line
+has no terminal punctuation" would join `"o r violate its provisions."` onto
+whatever finished sentence came before it, which is corruption, not
+recovery. A line that is mangled is never dropped: an unreadable line is a
+gap, and a gap has to stay visible. The counts are logged and written to the
+requirements stage's detail as JSON, so the report can say how much of a
+tender was noise.
+
+*Why:* the fragments in the database (`"5.2"`, `"o r violate its
+provisions."`, `"[a7__|rpmcassamproncontactoR"`) were sent to the model one
+call each and came back as `unknown` requirements, which the report then
+counted as unsupported. Dropping them before the call is cheaper and keeps
+the unknown count meaning what it says.
+
+*Alternatives:* Drop every line under 25 characters - rejected: `"125 MM
+minimum"` is 15 characters and is a requirement. Drop every line with no
+verb - rejected: `"Type Flanged ends both side"` is a specification row and
+has no verb. Keep the fragments and mark them unknown - rejected: that is
+the flood this change exists to stop.
+
 
 
 

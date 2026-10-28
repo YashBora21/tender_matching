@@ -1040,3 +1040,150 @@ def _title_key(text: str) -> str:
     are the same item, and the sizes and classes are what say so.
     """
     return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+
+# --- fragments --------------------------------------------------------------
+
+# A clause shorter than this that names no unit and no specification word is
+# a fragment of a line, not a requirement.
+FRAGMENT_MIN_CHARS = 25
+
+# A clause with more than this share of characters that are neither letters
+# nor ordinary punctuation is OCR noise, not a clause.
+FRAGMENT_JUNK_SHARE = 0.35
+
+# A clause that is only a number: "5.2", "24.13.10", "3."
+_PURE_NUMBER = re.compile(r"^\d{1,3}(?:\.\d{1,3}){0,4}[.)]?$")
+
+# The characters a clause may hold. Anything else is what a bad scan leaves
+# behind: "|", "_", "[", "]" and the rest of the OCR residue.
+_JUNK = re.compile(r"[^0-9A-Za-z\u0900-\u097F\s.,;:/%\-()\"'&+=°*]")
+
+# A run of two such characters is never a word: it is the residue of a table
+# border or a broken glyph, however many letters surround it.
+_JUNK_RUN = re.compile(r"[^0-9A-Za-z\u0900-\u097F\s.,;:/%\-()\"'&+=°*]{2,}")
+
+# The words that name something a specification states. A short clause that
+# names one of these is worth keeping; a short clause that names none is not.
+SPEC_WORDS = re.compile(
+    r"\b(?:size|diameter|bore|head|flow|capacity|discharge|pressure|rating|"
+    r"class|material|thickness|efficiency|power|speed|voltage|frequency|"
+    r"temperature|weight|length|width|height|grade|standard|tolerance|test|"
+    r"type|design|connection|flange|flanged|screwed|welded|body|bonnet|seat|"
+    r"stem|wedge|disc|impeller|casing|shaft|bearing|seal|ends|surface)\b",
+    re.IGNORECASE,
+)
+
+# The verbs a requirement is written with. A clause with no verb and no value
+# states nothing a document could be compared against.
+VERB_WORDS = re.compile(
+    r"\b(?:shall|should|must|is|are|be|been|has|have|had|will|can|may|"
+    r"provide|provided|supply|supplied|fit|fitted|make|made|use|used|"
+    r"test|tested|design|designed|give|given|include|included|ensure|"
+    r"maintain|operate|comply|conform|meet|require|required|accept|allow|"
+    r"permit|work|works|mounted|connected|suitable|capable)\b",
+    re.IGNORECASE,
+)
+
+
+@dataclass
+class FragmentReport:
+    """How many clauses were dropped, and how many were joined to one before."""
+
+    dropped: int = 0
+    merged: int = 0
+
+
+def _junk_share(text: str) -> float:
+    """The share of a clause's characters that no document would print."""
+    characters = [character for character in text if not character.isspace()]
+    if not characters:
+        return 1.0
+    junk = sum(1 for character in characters if _JUNK.match(character))
+    return junk / len(characters)
+
+
+def is_fragment(text: str) -> bool:
+    """True when a clause is a piece of a line rather than a requirement.
+
+    A fragment is a clause number on its own ("5.2"), a line with more OCR
+    residue than words, a line too short to state anything that names no
+    unit and no specification word, a line with no verb and no value, or a
+    line that starts in lowercase - which is the tail of a clause whose
+    beginning was lost at a page break or a table cell.
+    """
+    clause = " ".join((text or "").split())
+    if not clause:
+        return True
+    if _PURE_NUMBER.match(clause):
+        return True
+    if _JUNK_RUN.search(clause) or _junk_share(clause) > FRAGMENT_JUNK_SHARE:
+        return True
+    if clause[0].islower():
+        return True
+    if (
+        len(clause) < FRAGMENT_MIN_CHARS
+        and not NUMBER_WITH_UNIT.search(clause)
+        and not SPEC_WORDS.search(clause)
+    ):
+        return True
+    if (
+        not re.search(r"\d", clause)
+        and not VERB_WORDS.search(clause)
+        and not SPEC_WORDS.search(clause)
+    ):
+        return True
+    return False
+
+
+def _continues(previous: str, fragment: str) -> bool:
+    """True when a fragment is the rest of the clause before it.
+
+    Both signals must agree: the fragment starts in lowercase, and the clause
+    before it does not end a sentence. Joining a lowercase tail onto a
+    finished sentence would corrupt the sentence, which is what happened when
+    a fragment was merged into whatever line came before it.
+    """
+    text = (fragment or "").strip()
+    if not text or not text[0].islower():
+        return False
+    return not previous.rstrip().endswith((".", "!", "?", ";", ":"))
+
+
+def drop_fragments(
+    requirements: list[RequirementRecord],
+) -> tuple[list[RequirementRecord], FragmentReport]:
+    """Drop the clauses that are not requirements, joining the ones that are.
+
+    A fragment is never guessed at: it is either the rest of the clause
+    before it, in which case it is joined to it, or it is dropped and
+    counted. The count is what a report needs to say how much of a tender was
+    noise instead of requirements.
+    """
+    kept: list[RequirementRecord] = []
+    report = FragmentReport()
+
+    for requirement in requirements:
+        if requirement.unreadable or is_mangled(requirement.text):
+            # A line that cannot be read is a gap, not a fragment: dropping
+            # it would turn "I could not read this" into "the tender did not
+            # say it".
+            kept.append(requirement)
+            continue
+        if not is_fragment(requirement.text):
+            kept.append(requirement)
+            continue
+        previous = kept[-1] if kept else None
+        if (
+            previous is not None
+            and previous.item_id == requirement.item_id
+            and previous.page == requirement.page
+            and _continues(previous.text, requirement.text)
+        ):
+            previous.text = f"{previous.text.rstrip()} {requirement.text.strip()}"
+            # The span pointed into the old text, which no longer exists.
+            previous.source_span = None
+            report.merged += 1
+            continue
+        report.dropped += 1
+    return kept, report

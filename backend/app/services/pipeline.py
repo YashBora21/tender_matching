@@ -19,6 +19,7 @@ change to one stage invalidates only what comes after it.
 from __future__ import annotations
 
 import hashlib
+import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -39,6 +40,7 @@ from app.services.tenderingest import (
     SpecificationRead,
     TenderItem,
     assign_to_items,
+    drop_fragments,
     english_half,
     is_mangled,
     read_boq_items,
@@ -442,10 +444,25 @@ def run_pipeline(
                 ),
             )
         )
+    # A clause that is a fragment of a line is not a requirement: it is
+    # either the rest of the clause before it, or noise (step 3).
+    result.requirements, fragments = drop_fragments(result.requirements)
+    if fragments.dropped or fragments.merged:
+        # Kept in the stage's detail so the report can say how much of the
+        # tender was noise instead of requirements.
+        requirements_state.detail = json.dumps(
+            {"dropped": fragments.dropped, "merged": fragments.merged}
+        )
+        logger.info(
+            "tender %s: %d fragment(s) dropped, %d merged",
+            tender_id,
+            fragments.dropped,
+            fragments.merged,
+        )
+
     requirements_state.status = STATUS_DONE if changed(STAGE_REQUIREMENTS) else STATUS_SKIPPED
     requirements_state.rows = len(result.requirements)
     result.stages[STAGE_REQUIREMENTS] = requirements_state
-
     # --- the extraction (the only stage that calls the LLM) ---
     extraction_state = StageState(
         name=STAGE_EXTRACTION,
