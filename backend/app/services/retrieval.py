@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import func, literal, literal_column, or_, select, text
@@ -65,6 +66,12 @@ class Candidate:
     manufacturer: Optional[str] = None
     model: Optional[str] = None
     family: Optional[str] = None
+    # What the document itself declares it covers, and the file name it came
+    # from. Entity validity is decided from this metadata, not from the
+    # passage (D-94), and the title is part of what a chunk is embedded with
+    # (D-97).
+    model_or_family: Optional[str] = None
+    document_title: Optional[str] = None
     # True when the document is about a family of products rather than one
     # model. Evidence from it is family-level: uncertain applicability
     # (PRD 4).
@@ -162,6 +169,13 @@ def _category_filter(category: Optional[str]):
     return or_(document.c.category.is_(None), document.c.category.notin_(others))
 
 
+def _document_title(path: Optional[str]) -> Optional[str]:
+    """The title a document is known by: its file name without the extension."""
+    if not path:
+        return None
+    return Path(str(path)).stem or None
+
+
 def keyword_search(
     session: Session,
     query_text: str,
@@ -198,6 +212,8 @@ def keyword_search(
             product.c.model,
             product.c.family,
             product.c.is_family_level,
+            document.c.model_or_family,
+            document.c.path,
             func.ts_rank_cd(chunk.c.search_vector, _tsquery(_or_query(query))).label("rank"),
         )
         .select_from(chunk)
@@ -238,6 +254,8 @@ def keyword_search(
             model=row[8],
             family=row[9],
             is_family_level=bool(row[10]),
+            model_or_family=row[11],
+            document_title=_document_title(row[12]),
         )
         if wanted:
             lowered = candidate.text.lower()
@@ -304,6 +322,8 @@ def semantic_search(
             product.c.model,
             product.c.family,
             product.c.is_family_level,
+            document.c.model_or_family,
+            document.c.path,
             distance.label("distance"),
         )
         .select_from(chunk)
@@ -334,6 +354,8 @@ def semantic_search(
             model=row[8],
             family=row[9],
             is_family_level=bool(row[10]),
+            model_or_family=row[11],
+            document_title=_document_title(row[12]),
         )
         for row in session.execute(statement)
     ]

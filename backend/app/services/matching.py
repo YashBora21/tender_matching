@@ -152,6 +152,8 @@ def match_requirement(
             requirement_value=requirement_value,
             requirement_unit=requirement_unit,
             requirement_operator=requirement_operator,
+            manufacturer_name=manufacturer_name,
+            model=model,
             client=client,
         )
         result.llm_calls += outcome.llm_calls
@@ -208,6 +210,8 @@ def _match_candidate(
     requirement_value: Optional[str] = None,
     requirement_unit: Optional[str] = None,
     requirement_operator: Optional[str] = None,
+    manufacturer_name: Optional[str] = None,
+    model: Optional[str] = None,
     client: Optional[LLMClient] = None,
 ) -> MatchResult:
     """Read one passage and say what it means for the requirement."""
@@ -240,9 +244,16 @@ def _match_candidate(
         quote=fact.quote,
         page_text=page_text,
         passage=candidate.text,
-        manufacturer=candidate.manufacturer,
-        model=fact.model or candidate.model,
-        family=candidate.family,
+        # Entity validity is decided from the document row, never from the
+        # passage: a datasheet page that does not repeat its own manufacturer
+        # is still the manufacturer's document (D-94).
+        document_manufacturer=candidate.manufacturer,
+        document_model=candidate.model,
+        document_family=candidate.family,
+        document_model_or_family=candidate.model_or_family,
+        expected_manufacturer=manufacturer_name,
+        expected_model=model,
+        is_family_level=candidate.is_family_level,
         attribute=fact.attribute,
         value=fact.value,
         requirement_unit=requirement_unit,

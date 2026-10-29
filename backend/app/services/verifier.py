@@ -21,6 +21,7 @@ from typing import Optional
 
 from app.comparison.units import is_compatible
 from app.schemas.enums import Applicability, VerificationOutcome
+from app.services.textnorm import normalise_text
 
 
 class Layer(IntEnum):
@@ -80,23 +81,25 @@ class VerificationReport:
 
 def normalise_whitespace(text: str) -> str:
     """Collapse all whitespace so a re-wrapped quote still matches."""
-    return re.sub(r"\s+", " ", text).strip()
+    return normalise_text(text)
 
 
 def check_citation(quote: Optional[str], page_text: Optional[str]) -> LayerResult:
     """Layer 1: the quote must exist on the cited page.
 
-    The quote is matched whitespace-normalized (FR-23). A quote that is longer
-    than the page cannot be verified, and an empty quote is a failure, not a
-    pass: an unverifiable claim is exactly what this layer exists to catch.
+    The quote is matched with the same normalisation the reader used to store
+    the chunk (FR-23): control characters removed, Unicode folded and
+    whitespace collapsed. A quote that is longer than the page cannot be
+    verified, and an empty quote is a failure, not a pass: an unverifiable
+    claim is exactly what this layer exists to catch.
     """
     if not quote or not quote.strip():
         return LayerResult(Layer.CITATION, False, "the claim carries no quote to verify")
     if page_text is None:
         return LayerResult(Layer.CITATION, False, "the cited page has no text to check the quote against")
 
-    needle = normalise_whitespace(quote)
-    haystack = normalise_whitespace(page_text)
+    needle = normalise_text(quote)
+    haystack = normalise_text(page_text)
     if not needle:
         return LayerResult(Layer.CITATION, False, "the claim carries no quote to verify")
     if needle in haystack:
@@ -118,54 +121,133 @@ def check_citation(quote: Optional[str], page_text: Optional[str]) -> LayerResul
     )
 
 
-def check_entity(
-    passage: Optional[str],
-    manufacturer: Optional[str],
-    model: Optional[str],
-    family: Optional[str] = None,
-) -> LayerResult:
-    """Layer 2: the passage must be about this manufacturer and model or family.
+def _identity(text: Optional[str]) -> str:
+    """The form a product name is compared in: folded and case-insensitive."""
+    return normalise_text(text or "").casefold()
 
-    A model or family name in the passage identifies the product. The
-    manufacturer's name does not have to appear: a datasheet page saying
-    "GV series body is SS316" is about the manufacturer whose catalogue it is,
-    and the page it came from is already provenance.
 
-    When the model is named the evidence is model-level. When only the family is
-    named the evidence is family-level: uncertain applicability, not a confirmed
-    match (PRD 4).
+def _names(needle: Optional[str], haystack: Optional[str]) -> bool:
+    """True when `needle` is a whole name inside `haystack`.
+
+    Product names are written with a suffix ("GV-100/150", "Series 75/76") and
+    a plain substring test would make "GV-10" match "GV-100". The boundary
+    test keeps a shorter model from matching a longer one.
     """
-    if not passage:
-        return LayerResult(Layer.ENTITY, False, "the passage is empty")
+    left = _identity(needle)
+    right = _identity(haystack)
+    if not left or not right:
+        return False
+    return bool(re.search(rf"(?<![a-z0-9]){re.escape(left)}(?![a-z0-9])", right))
 
-    lowered = passage.lower()
 
-    model_named = bool(model) and model.lower() in lowered
-    family_named = bool(family) and family.lower() in lowered
+def check_entity(
+    *,
+    document_manufacturer: Optional[str] = None,
+    document_model: Optional[str] = None,
+    document_family: Optional[str] = None,
+    document_model_or_family: Optional[str] = None,
+    expected_manufacturer: Optional[str] = None,
+    expected_model: Optional[str] = None,
+    expected_family: Optional[str] = None,
+    is_family_level: bool = False,
+) -> LayerResult:
+    """Layer 2: the *document's metadata* must identify the product under test.
 
-    if model_named:
-        return LayerResult(Layer.ENTITY, True, "the passage names the model under test")
-    if family_named:
+    The passage is not evidence about which product it describes: a datasheet
+    page that says "body is SS316" names no model, and reading that silence as
+    a failure of the product was wrong. Provenance is the document row - the
+    manufacturer it belongs to and the model, family or model-or-family it
+    declares. The verifier compares that metadata with the product the run is
+    answering for.
+
+    When the document declares the model the evidence is model-level. When it
+    declares only a family (or declares no product at all) the evidence is
+    family-level: uncertain applicability, not a confirmed match (PRD 4).
+    """
+    if expected_manufacturer:
+        if not document_manufacturer:
+            return LayerResult(
+                Layer.ENTITY,
+                False,
+                "the document declares no manufacturer to check against",
+            )
+        if not _names(expected_manufacturer, document_manufacturer):
+            return LayerResult(
+                Layer.ENTITY,
+                False,
+                f"the document belongs to {document_manufacturer}, not {expected_manufacturer}",
+            )
+
+    declared = [
+        value
+        for value in (document_model, document_family, document_model_or_family)
+        if value
+    ]
+
+    if expected_model:
+        # The document names the model under test: the strongest provenance.
+        for value in (document_model, document_model_or_family):
+            if _names(expected_model, value):
+                if is_family_level:
+                    return LayerResult(
+                        Layer.ENTITY,
+                        True,
+                        f"the document names the model {expected_model} but covers a family",
+                        borderline=True,
+                    )
+                return LayerResult(
+                    Layer.ENTITY, True, f"the document declares the model {expected_model}"
+                )
+        # The document names the family, or a family-level catalogue: the
+        # evidence applies to the family, not confirmed for this model.
+        if expected_family and any(
+            _names(expected_family, value)
+            for value in (document_family, document_model_or_family)
+        ):
+            return LayerResult(
+                Layer.ENTITY,
+                True,
+                f"the document covers the {expected_family} family, not the model {expected_model}",
+                borderline=True,
+            )
+        if is_family_level or document_family or document_model_or_family:
+            named = document_family or document_model_or_family or "a family"
+            return LayerResult(
+                Layer.ENTITY,
+                True,
+                f"the document covers {named}, not the model {expected_model}",
+                borderline=True,
+            )
+        if document_model:
+            return LayerResult(
+                Layer.ENTITY,
+                False,
+                f"the document is about {document_model}, not {expected_model}",
+            )
+        return LayerResult(
+            Layer.ENTITY,
+            False,
+            f"the document declares no model to check {expected_model} against",
+        )
+
+    # No model is under test: the document's own declaration is the provenance.
+    if document_model and not is_family_level:
+        return LayerResult(
+            Layer.ENTITY, True, f"the document declares the model {document_model}"
+        )
+    if declared:
         return LayerResult(
             Layer.ENTITY,
             True,
-            f"the passage names the {family} family, not the specific model",
+            f"the document declares {declared[0]} at family level",
             borderline=True,
         )
-
-    # No model or family identified the passage. The manufacturer name is then
-    # the only provenance signal available.
-    if manufacturer:
-        if manufacturer.lower() in lowered:
-            return LayerResult(Layer.ENTITY, True, "the passage names the manufacturer")
-        return LayerResult(
-            Layer.ENTITY, False, f"the passage does not mention {manufacturer}"
-        )
-    if model or family:
-        return LayerResult(
-            Layer.ENTITY, False, "the passage does not identify the model or family"
-        )
-    return LayerResult(Layer.ENTITY, True, "no model was specified to check against")
+    return LayerResult(
+        Layer.ENTITY,
+        True,
+        "the document declares no model, so the evidence is family-level",
+        borderline=True,
+    )
 
 
 def check_semantic(
@@ -242,9 +324,14 @@ def verify(
     quote: Optional[str],
     page_text: Optional[str],
     passage: Optional[str],
-    manufacturer: Optional[str] = None,
-    model: Optional[str] = None,
-    family: Optional[str] = None,
+    document_manufacturer: Optional[str] = None,
+    document_model: Optional[str] = None,
+    document_family: Optional[str] = None,
+    document_model_or_family: Optional[str] = None,
+    expected_manufacturer: Optional[str] = None,
+    expected_model: Optional[str] = None,
+    expected_family: Optional[str] = None,
+    is_family_level: bool = False,
     attribute: Optional[str] = None,
     value: Optional[str] = None,
     requirement_unit: Optional[str] = None,
@@ -255,7 +342,18 @@ def verify(
     """Run all four layers and return the report."""
     report = VerificationReport()
     report.layers.append(check_citation(quote, page_text))
-    report.layers.append(check_entity(passage, manufacturer, model, family))
+    report.layers.append(
+        check_entity(
+            document_manufacturer=document_manufacturer,
+            document_model=document_model,
+            document_family=document_family,
+            document_model_or_family=document_model_or_family,
+            expected_manufacturer=expected_manufacturer,
+            expected_model=expected_model,
+            expected_family=expected_family,
+            is_family_level=is_family_level,
+        )
+    )
     report.layers.append(check_semantic(passage, attribute, value))
     report.layers.append(
         check_comparison(requirement_unit, capability_unit, operator_is_known, convertible)

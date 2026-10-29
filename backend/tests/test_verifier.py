@@ -42,15 +42,70 @@ def test_a_quote_longer_than_the_page_fails() -> None:
     assert result.passed is False
 
 
-def test_the_entity_layer_fails_when_the_manufacturer_is_absent() -> None:
-    result = check_entity("The body is SS316", "Acme Valves", "GV-100")
+def test_the_entity_layer_uses_the_document_metadata_not_the_passage() -> None:
+    """A datasheet page that does not repeat its own manufacturer is still the
+    manufacturer's document. The old check searched the passage for the name
+    and failed every page that did not say it (D-94)."""
+    result = check_entity(
+        document_manufacturer="Acme Valves",
+        document_model="GV-100",
+        expected_manufacturer="Acme Valves",
+        expected_model="GV-100",
+    )
+    assert result.passed is True
+    assert result.borderline is False
+
+
+def test_the_entity_layer_fails_when_the_document_belongs_to_another_manufacturer() -> None:
+    result = check_entity(
+        document_manufacturer="Other Valves",
+        document_model="GV-100",
+        expected_manufacturer="Acme Valves",
+        expected_model="GV-100",
+    )
+    assert result.passed is False
+
+
+def test_the_entity_layer_fails_when_the_document_names_another_model() -> None:
+    result = check_entity(
+        document_manufacturer="Acme Valves",
+        document_model="GV-200",
+        expected_manufacturer="Acme Valves",
+        expected_model="GV-100",
+    )
     assert result.passed is False
 
 
 def test_the_entity_layer_marks_family_evidence_as_borderline() -> None:
-    result = check_entity("The GV series body is SS316", "Acme Valves", "GV-100", "GV")
+    result = check_entity(
+        document_manufacturer="Acme Valves",
+        document_family="GV",
+        expected_manufacturer="Acme Valves",
+        expected_model="GV-100",
+        expected_family="GV",
+    )
     assert result.passed is True
     assert result.borderline is True
+
+
+def test_a_document_with_no_model_declaration_is_family_level_evidence() -> None:
+    result = check_entity(
+        document_manufacturer="Acme Valves",
+        expected_manufacturer="Acme Valves",
+    )
+    assert result.passed is True
+    assert result.borderline is True
+
+
+def test_a_quote_is_normalised_like_the_chunk_it_came_from() -> None:
+    """A control character in the page's text layer does not break a quote.
+
+    The reader strips control characters before storing a chunk, so the
+    verifier has to strip them from the page it reads back too (D-94).
+    """
+    page = "Maximum operating\x0ctemperature is 60 degC."
+    result = check_citation("Maximum operating temperature is 60 degC.", page)
+    assert result.passed is True
 
 
 def test_the_semantic_layer_fails_when_the_value_is_absent() -> None:
@@ -73,8 +128,10 @@ def test_a_failed_layer_makes_the_whole_verification_fail() -> None:
         quote="The valve is rated at 250 degC.",
         page_text=PAGE_TEXT,
         passage="The body is SS316",
-        manufacturer="Acme Valves",
-        model="GV-100",
+        document_manufacturer="Acme Valves",
+        document_model="GV-100",
+        expected_manufacturer="Acme Valves",
+        expected_model="GV-100",
         attribute="operating_temperature",
         value="250",
         requirement_unit="degC",
@@ -91,9 +148,11 @@ def test_family_level_evidence_is_reported_as_family_level_not_as_a_pass() -> No
         quote="The GV series body is SS316",
         page_text="The GV series body is SS316",
         passage="The GV series body is SS316",
-        manufacturer="Acme Valves",
-        model="GV-100",
-        family="GV",
+        document_manufacturer="Acme Valves",
+        document_family="GV",
+        expected_manufacturer="Acme Valves",
+        expected_model="GV-100",
+        expected_family="GV",
         attribute="material_grade",
         value="SS316",
     )

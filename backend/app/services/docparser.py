@@ -32,6 +32,7 @@ from app.comparison import attributes as attrs
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.services.evidence import load_doc_types
+from app.services.textnorm import strip_control
 
 logger = get_logger(__name__)
 
@@ -84,19 +85,16 @@ class ParsedDocument:
     ocr_pages: list[int] = field(default_factory=list)
 
 
-# Control characters a PDF's text layer can carry and PostgreSQL will not
-# store: a NUL byte in a text column is an error, not a character.
-_CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-
-
 def _clean(text: str) -> str:
     """Strip the control characters a document's text layer carries.
 
     A PDF's text layer can carry a NUL byte from its glyph mapping, and
     PostgreSQL refuses a NUL in a text column. The byte is not information:
-    it is an artefact of how the file was written.
+    it is an artefact of how the file was written. The rule lives in
+    `textnorm`, which the verifier also uses, so a chunk and the quote checked
+    against it are cleaned the same way.
     """
-    return _CONTROL_CHARS.sub("", text)
+    return strip_control(text)
 
 
 def _is_heading(line: str) -> bool:

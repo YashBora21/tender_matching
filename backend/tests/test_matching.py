@@ -108,6 +108,57 @@ def test_a_quote_that_is_not_on_the_page_fails_the_citation_layer(monkeypatch):
     assert result.quote == "Body of body shall be SS316"
 
 
+def test_a_page_that_does_not_repeat_the_manufacturer_is_still_that_manufacturers_evidence(
+    monkeypatch,
+):
+    """The entity layer reads the document row, not the passage (D-94).
+
+    A CIRCOR brochure page that says only "body shall be SS316" used to fail
+    the entity layer because the word CIRCOR was not on the page.
+    """
+    from app.services import matching
+    from app.services.retrieval import Candidate
+
+    candidate = Candidate(
+        chunk_id="c1",
+        document_id="d1",
+        text="Body of body shall be SS316",
+        page=1,
+        manufacturer="Acme Valves",
+        model="GV-100",
+    )
+    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(matching, "_page_text", lambda s, c: candidate.text)
+
+    client = FakeClient(
+        {
+            "requirements": [
+                {
+                    "found": True,
+                    "attribute": "body material",
+                    "value": "SS316",
+                    "unit": None,
+                    "operator": "eq",
+                    "model": None,
+                    "quote": "Body of body shall be SS316",
+                }
+            ]
+        }
+    )
+
+    result = match_requirement(
+        FakeSession(),
+        "Body shall be SS316",
+        requirement_value="SS316",
+        requirement_operator="eq",
+        manufacturer_name="Acme Valves",
+        client=client,
+    )
+
+    assert result.status is RequirementStatus.FULL_MATCH
+    assert result.verification_outcome.value == "passed"
+
+
 def test_an_extraction_that_fails_is_flagged_not_silently_empty(monkeypatch):
     """A failed extraction is a failure the reviewer can see."""
     from app.services import matching

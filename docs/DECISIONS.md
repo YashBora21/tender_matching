@@ -1753,3 +1753,35 @@ second copy could disagree with it.
 
 
 
+
+## D-94 - Entity validity reads the document row, and a quote is normalised like a chunk
+
+`check_entity` no longer searches the passage for the manufacturer, model or
+family. It takes the document's metadata (`document.manufacturer_id` ->
+`manufacturer.name`, `product.model`, `product.family`,
+`document.model_or_family`) and the product the run is answering for, and
+compares the two. A document that declares the model is model-level evidence;
+a document that declares only a family, or declares no product at all, is
+family-level evidence and goes to review. A document that declares a
+different manufacturer or a different model fails the layer. A passage that
+never repeats its own manufacturer is not a failure: it is still that
+manufacturer's document.
+
+`check_citation` and the reader share `app/services/textnorm.py`:
+`normalise_text` folds Unicode compatibility forms, turns vertical tab and
+form feed into a space, removes the remaining control characters and
+collapses whitespace. The reader's `_clean` uses the same `strip_control`, so
+a quote and the chunk it came from cannot be normalised differently.
+
+*Why:* the gold slice showed CIRCOR evidence failing entity validity with
+"the passage does not mention CIRCOR" on a CIRCOR brochure page. The passage
+was never the provenance; the document row is. The citation layer also only
+collapsed spaces, so a form feed in the page's text layer could make a
+verbatim quote unmatchable.
+
+*Alternatives:* keep the passage check as a fallback when the metadata is
+silent - rejected: it re-introduces the exact failure, and a silent document
+is family-level evidence, not a pass. Normalise only the quote and not the
+page - rejected: the two sides must use one function or they drift.
+
+---

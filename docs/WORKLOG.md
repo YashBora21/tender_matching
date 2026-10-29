@@ -1755,3 +1755,30 @@ What the numbers say, and what they do not:
   extraction can finish.
 - `backend/data/catalogue.zip` (458 MB) is still untracked and deliberately not
   committed.
+
+---
+
+## Phase 17 - match-side fixes (started 2026-10-29)
+
+The tender-side filter steps are held. This phase works on the match side:
+what the verifier trusts, what the comparison can evaluate, how a retrieval
+query is built, and what a chunk is embedded with.
+
+### Step 1 - entity validity and citation normalisation (D-94)
+
+- `services/textnorm.py`: one `normalise_text` / `strip_control` used by the
+  reader and the verifier.
+- `services/verifier.py`: `check_entity` takes document metadata and the
+  expected product, never the passage. `check_citation` normalises the quote
+  and the page with `normalise_text`.
+- `services/retrieval.py`: a `Candidate` carries `model_or_family` and
+  `document_title`; both searches select them.
+- `services/matching.py`: passes the document metadata and the run's
+  manufacturer/model into `verify`.
+
+*Measured:* 480 unit tests pass, 8 skip without a database. The gold-slice
+CIRCOR row P01 ("the passage does not mention CIRCOR") is the failure this
+step removes; it cannot be re-measured until the database is running.
+
+**Open:** the Docker daemon is down, so the database-backed suite and any
+re-measurement wait on it.
