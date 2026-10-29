@@ -96,10 +96,60 @@ def _confidence(
     return ConfidenceLevel.LOW
 
 
+def build_query(
+    item_title: Optional[str] = None,
+    requirement_text: Optional[str] = None,
+    *,
+    attribute: Optional[str] = None,
+    value: Optional[str] = None,
+    unit: Optional[str] = None,
+) -> str:
+    """The text a requirement is retrieved with (D-96).
+
+    A stored clause is often a bare fragment - "1500 RPM", "Class 150" - and
+    on its own it names no subject: a search for it matches every page that
+    mentions the number. The query carries three things instead of one:
+
+    - the BOQ item's title, which names the thing being bought;
+    - the clause itself, which names the obligation;
+    - the attribute, value and unit the normalizer read, which name what is
+      being asked even when the clause is abbreviated.
+
+    A part is added once. The item title and the clause usually repeat each
+    other ("GATE VALVE, SIZE-150 MM, CLASS-150" and "Flanged Gate valve class
+    150"), and repeating a word would weight it twice in the keyword rank.
+    """
+    parts: list[str] = []
+    seen: set[str] = set()
+
+    def add(text: Optional[str]) -> None:
+        cleaned = " ".join((text or "").split())
+        if not cleaned:
+            return
+        key = cleaned.casefold()
+        if key in seen:
+            return
+        seen.add(key)
+        parts.append(cleaned)
+
+    add(item_title)
+    add(requirement_text)
+    add(
+        " ".join(
+            part
+            for part in ((attribute or "").replace("_", " ").strip(), value, unit)
+            if part
+        )
+    )
+    return " ".join(parts)
+
+
 def match_requirement(
     session: Session,
     requirement_text: str,
     *,
+    item_title: Optional[str] = None,
+    requirement_attribute: Optional[str] = None,
     requirement_value: Optional[str] = None,
     requirement_unit: Optional[str] = None,
     requirement_operator: Optional[str] = None,
@@ -128,9 +178,18 @@ def match_requirement(
             model=model,
         )
 
+    # The search is asked with the item's title and the read attribute, not
+    # with the bare clause: a fragment names no subject on its own (D-96).
+    query = build_query(
+        item_title,
+        requirement_text,
+        attribute=requirement_attribute,
+        value=requirement_value,
+        unit=requirement_unit,
+    )
     candidates = search(
         session,
-        requirement_text,
+        query,
         limit=limit,
         manufacturer_name=manufacturer_name,
         category=category,

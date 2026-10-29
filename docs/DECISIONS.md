@@ -1817,3 +1817,32 @@ one attribute. Treating a lower class as partial - rejected: a lower pressure
 rating is a failing value, not a close one.
 
 ---
+
+## D-96 - A requirement is retrieved with its item, its attribute and its value
+
+`matching.build_query` composes the retrieval text from the BOQ item's title,
+the clause, and the attribute/value/unit the normalizer read. A part is added
+once, so a title and a clause that repeat each other do not weight the same
+words twice in the keyword rank. `match_requirement` takes `item_title` and
+`requirement_attribute`, and `runs._assess` passes `item.name` and
+`requirement.attribute`; the composed query is what `search` receives.
+
+The atomizer keeps a `context` on every atom - the section heading plus the
+piece the atom was cut from - and `retrieval_text` adds it only when the atom
+does not carry a clause marker of its own ("1500 RPM", "Class 150"). It also
+splits two sentences on one line and a second obligation joined by "and".
+
+*Why:* the gold slice's clauses are often bare fragments ("Class 150",
+"1500 RPM"), and searching for the fragment alone matches every page that
+mentions the number. The subject lives in the item, and the attribute lives in
+what the normalizer already read; both were being thrown away before the
+search. The atomizer is still a module fix, not wired into production
+extraction (D-89 note); the query construction is the operational fix.
+
+*Alternatives:* make the extractor rewrite the clause before searching -
+rejected: that spends LLM tokens to do a deterministic join, and it would
+change the clause the verifier is answering. Prefix every atom with its
+context unconditionally - rejected: a self-contained clause then repeats
+itself and dilutes its own distinctive words.
+
+---

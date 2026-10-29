@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.schemas.enums import RequirementStatus
-from app.services.matching import match_requirement
+from app.services.matching import build_query, match_requirement
 
 
 class FakeSession:
@@ -36,6 +36,59 @@ def test_a_requirement_nothing_answers_is_no_evidence_found(monkeypatch):
     assert result.score == 0.0
     assert result.review_required is True
     assert result.reason
+
+
+# --- the retrieval query (D-96) --------------------------------------------
+
+
+def test_the_query_carries_the_item_the_clause_and_what_was_read() -> None:
+    query = build_query(
+        "GATE VALVE, SIZE-150 MM, CLASS-150",
+        "Flanged Gate valve class 150",
+        attribute="pressure_class",
+        value="CLASS150",
+    )
+    assert "GATE VALVE" in query
+    assert "Flanged Gate valve class 150" in query
+    # The canonical term is spelled the way a document spells it.
+    assert "pressure class" in query
+    assert "CLASS150" in query
+
+
+def test_a_query_part_is_added_once() -> None:
+    """The item title and the clause repeat each other; a repeated part would
+    weight the same words twice in the keyword rank for no reason."""
+    query = build_query("Gate valve class 150", "Gate valve class 150")
+    assert query == "Gate valve class 150"
+
+
+def test_a_bare_clause_is_searched_with_its_item_and_attribute(monkeypatch):
+    """The stored clause may be "1500 RPM". Searching for it alone matches
+    every page that mentions a speed; the item names the pump (D-96)."""
+    from app.services import matching
+
+    seen: dict = {}
+
+    def search(session, text, **kwargs):
+        seen["text"] = text
+        return []
+
+    monkeypatch.setattr(matching, "search", search)
+
+    match_requirement(
+        FakeSession(),
+        "1500 RPM",
+        item_title="CENTRIFUGAL PUMP 50 M3/HR",
+        requirement_attribute="rotational_speed",
+        requirement_value="1500",
+        requirement_unit="rpm",
+        client=FakeClient({}),
+    )
+
+    assert "CENTRIFUGAL PUMP" in seen["text"]
+    assert "rotational speed" in seen["text"]
+    assert "1500" in seen["text"]
+    assert seen["text"] != "1500 RPM"
 
 
 def test_a_passage_that_states_nothing_is_no_evidence_found(monkeypatch):

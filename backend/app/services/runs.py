@@ -416,6 +416,11 @@ def _assess(
     outcome = matcher(
         session,
         text,
+        # What the clause is about, and what the normalizer read from it: the
+        # retrieval query is built from all three, so a bare fragment is not
+        # searched for on its own (D-96).
+        item_title=item.get("name"),
+        requirement_attribute=requirement.get("attribute"),
         requirement_value=requirement.get("value"),
         requirement_unit=requirement.get("unit"),
         # The stored operator is what makes "minimum 1500 RPM" a `gte`

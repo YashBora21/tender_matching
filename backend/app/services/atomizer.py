@@ -27,6 +27,18 @@ _SPLIT_PATTERNS = (
     re.compile(r",\s+(?:and|with|plus)\s+", re.IGNORECASE),
     # A semicolon or ";" between two clauses.
     re.compile(r"\s*;\s*"),
+    # A comma that introduces a fresh obligation: "..., and shall be tested".
+    re.compile(r",\s*(?:and\s+)?(?=(?:shall|must|should)\b)", re.IGNORECASE),
+    # "The body shall be SS316 and the trim shall be 13Cr" - a second
+    # obligation, recognised by the clause marker that follows it.
+    re.compile(
+        r"\s+(?:and|whereas)\s+(?=[^,;]{0,60}\b(?:shall|must|should)\b)",
+        re.IGNORECASE,
+    ),
+    # Two sentences on one line. A decimal point is not a sentence break.
+    re.compile(r"(?<=[a-z0-9\)\]%])[.!?]\s+(?=[A-Z0-9])"),
+    # A blank line is a paragraph break.
+    re.compile(r"\n\s*\n"),
 )
 
 # A requirement with two or more measurable values is compound.
@@ -74,11 +86,39 @@ class AtomicRequirement:
     end: int
     # The parent clause this was split out of, if any.
     parent_clause: Optional[str] = None
+    # The text the atom was cut from: a section heading when there is one,
+    # otherwise the whole clause. It is what makes a short atom retrievable
+    # without guessing a subject.
+    context: Optional[str] = None
     requirement_type: RequirementType = RequirementType.TECHNICAL
     extraction_method: ExtractionMethod = ExtractionMethod.PROSE
     # True when the atomizer was not sure it had found every part.
     review_required: bool = False
     review_reason: Optional[str] = None
+
+    @property
+    def retrieval_text(self) -> str:
+        """The text to search with: the atom, with its context when bare.
+
+        An atom that carries its own obligation ("... shall be ...") stands
+        alone. A bare value ("1500 RPM", "Class 150") does not say what it is
+        about, so the clause it was cut from is searched with it. The marker
+        words come from the vocabulary file, so this agrees with the
+        normalizer about what a clause sounds like.
+        """
+        context = (self.context or "").strip()
+        if not context or context == self.text.strip():
+            return self.text
+        lowered = self.text.casefold()
+        stands_alone = any(
+            re.search(rf"\b{re.escape(marker)}\b", lowered)
+            for marker in attrs.clause_markers()
+        )
+        if stands_alone:
+            return self.text
+        if self.text.strip().casefold() in context.casefold():
+            return context
+        return f"{context} {self.text}".strip()
 
 
 def _split_spans(text: str) -> list[tuple[int, int]]:
@@ -120,6 +160,10 @@ def _is_compound(piece: str) -> bool:
     shall be SS316" is one.
     """
     if _MULTIPLE_VALUES.search(piece):
+        return True
+    # Two obligations in one piece are two requirements, whatever punctuation
+    # separates them: "The body shall be SS316 and the trim shall be 13Cr".
+    if len(_clause_hint().findall(piece)) >= 2:
         return True
     adjunct = _material_adjunct()
     if adjunct is not None and adjunct.search(piece):
@@ -195,6 +239,7 @@ def atomize(
                 start=0,
                 end=len(text),
                 parent_clause=parent_clause,
+                context=parent_clause or text,
                 requirement_type=requirement_type,
                 extraction_method=extraction_method,
             )
@@ -210,7 +255,7 @@ def atomize(
         if _HEADING.match(piece) and parent_clause is None:
             parent_clause = piece.rstrip(":").strip()
             continue
-            continue
+        context = f"{parent_clause} {piece}".strip() if parent_clause else piece
         if _is_compound(piece):
             for sub_start, sub_end in _split_again(piece, start):
                 sub = text[sub_start:sub_end].strip()
@@ -222,6 +267,7 @@ def atomize(
                         start=sub_start,
                         end=sub_end,
                         parent_clause=parent_clause,
+                        context=context,
                         requirement_type=requirement_type,
                         extraction_method=extraction_method,
                     )
@@ -233,6 +279,7 @@ def atomize(
                 start=start,
                 end=end,
                 parent_clause=parent_clause,
+                context=context,
                 requirement_type=requirement_type,
                 extraction_method=extraction_method,
             )
@@ -245,6 +292,7 @@ def atomize(
                 start=0,
                 end=len(text),
                 parent_clause=parent_clause,
+                context=parent_clause or text,
                 requirement_type=requirement_type,
                 extraction_method=extraction_method,
             )

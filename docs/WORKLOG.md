@@ -1797,3 +1797,16 @@ re-measurement wait on it.
 
 *Measured:* 489 unit tests pass, 8 skip without a database. The gold-slice
 P02 and P03 cases are covered by tests; re-measuring them needs the database.
+
+### Step 3 - retrieval query from the item, and atomizer context (D-96)
+
+- `services/matching.py`: `build_query`, and `item_title` /
+  `requirement_attribute` on `match_requirement`; `search` gets the composed
+  query.
+- `services/runs.py`: `_assess` passes the item's name and the requirement's
+  stored attribute.
+- `services/atomizer.py`: a `context` on every atom and `retrieval_text`;
+  sentence, paragraph, "and"-obligation and comma-obligation splits; a piece
+  with two clause markers is compound.
+
+*Measured:* 496 unit tests pass, 8 skip without a database.

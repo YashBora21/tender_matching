@@ -216,6 +216,10 @@ def test_a_technical_requirement_is_matched_and_a_commercial_one_is_not():
     # The LLM was asked about exactly one of the two requirements.
     assert [call["text"] for call in calls] == ["Body shall be SS316"]
     assert calls[0]["category"] == "valves"
+    # The item's title and the read attribute travel with the clause: they are
+    # what a bare clause is retrieved with (D-96).
+    assert calls[0]["item_title"] == "GATE VALVE SIZE 150 MM"
+    assert "requirement_attribute" in calls[0]
     assert outcome.results == 2
     assert outcome.status == RunStatus.DONE.value
 

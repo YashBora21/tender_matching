@@ -82,3 +82,44 @@ def test_splitting_does_not_explode_into_empty_pieces() -> None:
     parts = atomize("; ".join(["trim 13Cr"] * 30))
     assert len(parts) == 30
     assert all(part.text.strip() for part in parts)
+
+
+def test_two_sentences_on_one_line_are_two_requirements() -> None:
+    """A description that puts two obligations in one paragraph is two
+    requirements, not one (FR-13). A decimal point is not a sentence break."""
+    parts = atomize("Body shall be SS316. Trim shall be 13Cr.")
+    texts = [part.text for part in parts]
+    assert len(texts) == 2
+    assert texts[0] == "Body shall be SS316"
+    assert "Trim shall be 13Cr" in texts[1]
+
+
+def test_a_second_obligation_joined_by_and_is_split() -> None:
+    parts = atomize("The body shall be SS316 and the trim shall be 13Cr")
+    texts = [part.text for part in parts]
+    assert len(texts) == 2
+    assert "body shall be SS316" in texts[0]
+    assert "trim shall be 13Cr" in texts[1]
+
+
+def test_a_bare_atom_is_searched_with_the_clause_it_came_from() -> None:
+    """A split-off value names no subject. "1500 RPM" alone matches every
+    page that mentions a speed, so its clause is carried with it (D-96)."""
+    parts = atomize("Body shall be SS316, protection IP68, speed 1500 RPM")
+    by_text = {part.text: part for part in parts}
+
+    # A self-contained atom is left as it is.
+    assert by_text["Body shall be SS316"].retrieval_text == "Body shall be SS316"
+
+    # A bare value carries the clause, so the subject is in the search.
+    bare = by_text["speed 1500 RPM"]
+    assert "Body shall be SS316" in bare.retrieval_text
+    assert "speed 1500 RPM" in bare.retrieval_text
+    assert bare.retrieval_text.count("speed 1500 RPM") == 1
+
+
+def test_a_heading_is_part_of_the_context_of_its_sub_clauses() -> None:
+    parts = atomize("3.2 Materials: a) body SS316 b) trim 13Cr")
+    assert parts
+    for part in parts:
+        assert part.retrieval_text.startswith("3.2 Materials")
