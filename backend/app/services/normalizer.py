@@ -182,6 +182,10 @@ def _categorical_value(text: str, spec: attrs.AttributeSpec) -> Optional[str]:
         match = pattern.search(text) if pattern else None
         if match:
             return match.group(0).upper().replace(" ", "")
+    if spec.canonical_term == shapes.get("pressure_class"):
+        pattern = attrs.pressure_class_pattern()
+        match = pattern.search(text) if pattern else None
+        return match.group(0).upper().replace(" ", "") if match else None
     if spec.canonical_term == shapes.get("certification"):
         pattern = attrs.certification_pattern()
         match = pattern.search(text) if pattern else None

@@ -62,6 +62,7 @@ class Vocabulary:
     certification_pattern: str = ""
     ip_pattern: str = ""
     dn_pattern: str = ""
+    pressure_class_pattern: str = ""
     # The wording a requirement uses to state its obligation. One list, so a
     # phrase is not mandatory in one place and informative in another.
     mandatory_markers: tuple[str, ...] = ()
@@ -150,6 +151,7 @@ def load_vocabulary(path: Optional[str] = None) -> Vocabulary:
         certification_pattern=data.get("certification_pattern", ""),
         ip_pattern=data.get("ip_pattern", ""),
         dn_pattern=data.get("dn_pattern", ""),
+        pressure_class_pattern=data.get("pressure_class_pattern", ""),
         mandatory_markers=tuple(language.get("mandatory_markers", ())),
         optional_markers=tuple(language.get("optional_markers", ())),
         clause_markers=tuple(language.get("clause_markers", ())),

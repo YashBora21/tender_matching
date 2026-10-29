@@ -1785,3 +1785,35 @@ is family-level evidence, not a pass. Normalise only the quote and not the
 page - rejected: the two sides must use one function or they drift.
 
 ---
+
+## D-95 - Pressure class is an ordered categorical, and a missing evaluator is review
+
+`pressure_class` is a canonical attribute in the vocabulary file, with a
+value-shape pattern (`Class 150`, `PN16`). The registry keeps an
+attribute-specific evaluator map beside the value-type registry:
+`pressure_class` -> `evaluate_ordered_categorical`. A higher class covers a
+lower requirement (Class 300 meets Class 150); a lower class is
+`missing_capability`, because the document states a capability with a failing
+value. ASME class and PN are different systems and are not converted here:
+that comparison needs review.
+
+`get_evaluator` asks for the attribute's own rule first, then the value type.
+An attribute with neither returns `no_evidence_found` + `needs_review` with
+`ATTRIBUTE_NOT_MAPPED`; it is never `unsupported_requirement`, which PRD 4
+reserves for a clause no document could answer.
+
+The carbon-steel material group now holds `cast carbon steel`, `A216`,
+`A216 WCB`, `A216 Gr WCB`, `A216 WCC`, `A216 Gr WCC` and their `ASTM`
+spellings. They are data in `attribute_vocabulary.json`, not code.
+
+*Why:* the gold slice's P02 ("Flanged Gate valve class 150") came out
+`unsupported_requirement` because "class" was not a canonical term, and P03
+("cast carbon steel" vs "Carbon Steel, A216 Gr WCC") came out
+`GRADE_NOT_RECOGNISED`. Both are technical clauses a document can answer.
+
+*Alternatives:* a new `ORDERED_CATEGORICAL` value type - rejected: the value
+type is a database enum, so it needs a migration for a rule that belongs to
+one attribute. Treating a lower class as partial - rejected: a lower pressure
+rating is a failing value, not a close one.
+
+---

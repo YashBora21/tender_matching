@@ -102,3 +102,15 @@ def test_ip_rating_is_recognised() -> None:
     result = normalize("Enclosure shall have IP68 protection")
     assert result.attribute == "ip_rating"
     assert result.text_value == "IP68"
+
+
+def test_pressure_class_is_recognised() -> None:
+    result = normalize("Flanged Gate valve class 150")
+    assert result.attribute == "pressure_class"
+    assert result.text_value == "CLASS150"
+
+
+def test_a_pn_pressure_class_is_recognised() -> None:
+    result = normalize("Valve shall be PN16")
+    assert result.attribute == "pressure_class"
+    assert result.text_value == "PN16"

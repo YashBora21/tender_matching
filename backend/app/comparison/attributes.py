@@ -43,6 +43,7 @@ __all__ = [
     "material_satisfies",
     "normalise_token",
     "optional_markers",
+    "pressure_class_pattern",
 ]
 
 # Mandatory and optional wording. The lists live in the vocabulary file, so
@@ -83,6 +84,9 @@ def _patterns(vocabulary_path: Optional[str]):
         re.compile(vocabulary.certification_pattern, re.IGNORECASE) if vocabulary.certification_pattern else None,
         re.compile(vocabulary.ip_pattern, re.IGNORECASE) if vocabulary.ip_pattern else None,
         re.compile(vocabulary.dn_pattern, re.IGNORECASE) if vocabulary.dn_pattern else None,
+        re.compile(vocabulary.pressure_class_pattern, re.IGNORECASE)
+        if vocabulary.pressure_class_pattern
+        else None,
     )
 
 
@@ -122,6 +126,11 @@ def dn_pattern() -> Optional[re.Pattern]:
     return _patterns(vocabulary_path())[3]
 
 
+def pressure_class_pattern() -> Optional[re.Pattern]:
+    """The pattern that recognises a pressure class (Class 150, PN16)."""
+    return _patterns(vocabulary_path())[4]
+
+
 def _value_shaped_attribute(text: str) -> Optional[AttributeSpec]:
     """The attribute whose *value shape* the text contains, if any.
 
@@ -134,7 +143,9 @@ def _value_shaped_attribute(text: str) -> Optional[AttributeSpec]:
     renaming an attribute there does not break this.
     """
     vocabulary = load_vocabulary()
-    material_pattern, certification_pattern, ip_pattern, dn_pattern = _patterns(vocabulary_path())
+    material_pattern, certification_pattern, ip_pattern, dn_pattern, class_pattern = _patterns(
+        vocabulary_path()
+    )
     shapes = vocabulary.value_shapes
     if certification_pattern and certification_pattern.search(text):
         return vocabulary.by_term.get(shapes.get("certification", ""))
@@ -142,6 +153,8 @@ def _value_shaped_attribute(text: str) -> Optional[AttributeSpec]:
         return vocabulary.by_term.get(shapes.get("ip_rating", ""))
     if dn_pattern and dn_pattern.search(text):
         return vocabulary.by_term.get(shapes.get("nominal_size", ""))
+    if class_pattern and class_pattern.search(text):
+        return vocabulary.by_term.get(shapes.get("pressure_class", ""))
     if material_pattern and material_pattern.search(text):
         return vocabulary.by_term.get(shapes.get("material_grade", ""))
     return None
@@ -166,6 +179,9 @@ def has_value_shape(spec: AttributeSpec, text: str) -> bool:
         return bool(pattern and pattern.search(text))
     if spec.canonical_term == shapes.get("nominal_size"):
         pattern = dn_pattern()
+        return bool(pattern and pattern.search(text))
+    if spec.canonical_term == shapes.get("pressure_class"):
+        pattern = pressure_class_pattern()
         return bool(pattern and pattern.search(text))
     return False
 

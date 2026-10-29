@@ -66,6 +66,10 @@ class ComparisonRequest:
     capability_unit: Optional[str]
     capability_text_value: Optional[str]
     capability_range: Optional[tuple[float, float]]
+    # The canonical attribute the comparison is about, when it is known. An
+    # attribute can have a rule of its own (a pressure class is ordered, an IP
+    # rating is not), so the registry is asked for it before the value type.
+    attribute: Optional[str] = None
     # True when the capability is documented for a product family, not the model.
     capability_is_family_level: bool = False
     # True when the capability came from OCR text (PRD 9 - lower confidence).
@@ -532,6 +536,100 @@ def evaluate_material(request: ComparisonRequest) -> Evaluation:
     )
 
 
+# Pressure classes are ordered, but they are not numbers in one scale: an
+# ASME class and a PN class are different systems. A token is read as
+# (system, value); the evaluator only compares tokens in the same system.
+_CLASS_TOKEN = re.compile(
+    r"\b(?:(?:ANSI|ASME)\s+)?CLASS\s*-?\s*(?P<class>\d{1,4})\b"
+    r"|\bPN\s*-?\s*(?P<pn>\d{1,3})\b",
+    re.IGNORECASE,
+)
+_BARE_CLASS = re.compile(r"(?<![\w.])(\d{1,4})(?![\w.])")
+
+
+def _pressure_classes(text: Optional[str]) -> list[tuple[str, int]]:
+    """The pressure classes a value names, as (system, number).
+
+    "Class 150" and a bare "150" are the ASME class system; "PN16" is the PN
+    system. A capability that lists several classes names the range the
+    product is available in.
+    """
+    if not text:
+        return []
+    found: list[tuple[str, int]] = []
+    for match in _CLASS_TOKEN.finditer(text):
+        if match.group("class") is not None:
+            found.append(("class", int(match.group("class"))))
+        elif match.group("pn") is not None:
+            found.append(("pn", int(match.group("pn"))))
+    if found:
+        return found
+    # The model often answers with the number alone ("150"). The attribute is
+    # already known to be a pressure class, so the bare number is one.
+    return [("class", int(value)) for value in _BARE_CLASS.findall(text)]
+
+
+def evaluate_ordered_categorical(request: ComparisonRequest) -> Evaluation:
+    """Pressure class: a higher class covers a lower requirement.
+
+    A Class 300 valve meets a Class 150 requirement. A lower class is a
+    documented capability with a failing value, so it is *missing capability*,
+    not an absence of evidence. Classes in different systems (ASME class vs
+    PN) are not converted here: a conversion is a fact about a standard, and
+    guessing one would be a comparison nobody can check.
+    """
+    required_text = request.requirement_text_value or request.requirement_value
+    offered_text = request.capability_text_value or request.capability_value
+    required = _pressure_classes(required_text)
+    offered = _pressure_classes(offered_text)
+    if not required or not offered:
+        return Evaluation(
+            RequirementStatus.NO_EVIDENCE_FOUND,
+            0.0,
+            "pressure class comparison needs a class on both sides",
+            needs_review=True,
+            code=ReasonCode.VALUE_MISSING,
+        )
+
+    required_systems = {system for system, _ in required}
+    offered_systems = {system for system, _ in offered}
+    if required_systems != offered_systems:
+        return Evaluation(
+            RequirementStatus.NO_EVIDENCE_FOUND,
+            0.0,
+            f"pressure classes {required_text} and {offered_text} are in different systems",
+            needs_review=True,
+            code=ReasonCode.VALUE_MISSING,
+        )
+
+    # The requirement may list the classes it accepts; the least demanding one
+    # is the floor. The capability may list the classes it is made in; the
+    # highest one is what it can be supplied as.
+    required_floor = min(value for _, value in required)
+    offered_top = max(value for _, value in offered)
+    system = next(iter(required_systems))
+    label = "Class" if system == "class" else "PN"
+    if offered_top >= required_floor:
+        return Evaluation(
+            RequirementStatus.FULL_MATCH,
+            1.0,
+            f"{label} {offered_top} meets the required {label} {required_floor}",
+        )
+    return Evaluation(
+        RequirementStatus.MISSING_CAPABILITY,
+        0.0,
+        f"{label} {offered_top} does not meet the required {label} {required_floor}",
+    )
+
+
+# A rule that belongs to one attribute rather than to a whole value type. The
+# attribute is the canonical term from the vocabulary, so adding a rule is a
+# change here and naming the attribute is a change to the data file.
+ATTRIBUTE_EVALUATORS: dict[str, Evaluator] = {
+    "pressure_class": evaluate_ordered_categorical,
+}
+
+
 REGISTRY: dict[ValueType, Evaluator] = {
     ValueType.NUMERIC: evaluate_numeric,
     ValueType.RANGE: evaluate_range,
@@ -542,8 +640,17 @@ REGISTRY: dict[ValueType, Evaluator] = {
 }
 
 
-def get_evaluator(value_type: Optional[ValueType]) -> Optional[Evaluator]:
-    """The evaluator for a value type, or None when there is none (FR-29)."""
+def get_evaluator(
+    value_type: Optional[ValueType], attribute: Optional[str] = None
+) -> Optional[Evaluator]:
+    """The evaluator for an attribute, or its value type, or None (FR-29).
+
+    An attribute with a rule of its own wins over the value type: pressure
+    class is categorical, but its values are ordered. An attribute with no
+    evaluator has no rule, and `evaluate` sends it to review.
+    """
+    if attribute and attribute in ATTRIBUTE_EVALUATORS:
+        return ATTRIBUTE_EVALUATORS[attribute]
     if value_type is None:
         return None
     return REGISTRY.get(value_type)
@@ -551,7 +658,7 @@ def get_evaluator(value_type: Optional[ValueType]) -> Optional[Evaluator]:
 
 def evaluate(request: ComparisonRequest, value_type: Optional[ValueType]) -> Evaluation:
     """Run the registered evaluator. Unknown type means review, never a guess."""
-    evaluator = get_evaluator(value_type)
+    evaluator = get_evaluator(value_type, request.attribute)
     if evaluator is None:
         return Evaluation(
             RequirementStatus.NO_EVIDENCE_FOUND,

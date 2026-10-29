@@ -1782,3 +1782,18 @@ step removes; it cannot be re-measured until the database is running.
 
 **Open:** the Docker daemon is down, so the database-backed suite and any
 re-measurement wait on it.
+
+### Step 2 - pressure class, material aliases, no-evaluator review (D-95)
+
+- `data/attribute_vocabulary.json`: `pressure_class` attribute and value
+  shape; `pressure_class_pattern`; the carbon-steel alias group.
+- `comparison/vocabulary.py`, `comparison/attributes.py`: load and expose the
+  new pattern.
+- `services/normalizer.py`: read `Class 150` / `PN16` as a pressure class.
+- `comparison/registry.py`: `evaluate_ordered_categorical`, the
+  attribute-specific evaluator map, and `ComparisonRequest.attribute`.
+- `services/matching.py`: resolve the model's attribute wording to the
+  canonical term and pass it to the comparison.
+
+*Measured:* 489 unit tests pass, 8 skip without a database. The gold-slice
+P02 and P03 cases are covered by tests; re-measuring them needs the database.

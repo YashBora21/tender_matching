@@ -307,6 +307,7 @@ def _match_candidate(
             capability_unit=fact.unit,
             capability_text_value=fact.value,
             capability_range=None,
+            attribute=_canonical_term(fact.attribute),
             capability_is_family_level=report.applicability is Applicability.FAMILY_LEVEL,
         ),
         value_type,
@@ -420,6 +421,7 @@ def _from_cached_fact(
             capability_unit=cached["unit"],
             capability_text_value=cached["value"],
             capability_range=None,
+            attribute=_canonical_term(cached["attribute"]),
             capability_is_family_level=family_level,
         ),
         value_type,
@@ -546,6 +548,21 @@ def _value_type(attribute: Optional[str]):
         return None
     spec = attribute_by_term(attribute) or find_attribute(attribute)
     return spec.value_type if spec is not None else None
+
+
+def _canonical_term(attribute: Optional[str]) -> Optional[str]:
+    """The canonical attribute a raw name resolves to, or None.
+
+    The comparison registry may hold a rule for one attribute (pressure class
+    is ordered). The rule is keyed on the canonical term, so the raw wording
+    the model used has to be resolved first.
+    """
+    from app.comparison.attributes import attribute_by_term, find_attribute
+
+    if not attribute:
+        return None
+    spec = attribute_by_term(attribute) or find_attribute(attribute)
+    return spec.canonical_term if spec is not None else None
 
 
 def _canonical_attribute(session, attribute: Optional[str]) -> Optional[str]:

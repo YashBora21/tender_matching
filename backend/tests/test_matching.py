@@ -159,6 +159,53 @@ def test_a_page_that_does_not_repeat_the_manufacturer_is_still_that_manufacturer
     assert result.verification_outcome.value == "passed"
 
 
+def test_a_pressure_class_uses_its_ordered_evaluator(monkeypatch):
+    """The model answers "class", the registry has a rule for the canonical
+    term `pressure_class`, and Class 300 meets a Class 150 requirement
+    (D-95)."""
+    from app.services import matching
+    from app.services.retrieval import Candidate
+
+    candidate = Candidate(
+        chunk_id="c1",
+        document_id="d1",
+        text="Valve is available in Class 150, 300 and 600",
+        page=1,
+        manufacturer="Acme Valves",
+        model="GV-100",
+    )
+    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(matching, "_page_text", lambda s, c: candidate.text)
+
+    client = FakeClient(
+        {
+            "requirements": [
+                {
+                    "found": True,
+                    "attribute": "class",
+                    "value": "300",
+                    "unit": None,
+                    "operator": "eq",
+                    "model": None,
+                    "quote": "Valve is available in Class 150, 300 and 600",
+                }
+            ]
+        }
+    )
+
+    result = match_requirement(
+        FakeSession(),
+        "Flanged Gate valve class 150",
+        requirement_value="150",
+        requirement_operator="eq",
+        manufacturer_name="Acme Valves",
+        client=client,
+    )
+
+    assert result.status is RequirementStatus.FULL_MATCH
+    assert result.value_type is not None
+
+
 def test_an_extraction_that_fails_is_flagged_not_silently_empty(monkeypatch):
     """A failed extraction is a failure the reviewer can see."""
     from app.services import matching

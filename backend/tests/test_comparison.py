@@ -90,17 +90,17 @@ def test_an_unknown_value_type_needs_review() -> None:
 
 
 def test_a_material_the_vocabulary_does_not_know_is_a_reason_code() -> None:
-    """`cast carbon steel` is not a grade the vocabulary resolves, so nothing
-    is compared - but the clause is still a technical requirement."""
+    """A grade the vocabulary does not resolve is not compared - but the
+    clause is still a technical requirement."""
     request = ComparisonRequest(
         requirement_value=None,
         requirement_operator=Operator.EQ,
         requirement_unit=None,
-        requirement_text_value="cast carbon steel",
+        requirement_text_value="widget alloy",
         requirement_range=None,
         capability_value=None,
         capability_unit=None,
-        capability_text_value="cast carbon steel",
+        capability_text_value="widget alloy",
         capability_range=None,
     )
     result = evaluate(request, ValueType.MATERIAL)
@@ -108,6 +108,95 @@ def test_a_material_the_vocabulary_does_not_know_is_a_reason_code() -> None:
     assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
     assert result.code is ReasonCode.GRADE_NOT_RECOGNISED
     assert result.needs_review is True
+
+
+def _material(required: str, offered: str) -> ComparisonRequest:
+    return ComparisonRequest(
+        requirement_value=required,
+        requirement_operator=Operator.EQ,
+        requirement_unit=None,
+        requirement_text_value=required,
+        requirement_range=None,
+        capability_value=offered,
+        capability_unit=None,
+        capability_text_value=offered,
+        capability_range=None,
+    )
+
+
+def test_cast_carbon_steel_is_the_carbon_steel_alias_group() -> None:
+    """The gold slice named "cast carbon steel" against "Carbon Steel, A216
+    Gr WCC": the same group, so the comparison can run (D-95)."""
+    for offered in ("Carbon Steel", "WCB", "WCC", "A216 WCB", "ASTM A216 Gr WCC"):
+        result = evaluate(
+            _material("cast carbon steel", offered), ValueType.MATERIAL
+        )
+        assert result.status is RequirementStatus.FULL_MATCH, offered
+
+
+def _pressure_class(required: str, offered: str) -> ComparisonRequest:
+    return ComparisonRequest(
+        requirement_value=required,
+        requirement_operator=Operator.EQ,
+        requirement_unit=None,
+        requirement_text_value=required,
+        requirement_range=None,
+        capability_value=offered,
+        capability_unit=None,
+        capability_text_value=offered,
+        capability_range=None,
+        attribute="pressure_class",
+    )
+
+
+def test_a_higher_pressure_class_meets_a_lower_requirement() -> None:
+    result = evaluate(_pressure_class("150", "300"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.FULL_MATCH
+    assert result.score == 1.0
+
+
+def test_the_same_pressure_class_meets_the_requirement() -> None:
+    result = evaluate(_pressure_class("Class 150", "150"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.FULL_MATCH
+
+
+def test_a_lower_pressure_class_is_a_missing_capability_not_an_absence() -> None:
+    """A Class 100 valve against a Class 150 requirement is a documented
+    capability with a failing value (PRD 4)."""
+    result = evaluate(_pressure_class("Class 150", "Class 100"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.MISSING_CAPABILITY
+    assert result.score == 0.0
+
+
+def test_pressure_classes_in_different_systems_need_review() -> None:
+    """ASME class and PN are different scales. Converting one to the other is
+    a fact about a standard, not a guess the evaluator may make."""
+    result = evaluate(_pressure_class("Class 150", "PN16"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.needs_review is True
+
+
+def test_an_attribute_without_an_evaluator_is_review_never_unsupported() -> None:
+    """`unsupported_requirement` is for a clause no document could answer, not
+    for an attribute this registry has no rule for (D-95)."""
+    request = ComparisonRequest(
+        requirement_value="widget",
+        requirement_operator=Operator.EQ,
+        requirement_unit=None,
+        requirement_text_value="widget",
+        requirement_range=None,
+        capability_value="widget",
+        capability_unit=None,
+        capability_text_value="widget",
+        capability_range=None,
+        attribute="not_a_canonical_attribute",
+    )
+    result = evaluate(request, None)
+
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.needs_review is True
+    assert result.code is ReasonCode.ATTRIBUTE_NOT_MAPPED
+    assert result.status is not RequirementStatus.UNSUPPORTED_REQUIREMENT
 
 
 def test_a_comparison_with_no_value_on_one_side_is_a_reason_code() -> None:
