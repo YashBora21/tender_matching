@@ -1881,3 +1881,41 @@ model filter already exists for the case where it does.
 not a schema change.
 
 ---
+
+## D-98 - Recall is measured before status, and every miss is attributed
+
+`eval/recall.py` measures retrieval recall@k against gold `document`/`page`
+labels. It reuses `matching.build_query`, `categories.infer_type` and
+`retrieval.search` - the same code the matcher calls - so the number is the
+recall the product gets, not a second, more forgiving implementation. A miss
+is put in exactly one bucket:
+
+- `corpus_gap` - the gold document is not in the corpus at all;
+- `chunking` - the document is indexed, but no chunk sits on the gold page;
+- `retrieval` - the page is indexed and ranked, but outside the top k;
+- `verifier` - the gold page was retrieved, and the published status still
+  differs from `true_status`.
+
+The buckets are checked in that order: a document that is absent cannot be a
+chunking bug, and a page that was never offered cannot be a verifier bug.
+
+The harness refuses a label file with no rows, and a file where no row names
+both `gold_document` and `gold_page`; recall over an empty set is not 0%, it
+is not a measurement. A row with neither is counted as *unlabelled* and left
+out; a row with only one of the two is an error, not a silent drop. The gold
+slice of 21 pairs produced so far has no gold columns, so the harness refuses
+it with exit 1 rather than publishing a 0%.
+
+*Why:* the status scorer (`eval/harness.py`) can only say a pair was answered
+wrongly. It cannot say whether the page was ever in front of the model, and
+the two failures need opposite fixes: a `retrieval` miss is a query or filter
+problem, a `verifier` miss is an extraction or comparison problem, a
+`chunking` miss is the reader, and a `corpus_gap` is the collector.
+
+*Alternatives:* score recall inside the report harness - rejected: the report
+is offline by design and carries no ranking, so recall would need a second
+run or a replayed search. Compare the run's own cited page to the gold page -
+rejected: that measures the pipeline end to end and hides a retrieval miss
+behind a verifier miss.
+
+---

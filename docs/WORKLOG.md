@@ -1826,3 +1826,20 @@ P02 and P03 cases are covered by tests; re-measuring them needs the database.
 *Measured:* 510 unit tests pass, 8 skip without a database. The corpus has not
 been re-embedded: Docker is down, and the old vectors stay until
 `embeddings --force` runs.
+
+### Step 5 - retrieval recall@k with attributed misses (D-98)
+
+- `eval/recall.py`: `RecallLabel`/`Ranked`/`RecallReport`, the four cause
+  buckets, `DatabaseRanking` (the product's `build_query`, `infer_type` and
+  `search`), a text and JSON report, and a CLI that refuses an unlabelled
+  file.
+- `eval/tests/test_recall.py`: 13 synthetic tests - refusals, recall@3/@20
+  arithmetic, each cause, stem matching.
+- `eval/README.md`: "Retrieval recall@k" section.
+- `Makefile`: `recall` target.
+
+*Measured:* 510 backend unit tests pass (8 skip without a database); eval 30
+pass; collect 14 pass. The recall figure itself is **not measured yet**: the
+21-pair gold slice has no `gold_document`/`gold_page` values, and the harness
+refuses it (`error: ... none of the 21 row(s) names the gold document and
+page, so there is nothing to measure`, exit 1).

@@ -9,6 +9,7 @@ COMPOSE := docker compose
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev migrate downgrade run test test-unit test-integration \
         test-collect collect ingest embed match report tenders tenders-audit eval eval-check \
+        recall \
         docker-build docker-up docker-down \
         docker-logs clean
 
@@ -73,6 +74,9 @@ eval: ## Score a report against gold labels: make eval REPORT=r.json GOLD=eval/g
 
 eval-check: ## Validate a gold file without a report: make eval-check GOLD=eval/gold/x.jsonl
 	$(VENV)/Scripts/python.exe eval/harness.py check --gold "$(GOLD)"
+
+recall: ## Measure retrieval recall@k: make recall GOLD=eval/gold/x.csv ARGS="--k 3 20"
+	$(VENV)/Scripts/python.exe eval/recall.py --gold "$(GOLD)" $(ARGS)
 
 docker-build: ## Build the backend and frontend images
 	$(COMPOSE) build backend frontend
