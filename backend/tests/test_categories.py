@@ -19,8 +19,11 @@ from app.services.categories import (
     UNKNOWN,
     categories_path,
     category_names,
+    category_types,
     infer_category,
+    infer_type,
     load_categories,
+    mentioned_types,
 )
 
 
@@ -160,6 +163,52 @@ def test_the_items_stage_is_keyed_on_the_category_vocabulary(tmp_path, monkeypat
 
     assert before[STAGE_ATTACHMENTS] == after[STAGE_ATTACHMENTS]
     assert before[STAGE_ITEMS] != after[STAGE_ITEMS]
+
+
+def test_a_valve_item_names_its_type_from_the_same_data_file():
+    """The category is `valves`; the type inside it is `gate`, and it comes
+    from the data file, not from a list in this module (D-97)."""
+    guess = infer_type("valves", "GATE VALVE, SIZE-150 MM, CLASS-150")
+    assert guess.product_type == "gate"
+    assert guess.term == "gate valve"
+    assert not guess.ambiguous
+
+
+def test_a_sluice_valve_is_a_gate_valve():
+    assert infer_type("valves", "SLUICE VALVE 200 MM").product_type == "gate"
+
+
+def test_a_type_is_not_inferred_without_a_category():
+    guess = infer_type(None, "GATE VALVE")
+    assert guess.product_type is None
+    assert not guess.known
+    assert guess.reason
+
+
+def test_two_types_named_equally_are_ambiguous_and_not_guessed():
+    """A line that names a gate valve and a ball valve equally is not
+    filtered on a coin toss (FR-T9)."""
+    guess = infer_type("valves", "GATE VALVE AND BALL VALVE")
+    assert guess.product_type is None
+    assert guess.ambiguous
+    assert "more than one type" in (guess.reason or "")
+
+
+def test_mentioned_types_tells_silent_from_different():
+    """Silence is not a different type: a chunk that never says which valve
+    it is may still be about the wanted one (PRD 4)."""
+    assert mentioned_types("valves", "Body shall be SS316") == frozenset()
+    assert mentioned_types("valves", "Ball valve body") == frozenset({"ball"})
+    assert mentioned_types("valves", "Gate valve and ball valve") == frozenset(
+        {"gate", "ball"}
+    )
+
+
+def test_the_valve_types_are_declared_in_the_data_file():
+    names = {kind.name for kind in category_types("valves")}
+    assert {"gate", "globe", "check", "ball", "butterfly"} <= names
+    # A category with no declared types is not an error; it simply has none.
+    assert category_types("pumps") == ()
 
 
 def test_every_item_is_classified_from_its_own_words():

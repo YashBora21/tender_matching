@@ -25,6 +25,83 @@
         "pressure reducing valve",
         "pressure relief valve",
         "valve"
+      ],
+      "types": [
+        {
+          "name": "gate",
+          "terms": [
+            "gate valve",
+            "sluice valve",
+            "wedge gate valve"
+          ]
+        },
+        {
+          "name": "globe",
+          "terms": [
+            "globe valve",
+            "glove valve"
+          ]
+        },
+        {
+          "name": "check",
+          "terms": [
+            "check valve",
+            "non return valve",
+            "nonreturn valve",
+            "nrv"
+          ]
+        },
+        {
+          "name": "ball",
+          "terms": [
+            "ball valve"
+          ]
+        },
+        {
+          "name": "butterfly",
+          "terms": [
+            "butterfly valve"
+          ]
+        },
+        {
+          "name": "control",
+          "terms": [
+            "control valve"
+          ]
+        },
+        {
+          "name": "needle",
+          "terms": [
+            "needle valve"
+          ]
+        },
+        {
+          "name": "plug",
+          "terms": [
+            "plug valve"
+          ]
+        },
+        {
+          "name": "diaphragm",
+          "terms": [
+            "diaphragm valve"
+          ]
+        },
+        {
+          "name": "pinch",
+          "terms": [
+            "pinch valve"
+          ]
+        },
+        {
+          "name": "safety_relief",
+          "terms": [
+            "safety valve",
+            "relief valve",
+            "pressure relief valve",
+            "pressure reducing valve"
+          ]
+        }
       ]
     },
     {

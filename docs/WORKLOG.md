@@ -1810,3 +1810,19 @@ P02 and P03 cases are covered by tests; re-measuring them needs the database.
   with two clause markers is compound.
 
 *Measured:* 496 unit tests pass, 8 skip without a database.
+
+### Step 4 - chunk enrichment and the valve-type filter (D-97)
+
+- `services/embeddings.py`: `embedding_text` and `_product_label`;
+  `embed_corpus` joins the document, manufacturer and product and embeds the
+  enriched text.
+- `data/categories.json`: `types` under `valves` (gate, globe, check, ball,
+  butterfly, control, needle, plug, diaphragm, pinch, safety/relief).
+- `services/categories.py`: `ProductType`, `category_types`, `infer_type`,
+  `mentioned_types`.
+- `services/retrieval.py`: `_type_filter` and `product_type` on `search`.
+- `services/matching.py`: infers the type from the item title and passes it.
+
+*Measured:* 510 unit tests pass, 8 skip without a database. The corpus has not
+been re-embedded: Docker is down, and the old vectors stay until
+`embeddings --force` runs.

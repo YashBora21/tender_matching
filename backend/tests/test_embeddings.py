@@ -107,6 +107,37 @@ def test_a_vector_literal_keeps_full_precision():
     assert [float(part) for part in literal[1:-1].split(",")] == vector
 
 
+def test_a_chunk_is_embedded_with_the_document_and_the_table_caption():
+    """A table row is a number and its column header. Embedded alone it is
+    close to every other row of numbers; the header names what it is about
+    (D-97)."""
+    text = embeddings.embedding_text(
+        "150",
+        document_title="CIRCOR-D-Series",
+        manufacturer="CIRCOR",
+        product="D Series",
+        section="Pressure class",
+    )
+
+    assert "CIRCOR" in text
+    assert "D Series" in text
+    assert "Pressure class" in text
+    assert "150" in text
+    # The header comes first: the chunk is the body.
+    assert text.index("CIRCOR") < text.index("150")
+
+
+def test_a_chunk_with_no_metadata_is_embedded_as_its_text():
+    assert embeddings.embedding_text("Body shall be SS316") == "Body shall be SS316"
+
+
+def test_the_product_label_prefers_the_family():
+    """A datasheet page is about the series, not one catalogue number."""
+    assert embeddings._product_label("D Series", "D-100", "D") == "D Series"
+    assert embeddings._product_label(None, "D-100", "D") == "D"
+    assert embeddings._product_label(None, "D-100", None) == "D-100"
+
+
 @pytest.fixture
 def rollback_session(test_database_url: str):
     """A session whose writes are rolled back at the end."""

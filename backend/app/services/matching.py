@@ -178,6 +178,15 @@ def match_requirement(
             model=model,
         )
 
+    # The finer scope inside the category: a gate-valve item is not answered
+    # by a ball-valve datasheet. The type is read from the item's title, and
+    # an item that names two types equally is not filtered on a guess (D-97).
+    product_type: Optional[str] = None
+    if category and item_title:
+        from app.services.categories import infer_type
+
+        product_type = infer_type(category, item_title).product_type
+
     # The search is asked with the item's title and the read attribute, not
     # with the bare clause: a fragment names no subject on its own (D-96).
     query = build_query(
@@ -193,6 +202,7 @@ def match_requirement(
         limit=limit,
         manufacturer_name=manufacturer_name,
         category=category,
+        product_type=product_type,
         model=model,
     )
     result.candidates = len(candidates)

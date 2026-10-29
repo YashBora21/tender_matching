@@ -176,6 +176,37 @@ def _document_title(path: Optional[str]) -> Optional[str]:
     return Path(str(path)).stem or None
 
 
+def _type_filter(
+    candidates: list[Candidate],
+    category: Optional[str],
+    product_type: Optional[str],
+) -> list[Candidate]:
+    """Drop the chunks that positively describe a different type (D-97).
+
+    A gate-valve requirement is not answered by a ball-valve datasheet, even
+    though both are `valves`. The filter is deliberately one-sided: a chunk
+    that names the wanted type is kept (a full catalogue may cover several),
+    and a chunk that names no type at all is kept, because silence is not a
+    different type and dropping it would turn a corpus gap into a missing
+    capability (PRD 4).
+    """
+    if not category or not product_type:
+        return candidates
+    from app.services.categories import mentioned_types
+
+    kept: list[Candidate] = []
+    for candidate in candidates:
+        named = mentioned_types(
+            category,
+            candidate.text,
+            candidate.section,
+            candidate.document_title,
+        )
+        if not named or product_type in named:
+            kept.append(candidate)
+    return kept
+
+
 def keyword_search(
     session: Session,
     query_text: str,
@@ -406,6 +437,7 @@ def search(
     limit: int = 20,
     manufacturer_name: Optional[str] = None,
     category: Optional[str] = None,
+    product_type: Optional[str] = None,
     model: Optional[str] = None,
 ) -> list[Candidate]:
     """Find the chunks that answer a requirement.
@@ -413,19 +445,27 @@ def search(
     Both searches run and their results are merged. A deployment that has no
     embedding model still gets the keyword half.
     """
-    keyword = keyword_search(
-        session,
-        text,
-        manufacturer_name=manufacturer_name,
-        category=category,
-        model=model,
+    keyword = _type_filter(
+        keyword_search(
+            session,
+            text,
+            manufacturer_name=manufacturer_name,
+            category=category,
+            model=model,
+        ),
+        category,
+        product_type,
     )
-    semantic = semantic_search(
-        session,
-        text,
-        manufacturer_name=manufacturer_name,
-        category=category,
-        model=model,
+    semantic = _type_filter(
+        semantic_search(
+            session,
+            text,
+            manufacturer_name=manufacturer_name,
+            category=category,
+            model=model,
+        ),
+        category,
+        product_type,
     )
     if not semantic:
         # No embedding model, or no embedded corpus: the keyword search is

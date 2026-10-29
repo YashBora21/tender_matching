@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Sequence
 
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
-from app.repositories.schema import chunk
+from app.repositories.schema import chunk, document, manufacturer, product
 from app.services.llm import embed
 
 logger = get_logger(__name__)
@@ -52,6 +53,60 @@ def _vector_literal(vector: Sequence[float]) -> str:
     produced rather than a rounded copy of it.
     """
     return "[" + ",".join(repr(float(value)) for value in vector) + "]"
+
+
+def _document_title(path: Optional[str]) -> Optional[str]:
+    """The title a document is known by: its file name without the extension."""
+    if not path:
+        return None
+    return Path(str(path)).stem or None
+
+
+def _product_label(
+    family: Optional[str], model: Optional[str], model_or_family: Optional[str]
+) -> Optional[str]:
+    """The product name a chunk is embedded under.
+
+    A family says more than a model for retrieval - a datasheet page is about
+    the series, not one catalogue number - so it is preferred, and the
+    document's own declaration is the fallback.
+    """
+    return family or model_or_family or model
+
+
+def embedding_text(
+    text: str,
+    *,
+    document_title: Optional[str] = None,
+    manufacturer: Optional[str] = None,
+    product: Optional[str] = None,
+    section: Optional[str] = None,
+) -> str:
+    """The text a chunk is embedded with (D-97).
+
+    A datasheet table row says "150" and the column header says "Pressure
+    class": neither is a sentence, and embedded alone the row is close to
+    every other row of numbers in the corpus. The header names the document,
+    the manufacturer, the product family and the section or table caption, so
+    the vector carries what the row is about.
+
+    The header is not stored in the chunk: it is a retrieval aid, not a quote,
+    and the verifier still checks the quote against the page (FR-23).
+    """
+    header = " | ".join(
+        part
+        for part in (
+            f"Document: {document_title}" if document_title else "",
+            f"Manufacturer: {manufacturer}" if manufacturer else "",
+            f"Product: {product}" if product else "",
+            f"Section: {section}" if section else "",
+        )
+        if part
+    )
+    body = (text or "").strip()
+    if not header:
+        return body
+    return f"{header}\n{body}" if body else header
 
 
 def _write_embeddings(
@@ -92,7 +147,22 @@ def embed_corpus(
     """
     report = EmbeddingReport()
 
-    statement = select(chunk.c.id, chunk.c.text)
+    statement = (
+        select(
+            chunk.c.id,
+            chunk.c.text,
+            chunk.c.section,
+            document.c.path,
+            document.c.model_or_family,
+            manufacturer.c.name,
+            product.c.family,
+            product.c.model,
+        )
+        .select_from(chunk)
+        .join(document, document.c.id == chunk.c.document_id)
+        .join(manufacturer, manufacturer.c.id == document.c.manufacturer_id)
+        .outerjoin(product, product.c.id == document.c.product_id)
+    )
     if not force:
         statement = statement.where(chunk.c.embedding.is_(None))
         report.skipped = session.execute(
@@ -113,7 +183,16 @@ def embed_corpus(
     for start in range(0, len(rows), batch_size):
         batch = rows[start : start + batch_size]
         report.batches += 1
-        texts = [row[1] or "" for row in batch]
+        texts = [
+            embedding_text(
+                row[1] or "",
+                document_title=_document_title(row[3]),
+                manufacturer=row[5],
+                product=_product_label(row[6], row[7], row[4]),
+                section=row[2],
+            )
+            for row in batch
+        ]
         try:
             vectors = embed(texts)
         except Exception as exc:  # noqa: BLE001 - a failed batch is reported, not raised
@@ -131,7 +210,7 @@ def embed_corpus(
             continue
 
         _write_embeddings(
-            session, [(chunk_id, vector) for (chunk_id, _), vector in zip(batch, vectors)]
+            session, [(row[0], vector) for row, vector in zip(batch, vectors)]
         )
         report.embedded += len(vectors)
         session.commit()

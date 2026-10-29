@@ -108,3 +108,56 @@ def test_a_document_that_declares_no_category_is_kept():
     assert "valves" in sql and "pumps" in sql and "motors" in sql
     assert "circor" not in sql
     assert "IS NULL" in sql
+
+
+def test_a_chunk_that_names_a_different_valve_type_is_dropped(monkeypatch):
+    """A gate-valve requirement is not answered by a ball-valve datasheet,
+    even though both are `valves` (D-97)."""
+    from app.services import retrieval
+
+    silent = _candidate("silent", "Body shall be SS316")
+    gate = _candidate("gate", "Gate valve body shall be SS316")
+    ball = _candidate("ball", "Ball valve body shall be SS316")
+
+    monkeypatch.setattr(
+        retrieval, "keyword_search", lambda *a, **k: [silent, gate, ball]
+    )
+    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+
+    kept = search(None, "gate valve", category="valves", product_type="gate")
+
+    # The silent chunk is kept: silence is not a different type.
+    assert [candidate.chunk_id for candidate in kept] == ["silent", "gate"]
+
+
+def test_a_document_title_names_the_type_of_a_silent_chunk(monkeypatch):
+    """The title is where a catalogue declares what it covers, and a chunk
+    page rarely repeats it."""
+    from app.services import retrieval
+
+    ball = Candidate(
+        chunk_id="ball",
+        document_id="d1",
+        text="Body shall be SS316",
+        document_title="Ball-Valve-Catalog",
+    )
+
+    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [ball])
+    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+
+    assert search(None, "gate valve", category="valves", product_type="gate") == []
+
+
+def test_without_a_type_nothing_is_filtered(monkeypatch):
+    from app.services import retrieval
+
+    candidates = [
+        _candidate("gate", "Gate valve"),
+        _candidate("ball", "Ball valve"),
+    ]
+    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: candidates)
+    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+
+    kept = search(None, "valve", category="valves", product_type=None)
+
+    assert [candidate.chunk_id for candidate in kept] == ["gate", "ball"]

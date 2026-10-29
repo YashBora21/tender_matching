@@ -1846,3 +1846,38 @@ context unconditionally - rejected: a self-contained clause then repeats
 itself and dilutes its own distinctive words.
 
 ---
+
+## D-97 - A chunk is embedded with what it is about, and retrieval knows the valve type
+
+`embeddings.embedding_text` prefixes the text it embeds with a header -
+`Document`, `Manufacturer`, `Product`, `Section` - and `embed_corpus` joins
+the document, its manufacturer and its product to build it. The product label
+prefers the family, then the document's own `model_or_family`, then the model.
+The chunk's stored text is unchanged: the header is a retrieval aid, and the
+verifier still checks a quote against the page (FR-23).
+
+The valve types are data in `categories.json`: each category may declare
+`types`, and `categories.infer_type` reads one from the item's title with the
+same longest-term rule as the category. `retrieval._type_filter` drops a chunk
+only when it positively names a different type: a chunk that names the wanted
+type is kept (a catalogue may cover several), and a chunk that names no type
+is kept, because silence is not a different type (PRD 4). An ambiguous item -
+"gate valve and ball valve" - is not filtered on a guess (FR-T9).
+
+*Why:* a datasheet table row is a number and its column header. Embedded
+alone, "150" is close to every other row of numbers in the corpus, and the
+semantic search has no way to know it is a pressure class in a CIRCOR
+catalogue. The same gap let a ball-valve brochure answer a gate-valve item,
+because both are `valves` and the category filter cannot tell them apart.
+
+*Alternatives:* store the header in the chunk text - rejected: it would become
+part of every quote and every citation check. Exclude a chunk that is silent
+about its type - rejected: that turns a corpus gap into a missing capability.
+Filter on the product model - rejected: a tender rarely names a model, and the
+model filter already exists for the case where it does.
+
+*Re-embedding:* chunks embedded before this change keep their old vector until
+`python -m app.services.embeddings --force` runs. That is a data operation,
+not a schema change.
+
+---

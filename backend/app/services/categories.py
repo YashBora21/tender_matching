@@ -34,10 +34,15 @@ from app.core.config import get_settings
 __all__ = [
     "Category",
     "CategoryGuess",
+    "ProductType",
+    "TypeGuess",
     "categories_path",
     "category_names",
+    "category_types",
     "infer_category",
+    "infer_type",
     "load_categories",
+    "mentioned_types",
 ]
 
 DEFAULT_CATEGORIES_PATH = Path(__file__).resolve().parents[2] / "data" / "categories.json"
@@ -54,11 +59,25 @@ def categories_path() -> str:
 
 
 @dataclass(frozen=True)
+class ProductType:
+    """One type inside a category, and the terms that name it.
+
+    A gate valve and a ball valve are both `valves`, but a gate-valve
+    requirement is not answered by a ball-valve datasheet. The type is the
+    finer scope, and it lives in the same data file as the category.
+    """
+
+    name: str
+    terms: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Category:
     """One product category and the terms that name it."""
 
     name: str
     terms: tuple[str, ...]
+    types: tuple[ProductType, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -76,6 +95,23 @@ class CategoryGuess:
     @property
     def known(self) -> bool:
         return self.category != UNKNOWN
+
+
+@dataclass(frozen=True)
+class TypeGuess:
+    """What an item's words say about its type inside a category."""
+
+    product_type: Optional[str] = None
+    # The term that decided it, for the report: "gate valve".
+    term: Optional[str] = None
+    # True when the item names two types equally. An ambiguous type is not
+    # filtered on, and is never guessed (FR-T9).
+    ambiguous: bool = False
+    reason: Optional[str] = None
+
+    @property
+    def known(self) -> bool:
+        return bool(self.product_type)
 
 
 def _normalise(text: str) -> str:
@@ -118,8 +154,20 @@ def _load(target: str) -> tuple[Category, ...]:
             for term in (_normalise(t) for t in item.get("terms", ()))
             if term
         )
+        types = tuple(
+            ProductType(
+                name=str(kind.get("name") or "").strip(),
+                terms=tuple(
+                    term
+                    for term in (_normalise(t) for t in kind.get("terms", ()))
+                    if term
+                ),
+            )
+            for kind in item.get("types", ())
+        )
+        types = tuple(kind for kind in types if kind.name and kind.terms)
         if name and terms:
-            categories.append(Category(name=name, terms=terms))
+            categories.append(Category(name=name, terms=terms, types=types))
     return tuple(categories)
 
 
@@ -176,3 +224,78 @@ def infer_category(
             ),
         )
     return CategoryGuess(category=winner, term=term)
+
+
+def category_types(
+    category: str, categories: Optional[Iterable[Category]] = None
+) -> tuple[ProductType, ...]:
+    """The types a category knows, from the same data file."""
+    for entry in categories if categories is not None else load_categories():
+        if entry.name == category:
+            return entry.types
+    return ()
+
+
+def infer_type(
+    category: Optional[str],
+    *parts: Optional[str],
+    categories: Optional[Iterable[Category]] = None,
+) -> TypeGuess:
+    """The type an item's own words name inside its category, or none.
+
+    The most specific term wins, exactly as it does for a category: "wedge
+    gate valve" says more than "gate valve". When two types are named equally
+    the answer is ambiguous, and the caller must not filter on a guess
+    (FR-T9).
+    """
+    if not category:
+        return TypeGuess(reason="the item's category is not known")
+    vocabulary = category_types(category, categories)
+    if not vocabulary:
+        return TypeGuess(reason=f"the {category} category names no types")
+    text = " " + _normalise(" ".join(part or "" for part in parts)) + " "
+    if not text.strip():
+        return TypeGuess(reason="the item names no product type")
+
+    best: dict[str, str] = {}
+    for kind in vocabulary:
+        matched = [term for term in kind.terms if _mentions(text, term)]
+        if matched:
+            best[kind.name] = max(matched, key=len)
+
+    if not best:
+        return TypeGuess(reason="the item names no product type")
+
+    ranked = sorted(best.items(), key=lambda pair: len(pair[1]), reverse=True)
+    winner, term = ranked[0]
+    tied = sorted({name for name, matched in ranked if len(matched) == len(term)})
+    if len(tied) > 1:
+        return TypeGuess(
+            ambiguous=True,
+            reason="the item names more than one type equally: " + ", ".join(tied),
+        )
+    return TypeGuess(product_type=winner, term=term)
+
+
+def mentioned_types(
+    category: Optional[str],
+    *parts: Optional[str],
+    categories: Optional[Iterable[Category]] = None,
+) -> frozenset[str]:
+    """Every type the text positively names.
+
+    This is what lets retrieval tell *silent* from *different*. A chunk that
+    never says which kind of valve it is may still be about the wanted kind;
+    a chunk that says "ball valve" is not evidence for a gate valve. Silence
+    is not a different type (PRD 4).
+    """
+    if not category:
+        return frozenset()
+    text = " " + _normalise(" ".join(part or "" for part in parts)) + " "
+    if not text.strip():
+        return frozenset()
+    return frozenset(
+        kind.name
+        for kind in category_types(category, categories)
+        if any(_mentions(text, term) for term in kind.terms)
+    )

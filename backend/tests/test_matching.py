@@ -91,6 +91,52 @@ def test_a_bare_clause_is_searched_with_its_item_and_attribute(monkeypatch):
     assert seen["text"] != "1500 RPM"
 
 
+def test_the_item_type_is_sent_to_the_search(monkeypatch):
+    """The category is `valves`; the type inside it is read from the item's
+    title and passed to retrieval (D-97)."""
+    from app.services import matching
+
+    seen: dict = {}
+
+    def search(session, text, **kwargs):
+        seen.update(kwargs)
+        return []
+
+    monkeypatch.setattr(matching, "search", search)
+
+    match_requirement(
+        FakeSession(),
+        "Body shall be SS316",
+        item_title="GATE VALVE, SIZE-150 MM",
+        category="valves",
+        client=FakeClient({}),
+    )
+
+    assert seen["product_type"] == "gate"
+
+
+def test_an_ambiguous_item_type_is_not_filtered_on_a_guess(monkeypatch):
+    from app.services import matching
+
+    seen: dict = {}
+
+    def search(session, text, **kwargs):
+        seen.update(kwargs)
+        return []
+
+    monkeypatch.setattr(matching, "search", search)
+
+    match_requirement(
+        FakeSession(),
+        "Body shall be SS316",
+        item_title="GATE VALVE AND BALL VALVE",
+        category="valves",
+        client=FakeClient({}),
+    )
+
+    assert seen["product_type"] is None
+
+
 def test_a_passage_that_states_nothing_is_no_evidence_found(monkeypatch):
     from app.services import matching
     from app.services.retrieval import Candidate
