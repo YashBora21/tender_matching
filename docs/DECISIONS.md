@@ -2086,3 +2086,43 @@ and the token rule would misread alloy aliases.
 rejected: the extractor may return no fact at all for a negative passage, so
 the comparison never runs. Treat every unextracted categorical as Missing -
 rejected: that is the absence-of-evidence error AGENTS #4 forbids.
+
+---
+
+## D-104 - Atomic gold rows, and document recall apart from page recall
+
+The gold slice for items 10 and 11 is a compound clause: "three piece ball
+valves 2" screwed end ASME class 150 cast carbon steel face to face 122mm" is
+four independent facts, and one `true_status` for the whole line hides which
+fact drove it. `eval/gold/proposed-GEM_9671792-items-10-11-atomic.csv` adds one
+row per requirement x manufacturer x attribute - valve type, nominal size,
+pressure class and face to face - carrying `required_value`,
+`documented_value`, the page, the verbatim quote and the atomic status. Every
+row is `label_state=proposed`, `confirmed=no`; nothing is confirmed here. A
+quote must be an exact substring of the named page, and
+`eval/tests/test_atomic_gold.py` checks that against the real PDF, skipping
+when the corpus is absent (the PDFs are not in git).
+
+`eval/recall.py` now reports **document recall** and **page recall** separately.
+Document recall asks whether the gold datasheet was offered at all; page
+recall asks whether the page that answers the clause was offered. A document
+found on the wrong page is a ranking problem inside a document we already
+hold, and averaging the two numbers would hide it.
+
+*Why:* the confirmed recall was 33.3% page recall@3 while both Delval misses
+were the *right document, wrong page*. One number cannot say that. The atomic
+rows are the same argument one level down: the confirmed Delval status is
+`missing_capability` because of the end connection, but its valve type, size
+and class are full matches, and a reviewer needs to see that.
+
+*Boundary:* a standard reference is not a value. "Face to Face: API 6D,
+ASME B16.10" states the dimensional standard, not 122 mm, so the atomic
+face-to-face status is `no_evidence_found`, not Missing capability and not
+Full. Worcester states no face-to-face dimension anywhere in the document, so
+it has no atomic face-to-face row: absence of a quote is not a quote.
+
+*Alternatives:* keep only the compound row - rejected: status accuracy per
+attribute is then unmeasurable. Infer 122 mm from API 6D - rejected: the
+standard is not on the page and the value would be invented. Report a single
+recall number - rejected: it conflates "we do not have the document" with
+"we have it but rank the wrong page".

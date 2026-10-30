@@ -1971,3 +1971,28 @@ comparison and normalizer tests pass; full unit suite exits 0.
 `connection_type` / `socket weld ends` against Delval page 2, quoting
 `Body Style: Flanged end / Butt weld end`. `test_verifier.py` and
 `test_matching.py` pass (43); full unit suite exits 0.
+
+### Step 11 - atomic gold rows and two recalls (D-104)
+
+- `eval/gold/proposed-GEM_9671792-items-10-11-atomic.csv`: 22 proposal rows,
+  one per requirement x manufacturer x attribute (valve type, nominal size,
+  pressure class, face to face) for Delval Series 7/8, Worcester Series 44 and
+  Val-Matic QuadroSphere. Every row is `label_state=proposed`, `confirmed=no`,
+  and carries `required_value`, `documented_value`, page and a verbatim quote.
+- `eval/recall.py`: `RecallRow.document_hit_at`, `RecallReport.document_hits` /
+  `document_recall`, and `render` prints document recall and page recall as
+  two lines per k. The JSON payload gains `document_recall` / `document_hits`.
+  Cause attribution is unchanged and stays page-level.
+- `eval/tests/test_atomic_gold.py`: the rows are proposals only, unique per
+  requirement/manufacturer/attribute, use a known status, and every quote is
+  an exact substring of the named page (skipped when the corpus PDFs, which
+  are not in git, are absent).
+- `eval/tests/test_recall.py`: a document found on the wrong page is document
+  recall 100% / page recall 0%, and is still a `retrieval` miss.
+
+*Measured:* 22 atomic rows written; every quote verified as an exact
+substring of its page. `test_atomic_gold.py` + `test_recall.py` pass (22).
+
+*Open:* the atomic rows are proposals - they are not measured until a reviewer
+confirms them, and `eval/recall.py` refuses a file of proposals (D-98). The
+confirmed slice is untouched.

@@ -204,6 +204,32 @@ def test_recall_at_three_and_twenty():
     assert report.recall(20) == pytest.approx(2 / 3)
 
 
+def test_document_recall_is_reported_separately_from_page_recall():
+    """The datasheet is in the top 3, but on the wrong page. Document recall
+    is a hit, page recall is a miss, and the report says both (D-104)."""
+    label = _label(gold_page=3)
+    ranking = FakeRanking(
+        ranked={label.key: [recall.Ranked("gold", 1)]},
+        pages={"gold": {1, 2, 3}},
+    )
+
+    report = recall.evaluate([label], ranking)
+
+    assert report.document_hits(3) == 1
+    assert report.document_recall(3) == 1.0
+    assert report.hits(3) == 0
+    assert report.recall(3) == 0.0
+    assert report.rows[0].document_hit_at[3] is True
+    assert report.rows[0].hit_at[3] is False
+    # The page is indexed and the document was offered: that is still a
+    # retrieval miss for the page, not a corpus gap.
+    assert report.rows[0].cause == recall.RETRIEVAL
+
+    text = recall.render(report)
+    assert "document recall@3: 100.0% (1/1)" in text
+    assert "page recall@3: 0.0% (0/1)" in text
+
+
 def test_a_document_that_is_not_in_the_corpus_is_a_corpus_gap():
     label = _label(gold_document="absent.pdf")
     ranking = FakeRanking(ranked={label.key: []}, pages={})

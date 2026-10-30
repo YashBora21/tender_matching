@@ -15,6 +15,12 @@ every label that is not a hit is put in one of four buckets:
 The last bucket is only filled when the run's results are available; without
 them the module measures retrieval alone.
 
+Two recalls are measured and reported apart: **document recall** asks whether
+the gold document was offered at all, **page recall** asks whether the gold
+page was offered. A document found on the wrong page is a ranking problem
+inside a document we already hold, and the two numbers must not be averaged
+into one.
+
 Two refusals keep the number honest:
 
 - a label file with no rows, or with no row that names a gold document and
@@ -47,7 +53,7 @@ import io
 import json
 import sys
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Protocol
 
@@ -97,10 +103,19 @@ class Ranked:
 
 @dataclass
 class RecallRow:
-    """One label, its hits, and the cause when it missed."""
+    """One label, its hits, and the cause when it missed.
+
+    `hit_at` is page recall: the gold document *and* the gold page are in the
+    top k. `document_hit_at` is document recall: the gold document is in the
+    top k on any page. They answer different questions - "did we find the
+    datasheet" and "did we offer the page that answers the clause" - and a
+    report that only prints the second hides whether the document was found
+    at all.
+    """
 
     label: RecallLabel
     hit_at: dict[int, bool]
+    document_hit_at: dict[int, bool] = field(default_factory=dict)
     cause: Optional[str] = None
     detail: str = ""
 
@@ -123,6 +138,15 @@ class RecallReport:
         if not self.rows:
             return 0.0
         return self.hits(k) / len(self.rows)
+
+    def document_hits(self, k: int) -> int:
+        """How many labels had the gold document in the top k, on any page."""
+        return sum(1 for row in self.rows if row.document_hit_at.get(k))
+
+    def document_recall(self, k: int) -> float:
+        if not self.rows:
+            return 0.0
+        return self.document_hits(k) / len(self.rows)
 
     def causes(self) -> dict[str, int]:
         counts = {cause: 0 for cause in CAUSES}
@@ -307,6 +331,13 @@ def evaluate(
     for label in labels:
         ranked = ranking.rank(label, deepest)
         gold_document = document_key(label.gold_document)
+        document_hit_at = {
+            k: any(
+                document_key(item.document) == gold_document
+                for item in ranked[:k]
+            )
+            for k in ks
+        }
         hit_at = {
             k: any(
                 document_key(item.document) == gold_document
@@ -345,7 +376,15 @@ def evaluate(
                     "the gold page was retrieved, but the result is "
                     f"{actual}, not {label.true_status}"
                 )
-        rows.append(RecallRow(label=label, hit_at=hit_at, cause=cause, detail=detail))
+        rows.append(
+            RecallRow(
+                label=label,
+                hit_at=hit_at,
+                document_hit_at=document_hit_at,
+                cause=cause,
+                detail=detail,
+            )
+        )
 
     return RecallReport(
         rows=rows, k_values=ks, unlabelled=unlabelled, unconfirmed=unconfirmed
@@ -483,11 +522,21 @@ class DatabaseRanking:
 
 
 def render(report: RecallReport) -> str:
-    """A short text report: the recall, the buckets, then every miss."""
+    """A short text report: the recall, the buckets, then every miss.
+
+    Document recall and page recall are printed separately: the first says the
+    datasheet was found, the second says the page that answers the clause was
+    offered. A miss on the second with a hit on the first is a chunking or
+    ranking problem inside a document we already have.
+    """
     lines: list[str] = []
     for k in report.k_values:
         lines.append(
-            f"recall@{k}: {report.recall(k):.1%} "
+            f"document recall@{k}: {report.document_recall(k):.1%} "
+            f"({report.document_hits(k)}/{report.total})"
+        )
+        lines.append(
+            f"page recall@{k}: {report.recall(k):.1%} "
             f"({report.hits(k)}/{report.total})"
         )
     if report.unlabelled:
@@ -570,6 +619,12 @@ def main(argv: Optional[list[str]] = None) -> int:
             "unconfirmed": report.unconfirmed,
             "recall": {str(k): report.recall(k) for k in report.k_values},
             "hits": {str(k): report.hits(k) for k in report.k_values},
+            "document_recall": {
+                str(k): report.document_recall(k) for k in report.k_values
+            },
+            "document_hits": {
+                str(k): report.document_hits(k) for k in report.k_values
+            },
             "causes": report.causes(),
             "misses": [
                 {
