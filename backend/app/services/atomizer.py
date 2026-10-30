@@ -214,6 +214,72 @@ def _split_again(piece: str, offset: int) -> list[tuple[int, int]]:
 # A section heading that introduces a list of sub-clauses: "3.2 Materials:".
 _HEADING = re.compile(r"^\s*[\d.]+[A-Za-z]?\s+[A-Za-z][A-Za-z /&()-]{0,60}:\s*$")
 
+# The version of the split. A change to it changes what the requirements stage
+# produces, so it is part of that stage's key.
+ATOMIZER_VERSION = "1"
+
+
+def _method_of(value: str) -> ExtractionMethod:
+    """The extraction method a record names, or prose when it names none."""
+    try:
+        return ExtractionMethod(value)
+    except ValueError:
+        return ExtractionMethod.PROSE
+
+
+def atomize_records(records):
+    """Split every compound requirement into atoms, keeping its provenance.
+
+    The parsed clauses are atomized *before* the model reads them, which is
+    the order the PRD gives (parser -> atomizer -> type gate -> normalizer).
+    Splitting after extraction would leave one attribute and one value on
+    several facts, and there is no honest way to say which atom the value
+    belongs to. Split first, so every atom is extracted on its own words
+    (FR-13, FR-T8).
+
+    A table row is already one parameter and is left alone. A record that is
+    already one atom is returned unchanged, so nothing the reader set - a
+    page tag, a confidence, a review flag - is lost.
+    """
+    from app.services.tenderingest import RequirementRecord
+
+    atomized: list[RequirementRecord] = []
+    for record in records:
+        method = _method_of(record.extraction_method)
+        if method is ExtractionMethod.TABLE:
+            atomized.append(record)
+            continue
+        parts = atomize(
+            record.text,
+            parent_clause=record.source_section,
+            extraction_method=method,
+            requirement_type=record.requirement_type,
+        )
+        if len(parts) <= 1:
+            atomized.append(record)
+            continue
+        for part in parts:
+            atomized.append(
+                RequirementRecord(
+                    text=part.text,
+                    item_id=record.item_id,
+                    requirement_type=record.requirement_type,
+                    mandatory=record.mandatory,
+                    # The atom's offsets are inside the clause; the clause's
+                    # span is the provenance every atom shares.
+                    source_span=record.source_span,
+                    page=record.page,
+                    source_section=record.source_section,
+                    extraction_method=ExtractionMethod.PROSE.value,
+                    page_tag=record.page_tag,
+                    confidence=record.confidence,
+                    unreadable=record.unreadable,
+                    review_required=record.review_required,
+                    review_reason=record.review_reason,
+                )
+            )
+    return atomized
+
 
 def atomize(
     text: str,

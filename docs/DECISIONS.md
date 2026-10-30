@@ -2126,3 +2126,45 @@ attribute is then unmeasurable. Infer 122 mm from API 6D - rejected: the
 standard is not on the page and the value would be invented. Report a single
 recall number - rejected: it conflates "we do not have the document" with
 "we have it but rank the wrong page".
+
+---
+
+## D-105 - Atomize the parsed clause before the model reads it, and stop resumably on a limit
+
+The atomizer now runs in the production requirements stage, after the clauses
+are read and fragments are dropped and before the extraction stage. Each atom
+becomes a `RequirementRecord` of its own with the parent's item, page, section,
+span, page tag and review flag, and `extraction_method=prose`. A table row is
+left alone, and an already atomic clause is returned unchanged. `ATOMIZER_VERSION`
+is folded into the requirements stage key, so a change to the split
+invalidates the stages after it. The reader's `extraction_method` now flows
+into `extract_requirements`, into the stored row and through the LLM cache;
+before this a prose clause was recorded as a table row and would never have
+been split on a rerun.
+
+The LLM target is the environment: `LLM_BASE_URL`, `LLM_API_KEY` and
+`LLM_MODEL` are the only source of the client's endpoint, key and model, and
+the client refuses to start without a key rather than returning empty
+answers. A rate limit is not caught by the extractor: `LLMRateLimited`
+propagates to `_extract_all`, which stops at the first one, keeps the atoms it
+never asked about, marks the stage `rate_limited`, and leaves the stage
+unfinished so the next run reads it again.
+
+*Why:* atomizing after extraction would leave one attribute and one value on
+several facts, and there is no honest way to say which atom the value belongs
+to. Splitting first is also the order the PRD gives (parser -> atomizer ->
+type gate -> normalizer, FR-T8). The rate-limit rule is the AGENTS #3 rule:
+a failure to ask is not a document that says nothing, and a tender whose
+reading stopped must not be labelled done.
+
+*Alternatives:* atomize the model's answer after extraction - rejected: the
+model's single attribute/value cannot be distributed across atoms, and
+dropping it would send every atom to review with no value. Ask the model
+again per atom after a compound answer - rejected: the same calls, one
+round later, and a second failure path. Catch `LLMRateLimited` as an ordinary
+extraction failure - rejected: it would turn "we could not ask" into "the
+line states nothing" and let a partial read look complete.
+
+*Boundary:* the atom's `source_span` is the parent clause's span, not a
+sub-span: the split is inside the clause text, and the clause is the
+provenance every atom shares.

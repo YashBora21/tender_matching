@@ -1011,3 +1011,72 @@ def test_a_specification_that_cannot_be_opened_is_a_failure(tmp_path, monkeypatc
     assert "could not be read" in result.failure
     assert result.stages[STAGE_REQUIREMENTS].status == pipeline.STATUS_FAILED
     assert result.requirements == []
+
+
+# --- the atomizer in production (D-105) -----------------------------------
+
+
+def _compound_prose_spec() -> SpecificationRead:
+    """One prose clause that states three facts."""
+    return SpecificationRead(
+        rows=[
+            {
+                "row": 1,
+                "page": 1,
+                "number": "1",
+                "title": "GATE VALVE SIZE 150 MM CLASS 150",
+                "description": "Body shall be SS316, protection IP68, speed 1500 RPM",
+                "extraction_method": "text",
+            }
+        ]
+    )
+
+
+def test_a_compound_prose_clause_is_atomized_before_the_model_reads_it(
+    tmp_path, monkeypatch
+):
+    """Each atom is its own requirement and its own model call (FR-13).
+
+    Atomizing after extraction would leave one attribute and one value on
+    three facts; the split happens first so each atom is read on its own.
+    """
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _compound_prose_spec())
+    client = CountingClient()
+
+    result = run_pipeline(
+        "T1", directory, attachments, repo=FakeRepo(), cache=FakeCache(), client=client
+    )
+
+    assert len(result.requirements) == 3
+    assert client.calls == 3
+    assert result.stages[STAGE_REQUIREMENTS].rows == 3
+    assert result.stages[STAGE_EXTRACTION].rows == 3
+    assert all(
+        requirement.extraction_method == "prose"
+        for requirement in result.requirements
+    )
+    assert all(requirement.item_id == "1" for requirement in result.requirements)
+
+
+def test_a_rate_limit_mid_atoms_keeps_the_unread_atoms(tmp_path, monkeypatch):
+    """Stopping on the provider's limit never drops an atom (D-105).
+
+    The atoms were split before the model was asked, so the ones that were
+    never read are still requirements; the stage says `rate_limited` and the
+    next run resumes it.
+    """
+    from app.services.llm import LLMRateLimited
+
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _compound_prose_spec())
+    client = FlakyClient(2, LLMRateLimited("the model is rate limited", retry_after=24.9))
+
+    result = run_pipeline(
+        "T1", directory, attachments, repo=FakeRepo(), cache=FakeCache(), client=client
+    )
+
+    assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_RATE_LIMITED
+    assert result.rate_limited is True
+    assert len(result.requirements) == 3
+    assert result.llm_calls == 2

@@ -64,3 +64,37 @@ def test_scoring_policy_comes_from_config(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setenv("SCORING_FAMILY_LEVEL_CAP", "0.25")
     policy = get_settings().scoring
     assert policy.family_level_cap == 0.25
+
+
+def test_the_llm_client_reads_its_address_key_and_model_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The three LLM_* variables are the only source of the client's target.
+
+    A provider is a base URL, not a library: pointing the service at another
+    OpenAI-compatible endpoint is an environment change, never a code edit.
+    """
+    from app.services.llm import LLMClient
+
+    monkeypatch.setenv("LLM_BASE_URL", "https://llm.example.test/v1")
+    monkeypatch.setenv("LLM_API_KEY", "key-from-env")
+    monkeypatch.setenv("LLM_MODEL", "model-from-env")
+
+    client = LLMClient()
+
+    assert client.base_url == "https://llm.example.test/v1"
+    assert client.api_key == "key-from-env"
+    assert client.model == "model-from-env"
+
+
+def test_the_llm_client_refuses_to_start_without_a_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No key is a loud failure, never a silent empty extraction."""
+    from app.services.llm import LLMClient, LLMError
+
+    monkeypatch.setenv("LLM_API_KEY", "")
+    monkeypatch.setenv("LLM_MODEL", "model-from-env")
+
+    with pytest.raises(LLMError):
+        LLMClient()

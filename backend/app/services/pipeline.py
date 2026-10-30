@@ -29,6 +29,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.repositories.tender import LLMCache, StoredRequirement, TenderRepo
 from app.schemas.enums import RequirementType
+from app.services.atomizer import atomize_records
 from app.services.extractor import (
     ExtractedRequirement,
     extract_requirements,
@@ -100,6 +101,17 @@ def _prompt_version() -> str:
     from app.services.extractor import PROMPT_VERSION
 
     return PROMPT_VERSION
+
+
+def _atomizer_version() -> str:
+    """The version of the atomizer, read where it is used.
+
+    A change to the split changes what the requirements stage produces, so it
+    is part of that stage's key and invalidates everything after it.
+    """
+    from app.services.atomizer import ATOMIZER_VERSION
+
+    return ATOMIZER_VERSION
 
 
 def content_hash(*parts) -> str:
@@ -260,11 +272,16 @@ def stage_keys(
         _categories_hash(),
     )
 
-    # The requirements: the specification, the items they hang from, and the
-    # version of the reader.
+    # The requirements: the specification, the items they hang from, the
+    # version of the reader, and the version of the atomizer that splits a
+    # compound clause (FR-13).
     spec = roles.specification
     requirements_key = content_hash(
-        "requirements", items_key, spec.get("sha256") if spec else "", _reader_version()
+        "requirements",
+        items_key,
+        spec.get("sha256") if spec else "",
+        _reader_version(),
+        _atomizer_version(),
     )
 
     # The extraction: the requirements, and what read them.
@@ -479,6 +496,18 @@ def run_pipeline(
                 tender_id,
                 fragments.dropped,
                 fragments.merged,
+            )
+        # A compound clause becomes one requirement per fact before the model
+        # reads it: the atomizer is part of the requirements stage, so each
+        # atom is extracted and compared on its own (FR-13, FR-T8, D-105).
+        clauses = len(result.requirements)
+        result.requirements = atomize_records(result.requirements)
+        if len(result.requirements) != clauses:
+            logger.info(
+                "tender %s: %d clause(s) atomized into %d requirement(s)",
+                tender_id,
+                clauses,
+                len(result.requirements),
             )
         requirements_state.status = STATUS_DONE
     else:
@@ -896,6 +925,10 @@ def _extract_one(
         client=client,
         page=requirement.page,
         section=requirement.source_section,
+        # The reader said how the clause was read; the stored requirement has
+        # to say the same thing, or a prose clause would be recorded as a
+        # table row and never be atomized on a rerun.
+        extraction_method=requirement.extraction_method,
     )
     if outcome.error:
         # The model was asked and did not answer. Nothing is cached: the next
@@ -923,6 +956,9 @@ def _as_dict(item: RequirementRecord) -> dict:
         "value": item.value,
         "unit": item.unit,
         "mandatory": item.mandatory,
+        # How the clause was read. A cached prose requirement that came back
+        # as a table row would never be atomized again.
+        "extraction_method": item.extraction_method,
     }
 
 
@@ -945,6 +981,9 @@ def _as_record(item) -> RequirementRecord:
         unit=item.get("unit"),
         mandatory=bool(item.get("mandatory", True)),
         source_span=tuple(span) if span else None,
+        # An answer cached before this field existed names no method; a table
+        # row is the safe reading, because it is the one that is never split.
+        extraction_method=item.get("extraction_method") or "table",
     )
 
 

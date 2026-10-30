@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from app.schemas.enums import ExtractionMethod
-from app.services.atomizer import atomize
+from app.services.atomizer import atomize, atomize_records
+from app.services.tenderingest import RequirementRecord
 
 
 def test_a_compound_line_is_split() -> None:
@@ -123,3 +124,68 @@ def test_a_heading_is_part_of_the_context_of_its_sub_clauses() -> None:
     assert parts
     for part in parts:
         assert part.retrieval_text.startswith("3.2 Materials")
+
+
+# --- the production stage (D-105) -----------------------------------------
+
+
+def _record(text: str, **overrides) -> RequirementRecord:
+    values = {
+        "text": text,
+        "item_id": "10",
+        "page": 3,
+        "source_section": "3.2 Materials",
+    }
+    values.update(overrides)
+    return RequirementRecord(**values)
+
+
+def test_a_compound_prose_clause_is_split_with_its_provenance():
+    record = _record(
+        "Body shall be SS316, protection IP68, speed 1500 RPM",
+        extraction_method="text",
+    )
+
+    parts = atomize_records([record])
+
+    assert [part.text for part in parts] == [
+        "Body shall be SS316",
+        "protection IP68",
+        "speed 1500 RPM",
+    ]
+    assert all(part.item_id == "10" for part in parts)
+    assert all(part.page == 3 for part in parts)
+    assert all(part.source_section == "3.2 Materials" for part in parts)
+    assert all(part.extraction_method == ExtractionMethod.PROSE.value for part in parts)
+
+
+def test_a_table_row_is_not_atomized_by_the_records_stage():
+    record = _record("1500 RPM, SS316, IP68", extraction_method="table")
+
+    assert atomize_records([record]) == [record]
+
+
+def test_an_atomic_prose_clause_is_returned_unchanged():
+    record = _record(
+        "Rotational speed shall be not less than 1500 RPM",
+        extraction_method="text",
+    )
+
+    assert atomize_records([record]) == [record]
+
+
+def test_an_atom_keeps_the_review_flag_of_its_clause():
+    record = _record(
+        "Body shall be SS316, speed 1500 RPM",
+        extraction_method="text",
+        review_required=True,
+        review_reason="page classified as boilerplate",
+    )
+
+    parts = atomize_records([record])
+
+    assert len(parts) == 2
+    assert all(part.review_required for part in parts)
+    assert all(
+        part.review_reason == "page classified as boilerplate" for part in parts
+    )

@@ -14,8 +14,10 @@ Three things keep the extraction honest:
   back. A span that does not hold what the model said it held is rejected,
   and the deterministic split is used instead.
 - The **deterministic split is the fallback**, not the exception. A row of a
-  bill of quantities is already one requirement; the atomizer splits a
-  compound clause. When the model cannot be used, the tender is still read.
+  bill of quantities is already one requirement; the pipeline atomizes a
+  compound prose clause before the model is asked. When the model cannot be
+  used, the atom is still there and is flagged, so the tender is still read
+  and the gap is visible rather than silent.
 """
 
 from __future__ import annotations

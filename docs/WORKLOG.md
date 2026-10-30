@@ -1996,3 +1996,30 @@ substring of its page. `test_atomic_gold.py` + `test_recall.py` pass (22).
 *Open:* the atomic rows are proposals - they are not measured until a reviewer
 confirms them, and `eval/recall.py` refuses a file of proposals (D-98). The
 confirmed slice is untouched.
+
+### Step 12 - the atomizer in production, env-driven LLM, resumable limits (D-105)
+
+- `services/atomizer.py`: `ATOMIZER_VERSION` and `atomize_records`. A prose
+  clause is split into atoms before the model reads it; each atom keeps the
+  parent's item, page, section, span, page tag, confidence and review flag,
+  and is marked `prose`. Table rows are left alone; an already atomic clause
+  is returned unchanged.
+- `services/pipeline.py`: the requirements stage calls `atomize_records`
+  after fragments are dropped; `_atomizer_version()` is part of the
+  requirements stage key. The reader's `extraction_method` now reaches
+  `extract_requirements` and travels through the LLM cache (`_as_dict` /
+  `_as_record`), so a prose clause is not stored as a table row.
+- `services/extractor.py`: the docstring now says where the deterministic
+  fallback lives - the clause is already atomized when the model is asked, so
+  a failed read leaves a flagged atom rather than nothing.
+- Tests: a compound prose clause is split with its provenance; a table row is
+  not split; an atomic clause is unchanged; a review flag survives the split;
+  a compound prose clause produces one requirement and one model call per
+  atom in the pipeline; a rate limit mid-atoms keeps the unread atoms and
+  marks the stage `rate_limited`; `LLM_BASE_URL`, `LLM_API_KEY` and
+  `LLM_MODEL` drive the client, and a missing key is a loud error.
+
+*Measured:* `test_atomizer.py`, `test_pipeline.py` and `test_config.py` pass
+(58); full unit suite exits 0. The rate-limit path was already covered at the
+pipeline, run and audit levels; the new test proves the atomized tail survives
+it.
