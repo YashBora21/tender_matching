@@ -2023,3 +2023,68 @@ confirmed slice is untouched.
 (58); full unit suite exits 0. The rate-limit path was already covered at the
 pipeline, run and audit levels; the new test proves the atomized tail survives
 it.
+
+### Step 13 - a fixed-seed audit sheet, and the after-state recall (D-106)
+
+- `eval/audit_sheet.py`: asks `match_requirement` for every requirement x
+  manufacturer pair, writes one row per pair with the published status,
+  verification outcome, applicability, confidence, review flag, reason code,
+  score, document, page and quote, and samples it with
+  `random.Random(seed)`. Rows are ordered by (item, requirement, manufacturer)
+  before the sample, so the database's order cannot change the sheet.
+  `audit_ok`, `correct_status` and `notes` are written empty. A rate limit is
+  re-raised as `RateLimited` and the answered pairs stay in a checkpoint, so a
+  rerun asks only the missing pairs. The candidate cap is written on every row
+  and in the provenance file.
+- `eval/tests/test_audit_sheet.py`: same seed over the same rows picks the
+  same sample regardless of input order; a different seed can pick a different
+  set; a sample larger than the rows keeps every row; a sample below one is
+  refused; the reviewer's columns are empty and the pair ids are `P01...`;
+  a rate limit at the third pair keeps the first two and the rerun asks only
+  the two that were missing.
+- `eval/README.md`: how to run the export, what the two empty columns are, and
+  why the cap is recorded.
+- `docs/DECISIONS.md`: D-106.
+
+*Measured (audit sheet):* `eval/audit/GEM_9671792-items-10-11-audit.csv`, 15
+rows sampled from 20 published results (seed `20261030`, cap 3,
+`openai/gpt-oss-20b`, 10 manufacturers with documents). Reviewer columns
+empty on all 15. The provenance file records the seed, cap, model, embedding
+backend and manufacturer list. The 20-row population is in the checkpoint.
+Statuses in the sample: 13 `no_evidence_found`, 2 `missing_capability`.
+
+What the sample already shows, before a reviewer grades it:
+
+- **Delval and Val-Matic are still `no_evidence_found` at cap 3.** Both
+  confirmed rows are `missing_capability`, and the listing that says so is on
+  page 2 of the Delval bulletin (page 1 was retrieved). Page recall@20 is
+  100%, so the page is reachable; it is the cap of 3 that hides it. This is
+  the cap-3 gap, not a retrieval failure.
+- **Emerson Fisher gives `missing_capability` on unrelated control-valve
+  documents** (`d103554x012.pdf`, a Fisher ED/EWD valve bulletin) for both
+  items. It is flagged for review and carries `applicability=family_level`,
+  which is the D-100 rule doing its job, but the manufacturer is a control
+  valve maker answering a ball-valve item.
+- **Unrelated manufacturers return motor and pump documents** (bharat_bijlee
+  motors, sulzer pumps, Xylem pumps). They are `no_evidence_found`, so the
+  status is right, but the rows show the category filter does not exclude a
+  manufacturer whose corpus is a different product family.
+
+*Measured (recall, before -> after):* the same six confirmed pairs, the same
+`DatabaseRanking` path as the product.
+
+| cut-off | document recall | page recall |
+| --- | --- | --- |
+| @3 | 66.7% -> 66.7% (4/6) | 33.3% -> 33.3% (2/6) |
+| @20 | 66.7% -> **100%** (6/6) | 66.7% -> **100%** (6/6) |
+
+The two misses before were both Delval item 10/11: the page was indexed but
+not in the top 20. After the query expansion and sibling read, both are in the
+top 20 and no miss remains (`corpus_gap`, `chunking`, `retrieval`, `verifier`
+all 0). The @3 numbers did not move, which is why the cap matters: the
+pipeline that reads three candidates still cannot see the Delval listing.
+
+*Open:* the sheet is not a measurement until a reviewer fills it, so status
+accuracy, the false-confident rate and citation correctness are still
+unmeasured on confirmed rows. The Delval cap-3 gap and the unrelated-corpus
+rows are the two things the sample points at; neither is fixed here.

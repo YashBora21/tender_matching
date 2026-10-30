@@ -2168,3 +2168,34 @@ line states nothing" and let a partial read look complete.
 *Boundary:* the atom's `source_span` is the parent clause's span, not a
 sub-span: the split is inside the clause text, and the clause is the
 provenance every atom shares.
+
+---
+
+## D-106 - The audit sheet is a fixed-seed sample, and the export does not grade
+
+The 15-row audit sheet for items 10 and 11 is a random sample of the results
+the matcher publishes for those two requirements against every manufacturer
+that holds documents. The rows are ordered by (item, requirement,
+manufacturer) before `random.Random(seed).sample`, so the same seed over the
+same results is the same sheet, and the order the database returned them in
+cannot change it. `audit_ok`, `correct_status` and `notes` are written empty:
+the export selects rows for a reviewer, it does not judge them. The candidate
+cap is written on every row and in the provenance file, because a result read
+with a cap of 3 is not the same answer as one read with a cap of 20.
+
+A rate limit stops the export rather than being caught: the pairs already
+answered stay in a checkpoint, and a rerun asks only the pairs that are
+missing. The export never fills a missing pair with a no-evidence row, because
+"we could not ask" is not "the catalogue is silent" (AGENTS #3, #4).
+
+*Why:* PRD 15 asks for a manual spot check of cited pages. A spot check is
+only a measurement if the sample is reproducible and the reviewer's columns
+are not pre-filled by the thing being checked. The sheet is not a score: it is
+the input to one, and the export must not be able to make its own rows look
+right.
+
+*Alternatives:* a stratified sample by status - rejected: it over-represents
+rare statuses and is no longer a sample of what the system published. A fixed
+list of pairs - rejected: it is not random and cannot be reproduced from the
+seed. Filling `correct_status` from the gold file - rejected: the reviewer
+would be agreeing with the system's own labels, not checking them.

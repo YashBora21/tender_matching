@@ -96,6 +96,27 @@ The harness refuses a label file with no rows, or with no confirmed row that
 names a gold document and page: recall over an empty set is not a measurement.
 A row without a gold page is counted as *unlabelled*, never as a miss.
 
+## The audit sheet (PRD 15)
+
+`eval/audit_sheet.py` exports a fixed-seed sample of published results for a
+reviewer:
+
+```bash
+python eval/audit_sheet.py --tender-sha <sha256> \
+  --requirement-id <id> --requirement-id <id> \
+  --n 15 --seed 20261030 --out eval/audit/sheet.csv
+```
+
+The rows carry the status, verification outcome, applicability, review flag,
+document, page and quote the matcher published. `audit_ok`, `correct_status`
+and `notes` are written empty: the export selects rows, it does not grade
+them. Rows are ordered by item, requirement and manufacturer before the
+sample, so the same seed over the same results is the same sheet.
+
+The candidate cap is written on every row and in the `--provenance` file. A
+rate limit stops the export and keeps the answered pairs in `--checkpoint`;
+rerun with the same checkpoint to ask only the missing pairs.
+
 ## Not built
 
 - The 50–100 hand-labelled pairs (PRD 15) — they need a live model to produce
