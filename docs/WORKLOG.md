@@ -1929,3 +1929,25 @@ carried by the generic terms, which page 1 matches more strongly. Both
 searches fetch 50 candidates each and the fusion returns the top 20, so page 2
 is either below 50 in a modality or loses on RRF.
 
+
+### Step 9 - short-document expansion and alias query expansion (D-102)
+
+- `core/config.py`: `retrieval_sibling_page_limit` (default 3).
+- `comparison/vocabulary.py`: `AttributeSpec.query_expansion`, read from the
+  vocabulary file.
+- `data/attribute_vocabulary.json`: new `connection_type` categorical
+  attribute with the names `end connection`, `body style`, `ends`,
+  `connections`, `connection`, `end`, marked `query_expansion: true`.
+- `repositories/aliases.py`: `AliasRepo.approved_aliases(threshold)` groups the
+  approved, confident aliases by canonical term.
+- `services/retrieval.py`: `expand_query` widens a query with the alias
+  table's other names for an expandable attribute; `expand_siblings` reads a
+  document of at most `retrieval_sibling_page_limit` pages whole when one of
+  its pages is retrieved, inserting siblings in page order after the hit and
+  trimming to the same budget. The fused order is not re-scored.
+- Tests: query expansion adds the other names and leaves an unrelated query
+  alone; only documents of at most three pages are eligible; siblings are
+  inserted in page order; the candidate budget is kept.
+
+*Measured:* `tests/test_retrieval.py` 19 pass; vocabulary, resolution,
+comparison and normalizer tests pass; full unit suite exits 0.

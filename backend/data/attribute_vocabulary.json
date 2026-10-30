@@ -462,6 +462,38 @@
         }
       ],
       "approved": true
+    },
+    {
+      "canonical_term": "connection_type",
+      "value_type": "categorical",
+      "synonyms": [
+        {
+          "term": "end connection",
+          "approved": true
+        },
+        {
+          "term": "body style",
+          "approved": true
+        },
+        {
+          "term": "ends",
+          "approved": true
+        },
+        {
+          "term": "connections",
+          "approved": true
+        },
+        {
+          "term": "connection",
+          "approved": true
+        },
+        {
+          "term": "end",
+          "approved": true
+        }
+      ],
+      "approved": true,
+      "query_expansion": true
     }
   ],
   "material_groups": {

@@ -191,6 +191,28 @@ class AliasRepo:
             for row in rows
         ]
 
+    def approved_aliases(self, *, threshold: float) -> dict[str, list[str]]:
+        """The names each canonical term is known by, for query expansion.
+
+        Only an approved alias at or above the confidence threshold is
+        returned: an unapproved name is a guess, and a query must not be
+        widened with guesses (FR-20). The rows are grouped by canonical term,
+        because the names of one attribute are what make the same thing
+        findable in another document's wording (D-102).
+        """
+        rows = self.session.execute(
+            select(alias_table.c.canonical_term, alias_table.c.alias)
+            .where(
+                alias_table.c.approved.is_(True),
+                alias_table.c.confidence >= threshold,
+            )
+            .order_by(alias_table.c.canonical_term, alias_table.c.alias)
+        ).all()
+        grouped: dict[str, list[str]] = {}
+        for canonical_term, alias in rows:
+            grouped.setdefault(canonical_term, []).append(alias)
+        return grouped
+
 
 def seed_aliases(session: Session) -> int:
     """Fill the alias table from the vocabulary file.

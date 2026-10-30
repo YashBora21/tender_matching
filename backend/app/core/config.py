@@ -104,6 +104,12 @@ class Settings(BaseSettings):
     # passage is a model call, so this is the cost ceiling of a match, and a
     # smaller number is a recall/cost trade the report has to name (FR-22).
     match_max_candidates: int = 20
+    # A short document is read whole: when one page of a document with at most
+    # this many pages is retrieved, its sibling pages are added to the result
+    # in page order. A datasheet's specification page rarely repeats the words
+    # on its cover, so a page-level hit on a three-page bulletin would
+    # otherwise hide the page that carries the values (D-102).
+    retrieval_sibling_page_limit: int = 3
 
     # --- fetching attachments ---
     # A tender links to documents on other hosts, and the collector follows

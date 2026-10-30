@@ -2013,3 +2013,41 @@ would have to parse prose. Reuse `status` - rejected: AGENTS requires status,
 `verification_outcome` and `applicability` to stay separate, and a system
 limit is not a product finding. A separate table - rejected: the code is one
 attribute of one result, and a column is the smallest change.
+
+---
+
+## D-102 - A short document is read whole, and an attribute's names widen the query
+
+`retrieval.search` does two things after the two searches have been fused.
+First, `expand_query` reads the alias table's approved names for every
+attribute the vocabulary marks `query_expansion` and adds the names the query
+does not already carry. `connection_type` is the first such attribute: its
+names are `end connection`, `body style`, `ends`, `connections`, `connection`
+and `end`, so a requirement that says "screwed end" also searches the wording
+a datasheet uses for the same thing. Second, `expand_siblings` finds the
+distinct documents among the fused candidates, counts their highest indexed
+page, and - for a document with at most `retrieval_sibling_page_limit` pages
+(default 3) - inserts every chunk of that document after its first retrieved
+chunk, in page order, then trims to the same budget. The fused order of the
+original candidates is not re-scored; siblings are added beside the hit they
+belong to.
+
+*Why:* the Delval Series 7/8 bulletin is found (page 1 is rank 1 for both
+items 10 and 11), but the specification page 2 never enters the fused top 20.
+The requirement's distinctive words - "screwed end", "socket weld", "122 mm" -
+do not occur anywhere in the bulletin, so page 1 wins on the generic terms.
+A three-page bulletin is cheap to read whole, and its specification page is
+the one that answers the clause. The alias expansion is the same problem from
+the other side: "screwed end" and "body style" are one attribute, and only the
+alias table knows that.
+
+*Alternatives:* raise the global `limit` or fetch deeper per modality -
+rejected: it changes ranking and cost for every requirement, and the miss is
+specific to short documents. Expand every attribute's synonyms - rejected: a
+common word such as "pressure" would pull a dozen names into every query and
+dilute the distinctive tokens. Add a second retrieval pass - rejected: the
+same evidence would be read twice and paid for twice.
+
+*Boundary:* the page count is the highest indexed page, so a document whose
+last page carries no chunk is treated as ending at its last chunk. A document
+longer than the limit is not expanded: its page-level ranking is left alone.

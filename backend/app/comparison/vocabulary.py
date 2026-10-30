@@ -47,6 +47,10 @@ class AttributeSpec:
     # own without approving the rest, so a name that is only a guess does not
     # resolve a requirement.
     approved_synonyms: frozenset[str] = frozenset()
+    # True when the attribute's other names are added to a retrieval query.
+    # A requirement that names one of them ("screwed end") should also find
+    # the document that calls the same thing "body style" (FR-20, D-102).
+    query_expansion: bool = False
 
 
 @dataclass(frozen=True)
@@ -131,6 +135,7 @@ def load_vocabulary(path: Optional[str] = None) -> Vocabulary:
                 for term, approved in _synonym_pairs(item.get("synonyms", ()))
                 if approved
             ),
+            query_expansion=bool(item.get("query_expansion", False)),
         )
         for item in data.get("attributes", ())
     )

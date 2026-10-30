@@ -222,3 +222,91 @@ def test_without_a_type_nothing_is_filtered(monkeypatch):
     kept = search(None, "valve", category="valves", product_type=None)
 
     assert [candidate.chunk_id for candidate in kept] == ["gate", "ball"]
+
+
+def test_query_expansion_adds_the_alias_tables_other_names():
+    """A requirement that says "screwed end" should also search the wording
+    the datasheet uses - "body style", "end connection" (D-102)."""
+    from app.services.retrieval import _expand_text
+
+    groups = {
+        "connection_type": [
+            "end connection",
+            "body style",
+            "ends",
+            "connections",
+            "end",
+        ]
+    }
+
+    expanded = _expand_text("Ball valve, screwed end, class 150", groups)
+
+    assert expanded.startswith("Ball valve, screwed end, class 150")
+    assert "body style" in expanded
+    assert "end connection" in expanded
+    # A name already in the query is not added again: "end" is not appended
+    # as a separate word, only as part of the other names.
+    assert expanded == (
+        "Ball valve, screwed end, class 150 "
+        "end connection body style ends connections"
+    )
+
+
+def test_query_expansion_leaves_an_unrelated_query_alone():
+    from app.services.retrieval import _expand_text
+
+    groups = {"connection_type": ["end connection", "body style"]}
+
+    assert _expand_text("Pump speed 1500 RPM", groups) == "Pump speed 1500 RPM"
+
+
+def test_only_short_documents_are_eligible_for_sibling_expansion():
+    from app.services.retrieval import _eligible_documents
+
+    eligible = _eligible_documents({"short": 3, "long": 4, "empty": None}, 3)
+
+    assert eligible == {"short"}
+
+
+def test_siblings_are_inserted_in_page_order_after_the_hit():
+    """A three-page bulletin retrieved on page 1 is read whole, and the fused
+    order of everything else is unchanged (D-102)."""
+    from app.services.retrieval import _merge_siblings
+
+    first = Candidate(chunk_id="d1p1", document_id="d1", text="", page=1)
+    other = Candidate(chunk_id="d2p1", document_id="d2", text="", page=1)
+    tail = Candidate(chunk_id="d3p1", document_id="d3", text="", page=1)
+    siblings = {
+        "d1": [
+            first,
+            Candidate(chunk_id="d1p2", document_id="d1", text="", page=2),
+            Candidate(chunk_id="d1p3", document_id="d1", text="", page=3),
+        ]
+    }
+
+    merged = _merge_siblings([first, other, tail], siblings, limit=20)
+
+    assert [c.chunk_id for c in merged] == [
+        "d1p1",
+        "d1p2",
+        "d1p3",
+        "d2p1",
+        "d3p1",
+    ]
+
+
+def test_sibling_expansion_keeps_the_candidate_budget():
+    from app.services.retrieval import _merge_siblings
+
+    first = Candidate(chunk_id="d1p1", document_id="d1", text="", page=1)
+    tail = Candidate(chunk_id="d2p1", document_id="d2", text="", page=1)
+    siblings = {
+        "d1": [
+            first,
+            Candidate(chunk_id="d1p2", document_id="d1", text="", page=2),
+        ]
+    }
+
+    merged = _merge_siblings([first, tail], siblings, limit=2)
+
+    assert [c.chunk_id for c in merged] == ["d1p1", "d1p2"]

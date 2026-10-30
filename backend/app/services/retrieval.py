@@ -22,6 +22,7 @@ and the filters are passed in.
 from __future__ import annotations
 
 import re
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -226,6 +227,201 @@ def _type_filter(
             candidate.type_unconfirmed = True
         kept.append(candidate)
     return kept
+
+
+def _mentions(text: str, term: str) -> bool:
+    """True when a term appears in the text as a whole phrase."""
+    return bool(re.search(rf"\b{re.escape(term.casefold())}\b", text))
+
+
+def _expand_text(text: str, groups: dict[str, list[str]]) -> str:
+    """Add the other names of an attribute the text already names.
+
+    The groups come from the alias table, keyed by canonical term. A group is
+    used only when the text mentions one of its names, and a name already in
+    the text is not added again: repeating a word would weight it twice in the
+    keyword rank (D-96, D-102).
+    """
+    lowered = text.casefold()
+    known = {word.casefold() for word in text.split()}
+    additions: list[str] = []
+    for aliases in groups.values():
+        if not any(_mentions(lowered, alias) for alias in aliases):
+            continue
+        for alias in aliases:
+            key = alias.casefold()
+            if key in known or _mentions(lowered, alias):
+                continue
+            known.add(key)
+            additions.append(alias)
+    return " ".join([text, *additions]) if additions else text
+
+
+def expand_query(session: Session, text: str) -> str:
+    """Widen a query with the alias table's other names for an attribute.
+
+    A requirement says "screwed end" and the datasheet says "body style": the
+    two name the same attribute, and only the alias table knows that. The
+    vocabulary says which attributes are worth expanding, so a common word
+    such as "pressure" does not pull every synonym into every query (D-102).
+    """
+    if session is None or not text.strip():
+        return text
+    from app.comparison.attributes import load_vocabulary
+    from app.repositories.aliases import AliasRepo
+
+    wanted = {
+        spec.canonical_term
+        for spec in load_vocabulary().attributes
+        if spec.query_expansion
+    }
+    if not wanted:
+        return text
+    groups = AliasRepo(session).approved_aliases(
+        threshold=get_settings().alias_confidence_threshold
+    )
+    return _expand_text(
+        text, {term: aliases for term, aliases in groups.items() if term in wanted}
+    )
+
+
+def _candidate_from_row(row) -> Candidate:
+    """One chunk row, in the column order the searches select."""
+    return Candidate(
+        chunk_id=str(row[0]),
+        document_id=str(row[1]),
+        text=row[2],
+        page=row[3],
+        section=row[4],
+        is_table=bool(row[5]),
+        ocr=bool(row[6]),
+        manufacturer=row[7],
+        model=row[8],
+        family=row[9],
+        is_family_level=bool(row[10]),
+        model_or_family=row[11],
+        document_title=_document_title(row[12]),
+    )
+
+
+def _eligible_documents(
+    page_counts: dict[str, Optional[int]], page_limit: int
+) -> set[str]:
+    """The documents short enough to read whole.
+
+    The count is the highest indexed page: a document whose last page carries
+    no chunk is treated as ending at its last chunk, which is the part the
+    corpus can actually offer (D-102).
+    """
+    return {
+        document_id
+        for document_id, pages in page_counts.items()
+        if pages is not None and pages <= page_limit
+    }
+
+
+def _merge_siblings(
+    candidates: list[Candidate],
+    siblings: dict[str, list[Candidate]],
+    *,
+    limit: int,
+) -> list[Candidate]:
+    """Insert a short document's pages after its first retrieved chunk.
+
+    The fused order of the original candidates is kept: siblings are added
+    beside the hit they belong to, in page order, and the result is trimmed to
+    the same budget. A sibling the search already found is not repeated.
+    """
+    merged: list[Candidate] = []
+    seen: set[str] = set()
+    expanded: set[str] = set()
+    for candidate in candidates:
+        if candidate.chunk_id not in seen:
+            merged.append(candidate)
+            seen.add(candidate.chunk_id)
+        document_id = candidate.document_id
+        if document_id in expanded or document_id not in siblings:
+            continue
+        expanded.add(document_id)
+        for sibling in siblings[document_id]:
+            if sibling.chunk_id in seen:
+                continue
+            merged.append(sibling)
+            seen.add(sibling.chunk_id)
+    return merged[:limit]
+
+
+def expand_siblings(
+    session: Session,
+    candidates: list[Candidate],
+    *,
+    category: Optional[str],
+    product_type: Optional[str],
+    limit: int,
+) -> list[Candidate]:
+    """Read a short document whole when one of its pages was retrieved.
+
+    A datasheet's cover page and its specification page rarely share words, so
+    a page-level hit on a three-page bulletin can hide the page that carries
+    the values. The siblings are filtered by the same category and type rules
+    as any other candidate; the global ranking is not re-scored (D-102).
+    """
+    if session is None or not candidates:
+        return candidates[:limit]
+    page_limit = get_settings().retrieval_sibling_page_limit
+    if page_limit <= 0:
+        return candidates[:limit]
+
+    document_ids = {
+        uuid.UUID(candidate.document_id)
+        for candidate in candidates
+        if candidate.document_id
+    }
+    if not document_ids:
+        return candidates[:limit]
+    counts = {
+        str(row[0]): row[1]
+        for row in session.execute(
+            select(chunk.c.document_id, func.max(chunk.c.page))
+            .where(chunk.c.document_id.in_(document_ids))
+            .group_by(chunk.c.document_id)
+        ).all()
+    }
+    eligible = _eligible_documents(counts, page_limit)
+    if not eligible:
+        return candidates[:limit]
+
+    rows = session.execute(
+        select(
+            chunk.c.id,
+            chunk.c.document_id,
+            chunk.c.text,
+            chunk.c.page,
+            chunk.c.section,
+            chunk.c.is_table,
+            chunk.c.ocr,
+            manufacturer.c.name,
+            product.c.model,
+            product.c.family,
+            product.c.is_family_level,
+            document.c.model_or_family,
+            document.c.path,
+        )
+        .select_from(chunk)
+        .join(document, document.c.id == chunk.c.document_id)
+        .join(manufacturer, manufacturer.c.id == document.c.manufacturer_id)
+        .outerjoin(product, product.c.id == document.c.product_id)
+        .where(chunk.c.document_id.in_(eligible))
+        .order_by(chunk.c.document_id, chunk.c.page, chunk.c.id)
+    ).all()
+
+    siblings: dict[str, list[Candidate]] = {}
+    for row in rows:
+        candidate = _candidate_from_row(row)
+        siblings.setdefault(candidate.document_id, []).append(candidate)
+    for document_id, items in siblings.items():
+        siblings[document_id] = _type_filter(items, category, product_type)
+    return _merge_siblings(candidates, siblings, limit=limit)
 
 
 def keyword_search(
@@ -464,8 +660,11 @@ def search(
     """Find the chunks that answer a requirement.
 
     Both searches run and their results are merged. A deployment that has no
-    embedding model still gets the keyword half.
+    embedding model still gets the keyword half. The query is widened with the
+    alias table's other names for an attribute it names, and a short document
+    is read whole when one of its pages is retrieved (D-102).
     """
+    text = expand_query(session, text)
     keyword = _type_filter(
         keyword_search(
             session,
@@ -493,5 +692,18 @@ def search(
         # the whole answer.
         for rank, candidate in enumerate(keyword, start=1):
             candidate.keyword_rank = rank
-        return keyword[:limit]
-    return fuse(keyword, semantic, limit=limit)
+        return expand_siblings(
+            session,
+            keyword[:limit],
+            category=category,
+            product_type=product_type,
+            limit=limit,
+        )
+    fused = fuse(keyword, semantic, limit=limit)
+    return expand_siblings(
+        session,
+        fused,
+        category=category,
+        product_type=product_type,
+        limit=limit,
+    )
