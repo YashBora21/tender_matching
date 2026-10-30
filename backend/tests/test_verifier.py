@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from app.schemas.enums import Applicability, VerificationOutcome
+from app.schemas.enums import Applicability, RequirementStatus, VerificationOutcome
 from app.services.verifier import (
     check_citation,
     check_comparison,
     check_entity,
     check_semantic,
+    listed_set_exclusion,
     verify,
 )
 
@@ -121,6 +122,34 @@ def test_the_semantic_layer_passes_when_the_value_is_present() -> None:
 def test_the_comparison_layer_fails_on_incompatible_units() -> None:
     result = check_comparison("rpm", "kg")
     assert result.passed is False
+
+
+def test_a_listed_set_that_excludes_the_required_value_is_missing_capability() -> None:
+    """The document states the attribute and lists the values it is offered
+    in. The required value is not one of them: that is a failing value, not an
+    absence of evidence (PRD 4)."""
+    finding = listed_set_exclusion(
+        "Body Style: Flanged end / Butt weld end",
+        'Three piece ball valves 2" Screwed end ASME class 150',
+    )
+
+    assert finding is not None
+    assert finding.status is RequirementStatus.MISSING_CAPABILITY
+    assert finding.attribute == "connection_type"
+    assert finding.required == "screwed end"
+    assert finding.values == ("Flanged end", "Butt weld end")
+    assert finding.quote == "Body Style: Flanged end / Butt weld end"
+
+
+def test_a_silent_document_is_not_a_listed_set() -> None:
+    """A page that never lists the attribute is silent, and silence stays
+    No evidence found: it is never read as Missing capability (AGENTS #4)."""
+    finding = listed_set_exclusion(
+        "Maximum operating temperature is 60 degC.",
+        'Three piece ball valves 2" Screwed end ASME class 150',
+    )
+
+    assert finding is None
 
 
 def test_a_failed_layer_makes_the_whole_verification_fail() -> None:

@@ -476,6 +476,38 @@
           "approved": true
         },
         {
+          "term": "screwed ends",
+          "approved": true
+        },
+        {
+          "term": "screwed end",
+          "approved": true
+        },
+        {
+          "term": "socket weld ends",
+          "approved": true
+        },
+        {
+          "term": "socket weld end",
+          "approved": true
+        },
+        {
+          "term": "butt weld ends",
+          "approved": true
+        },
+        {
+          "term": "butt weld end",
+          "approved": true
+        },
+        {
+          "term": "flanged ends",
+          "approved": true
+        },
+        {
+          "term": "flanged end",
+          "approved": true
+        },
+        {
           "term": "ends",
           "approved": true
         },

@@ -42,7 +42,7 @@ from app.schemas.enums import (
 from app.services.facts import extract_fact
 from app.services.llm import LLMClient
 from app.services.retrieval import Candidate, search
-from app.services.verifier import verify
+from app.services.verifier import check_citation, listed_set_exclusion, verify
 
 logger = get_logger(__name__)
 
@@ -310,11 +310,37 @@ def _match_candidate(
     # requirement is the one the comparison runs on; the rest are not this
     # requirement's business.
     fact = next((item for item in extracted.facts if item.found), None)
+    page_text = _page_text(session, candidate)
     if fact is None:
+        # The extractor found no claim. That is not automatically silence: a
+        # datasheet may list the values an attribute is available in, and the
+        # required one may be absent from that list. The list is evidence of a
+        # failing value, not an absence of evidence (PRD 4). The quote is
+        # still gated by the citation layer.
+        finding = listed_set_exclusion(candidate.text, requirement_text)
+        if finding is not None and check_citation(finding.quote, page_text).passed:
+            result.status = finding.status
+            result.score = 0.0
+            result.quote = finding.quote
+            result.attribute = finding.attribute
+            result.verification_outcome = VerificationOutcome.PASSED
+            result.applicability = (
+                Applicability.FAMILY_LEVEL
+                if candidate.is_family_level or candidate.type_unconfirmed
+                else Applicability.MODEL_LEVEL
+            )
+            result.reason = finding.reason
+            result.confidence = ConfidenceLevel.LOW
+            if result.applicability is Applicability.FAMILY_LEVEL:
+                result.review_required = True
+                result.review_reason = (
+                    "the evidence covers a family or a document whose product "
+                    "type is not declared"
+                )
+            return result
         result.reason = "the passage does not state this capability"
         return result
 
-    page_text = _page_text(session, candidate)
     report = verify(
         quote=fact.quote,
         page_text=page_text,

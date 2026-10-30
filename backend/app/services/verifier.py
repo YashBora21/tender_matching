@@ -19,8 +19,14 @@ from dataclasses import dataclass, field
 from enum import IntEnum
 from typing import Optional
 
+from app.comparison import attributes as attrs
 from app.comparison.units import is_compatible
-from app.schemas.enums import Applicability, VerificationOutcome
+from app.schemas.enums import (
+    Applicability,
+    RequirementStatus,
+    ValueType,
+    VerificationOutcome,
+)
 from app.services.textnorm import normalise_text
 
 
@@ -289,6 +295,121 @@ def check_semantic(
     return LayerResult(
         Layer.SEMANTIC, False, f"the passage does not contain the claimed value {value}"
     )
+
+
+@dataclass
+class ListedSet:
+    """A passage that lists the values an attribute is available in.
+
+    The list is evidence: the attribute exists, and the values the document
+    offers are the ones in the list. When the required value is not among
+    them, the document states a failing value - Missing capability - not an
+    absence of evidence (PRD 4).
+    """
+
+    status: RequirementStatus
+    attribute: str
+    required: str
+    values: tuple[str, ...]
+    quote: str
+    reason: str
+
+
+# A value list: "Flanged end / Butt weld end", "150, 300 or 600".
+_LIST_SEPARATOR = re.compile(r"\s*(?:/|;|\||,|\bor\b|\band\b)\s*", re.IGNORECASE)
+# A list value is a short name, not a sentence. This keeps a prose line that
+# happens to contain "body style:" from being read as an availability list.
+_MAX_LIST_VALUE_CHARS = 60
+
+
+def _requirement_value(text: str, synonyms: tuple[str, ...]) -> Optional[str]:
+    """The longest name of an attribute that the requirement uses."""
+    lowered = text.casefold()
+    for synonym in sorted(synonyms, key=len, reverse=True):
+        if re.search(rf"\b{re.escape(synonym.casefold())}\b", lowered):
+            return synonym
+    return None
+
+
+def _listed_values(line: str, synonyms: tuple[str, ...]) -> Optional[tuple[str, ...]]:
+    """The values a line lists after an attribute name, if it lists any.
+
+    The attribute has to be followed by `:` or `=`, and the remainder has to
+    be at least two short values. A single value is left to the extractor: a
+    prose sentence is not an availability list.
+    """
+    lowered = line.casefold()
+    for synonym in sorted(synonyms, key=len, reverse=True):
+        match = re.search(rf"\b{re.escape(synonym.casefold())}\b", lowered)
+        if match is None:
+            continue
+        tail = line[match.end() :]
+        separator = re.search(r"[:=]", tail)
+        if separator is None:
+            continue
+        text = tail[separator.end() :].strip()
+        if not text:
+            continue
+        parts = [
+            part.strip(" .")
+            for part in _LIST_SEPARATOR.split(text)
+            if part.strip(" .")
+        ]
+        parts = [part for part in parts if len(part) <= _MAX_LIST_VALUE_CHARS]
+        if len(parts) >= 2:
+            return tuple(parts)
+    return None
+
+
+def _listed_matches(required: str, offered: str) -> bool:
+    """True when a listed value is the required one, or names it more fully."""
+    if not required or not offered:
+        return False
+    return required == offered or required in offered or offered in required
+
+
+def listed_set_exclusion(
+    passage: Optional[str],
+    requirement_text: Optional[str],
+) -> Optional[ListedSet]:
+    """A listed set of values that excludes the required one, if there is one.
+
+    The function is deterministic and only reads a list the document writes
+    after an attribute name. A passage that never lists the attribute is
+    silent, and returns None: silence is No evidence found, never Missing
+    capability (PRD 4, AGENTS #4). Only categorical attributes are read this
+    way; a material or a number is compared by its own evaluator.
+    """
+    if not passage or not requirement_text:
+        return None
+
+    vocabulary = attrs.load_vocabulary()
+    for spec in vocabulary.attributes:
+        if spec.value_type is not ValueType.CATEGORICAL:
+            continue
+        required = _requirement_value(requirement_text, spec.synonyms)
+        if not required:
+            continue
+        for line in passage.splitlines():
+            values = _listed_values(line, spec.synonyms)
+            if values is None:
+                continue
+            required_key = attrs.normalise_token(required)
+            if any(_listed_matches(required_key, attrs.normalise_token(value)) for value in values):
+                continue
+            return ListedSet(
+                status=RequirementStatus.MISSING_CAPABILITY,
+                attribute=spec.canonical_term,
+                required=required,
+                values=values,
+                quote=line.strip(),
+                reason=(
+                    f"the document lists {', '.join(values)} for "
+                    f"{spec.canonical_term.replace('_', ' ')}, which excludes "
+                    f"the required {required}"
+                ),
+            )
+    return None
 
 
 def check_comparison(

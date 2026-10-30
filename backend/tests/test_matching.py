@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.schemas.enums import RequirementStatus
+from app.schemas.enums import RequirementStatus, VerificationOutcome
 from app.services.matching import build_query, match_requirement
 
 
@@ -36,6 +36,69 @@ def test_a_requirement_nothing_answers_is_no_evidence_found(monkeypatch):
     assert result.score == 0.0
     assert result.review_required is True
     assert result.reason
+
+
+def _passage_candidate(passage: str):
+    from app.services.retrieval import Candidate
+
+    return Candidate(
+        chunk_id="c1",
+        document_id="d1",
+        text=passage,
+        page=2,
+        manufacturer="Synthetic Manufacturer",
+        model="SYNTHETIC-1",
+    )
+
+
+def test_a_listed_set_that_excludes_the_requirement_is_missing_capability(monkeypatch):
+    """The document offers flanged or butt weld ends, not screwed. That is a
+    documented failing value, not silence (PRD 4)."""
+    from app.services import matching
+    from app.services.facts import FactResult
+
+    passage = "Body Style: Flanged end / Butt weld end"
+    monkeypatch.setattr(
+        matching, "search", lambda *a, **k: [_passage_candidate(passage)]
+    )
+    monkeypatch.setattr(matching, "_page_text", lambda *a, **k: passage)
+    monkeypatch.setattr(
+        matching, "extract_fact", lambda *a, **k: FactResult(facts=[])
+    )
+
+    result = match_requirement(
+        FakeSession(),
+        'Three piece ball valves 2" Screwed end ASME class 150',
+        client=FakeClient({}),
+    )
+
+    assert result.status is RequirementStatus.MISSING_CAPABILITY
+    assert result.quote == passage
+    assert result.verification_outcome is VerificationOutcome.PASSED
+
+
+def test_a_silent_passage_stays_no_evidence_found(monkeypatch):
+    """A page that does not mention the attribute is silent. It is never
+    turned into a missing capability (AGENTS #4)."""
+    from app.services import matching
+    from app.services.facts import FactResult
+
+    passage = "Maximum operating temperature is 60 degC."
+    monkeypatch.setattr(
+        matching, "search", lambda *a, **k: [_passage_candidate(passage)]
+    )
+    monkeypatch.setattr(matching, "_page_text", lambda *a, **k: passage)
+    monkeypatch.setattr(
+        matching, "extract_fact", lambda *a, **k: FactResult(facts=[])
+    )
+
+    result = match_requirement(
+        FakeSession(),
+        'Three piece ball valves 2" Screwed end ASME class 150',
+        client=FakeClient({}),
+    )
+
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
 
 
 # --- the retrieval query (D-96) --------------------------------------------

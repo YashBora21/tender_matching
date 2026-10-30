@@ -1951,3 +1951,23 @@ is either below 50 in a modality or loses on RRF.
 
 *Measured:* `tests/test_retrieval.py` 19 pass; vocabulary, resolution,
 comparison and normalizer tests pass; full unit suite exits 0.
+
+### Step 10 - listed-set exclusion is Missing, silence stays No evidence (D-103)
+
+- `data/attribute_vocabulary.json`: `connection_type` now also names
+  `screwed end`, `socket weld end(s)`, `butt weld end(s)` and `flanged end(s)`,
+  so a requirement's own wording supplies the value to look for.
+- `services/verifier.py`: `ListedSet` and `listed_set_exclusion`. A categorical
+  attribute followed by `:` or `=` and a list of at least two short values is
+  read as an availability list; when the required value is not in it, the
+  finding is `MISSING_CAPABILITY` with the verbatim line as its quote.
+- `services/matching.py`: when extraction finds no claim, the listed-set
+  finding is used only if the citation layer confirms the quote on the page;
+  otherwise the result stays `NO_EVIDENCE_FOUND`.
+- Tests: verifier tests for the Delval body-style list and for a silent page;
+  matching tests for the Missing and No-evidence statuses end to end.
+
+*Measured:* the verifier finds `connection_type` / `screwed end` and
+`connection_type` / `socket weld ends` against Delval page 2, quoting
+`Body Style: Flanged end / Butt weld end`. `test_verifier.py` and
+`test_matching.py` pass (43); full unit suite exits 0.

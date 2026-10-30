@@ -2051,3 +2051,38 @@ same evidence would be read twice and paid for twice.
 *Boundary:* the page count is the highest indexed page, so a document whose
 last page carries no chunk is treated as ending at its last chunk. A document
 longer than the limit is not expanded: its page-level ranking is left alone.
+
+---
+
+## D-103 - A listed set that excludes the required value is Missing, silence is No evidence
+
+`verifier.listed_set_exclusion` reads a passage for a categorical attribute the
+requirement names, takes the values the document lists after the attribute
+(`Body Style: Flanged end / Butt weld end`), and returns a `ListedSet` with
+`MISSING_CAPABILITY` when the required value is not among them. The quote is
+the whole line, so the citation layer still gates it: `matching._match_candidate`
+uses the finding only when `check_citation` passes. A passage that never lists
+the attribute returns `None`, and the existing path keeps `NO_EVIDENCE_FOUND`.
+
+The check runs when the extractor found no claim. The LLM may correctly say a
+passage does not answer the requirement, but "does not answer with the
+required value" is not the same as "says nothing": a document that offers
+flanged or butt weld ends has stated a failing value, and PRD 4 calls that
+Missing capability. The connection synonyms were extended with `screwed end`,
+`socket weld ends`, `butt weld end` and `flanged end` so the requirement's own
+wording supplies the value to look for.
+
+*Why:* Delval Series 7/8 page 2 lists the body style and excludes screwed and
+socket weld ends. Reading that as No evidence would overstate coverage and
+hide a real non-compliance behind a retrieval fact.
+
+*Boundary:* only a list of at least two short values after `:` or `=` is read;
+a single value or a prose sentence is left to the extractor, so a page that
+merely mentions an attribute is not turned into a finding. Only categorical
+attributes are checked this way: a material or a number has its own evaluator,
+and the token rule would misread alloy aliases.
+
+*Alternatives:* let the comparison registry decide from the extracted value -
+rejected: the extractor may return no fact at all for a negative passage, so
+the comparison never runs. Treat every unextracted categorical as Missing -
+rejected: that is the absence-of-evidence error AGENTS #4 forbids.
