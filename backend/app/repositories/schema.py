@@ -44,6 +44,7 @@ from app.schemas.enums import (
     FactVerificationStatus,
     LedgerStatus,
     Operator,
+    ReasonCode,
     RequirementStatus,
     RequirementType,
     RunStatus,
@@ -416,6 +417,10 @@ result = Table(
     Column("confidence", _enum(ConfidenceLevel, "confidence_level")),
     Column("review_required", Boolean, nullable=False, server_default="false"),
     Column("review_reason", Text),
+    # Why no verdict was reached, when the reason is a limit of this system
+    # rather than a finding about the product (D-86, D-101). NULL means the
+    # status is a finding: the catalogue answered, or it was silent.
+    Column("reason_code", _enum(ReasonCode, "reason_code")),
     Index("ix_result_run_id", "run_id"),
     Index("ix_result_requirement_id", "requirement_id"),
 )

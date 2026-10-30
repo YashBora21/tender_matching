@@ -570,13 +570,19 @@ def _pressure_classes(text: Optional[str]) -> list[tuple[str, int]]:
 
 
 def evaluate_ordered_categorical(request: ComparisonRequest) -> Evaluation:
-    """Pressure class: a higher class covers a lower requirement.
+    """Pressure class: a higher class is not automatically interchangeable.
 
-    A Class 300 valve meets a Class 150 requirement. A lower class is a
-    documented capability with a failing value, so it is *missing capability*,
-    not an absence of evidence. Classes in different systems (ASME class vs
-    PN) are not converted here: a conversion is a fact about a standard, and
-    guessing one would be a comparison nobody can check.
+    A Class 300 valve is rated above a Class 150 requirement, but the rating
+    is not the only difference: a higher class is often a heavier, longer
+    valve, and the clause may also fix face-to-face or weight. So the default
+    policy treats "higher" as a **partial match that goes to review**, not a
+    full one (D-99); `comparison_pressure_class_higher_covers_lower` is how a
+    deployment says the buyer accepts a higher class outright.
+
+    A lower class is a documented capability with a failing value, so it is
+    *missing capability*, not an absence of evidence. Classes in different
+    systems (ASME class vs PN) are not converted here: a conversion is a fact
+    about a standard, and guessing one would be a comparison nobody can check.
     """
     required_text = request.requirement_text_value or request.requirement_value
     offered_text = request.capability_text_value or request.capability_value
@@ -609,11 +615,28 @@ def evaluate_ordered_categorical(request: ComparisonRequest) -> Evaluation:
     offered_top = max(value for _, value in offered)
     system = next(iter(required_systems))
     label = "Class" if system == "class" else "PN"
-    if offered_top >= required_floor:
+    if offered_top == required_floor:
         return Evaluation(
             RequirementStatus.FULL_MATCH,
             1.0,
             f"{label} {offered_top} meets the required {label} {required_floor}",
+        )
+    if offered_top > required_floor:
+        if request.rules.pressure_class_higher_covers_lower:
+            return Evaluation(
+                RequirementStatus.FULL_MATCH,
+                1.0,
+                f"{label} {offered_top} covers the required {label} {required_floor}",
+            )
+        return Evaluation(
+            RequirementStatus.PARTIAL_MATCH,
+            request.rules.partial_score_max,
+            (
+                f"{label} {offered_top} is higher than the required {label} "
+                f"{required_floor}; a higher class is not confirmed as "
+                "interchangeable without review"
+            ),
+            needs_review=True,
         )
     return Evaluation(
         RequirementStatus.MISSING_CAPABILITY,

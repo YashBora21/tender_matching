@@ -34,6 +34,7 @@ from app.schemas.enums import (
     Applicability,
     ConfidenceLevel,
     FactVerificationStatus,
+    ReasonCode,
     RequirementStatus,
     ValueType,
     VerificationOutcome,
@@ -66,6 +67,11 @@ class MatchResult:
     fact_value: Optional[str] = None
     fact_unit: Optional[str] = None
     value_type: Optional[ValueType] = None
+    # Why no verdict was reached, when the reason is a limit of this system
+    # rather than a finding about the product (D-86). A code is what tells
+    # "we could not evaluate this attribute" apart from "the catalogue is
+    # silent" in a stored result (D-101).
+    reason_code: Optional[ReasonCode] = None
     review_required: bool = False
     review_reason: Optional[str] = None
     confidence: ConfidenceLevel = ConfidenceLevel.LOW
@@ -334,10 +340,11 @@ def _match_candidate(
             else _convertible(requirement_unit, fact.unit)
         ),
     )
-    if candidate.is_family_level:
-        # The document is about a family of products, so the evidence is not
+    if candidate.is_family_level or candidate.type_unconfirmed:
+        # The document is about a family of products, or it never declares
+        # which product type it covers. Either way the evidence is not
         # confirmed for this model: uncertain applicability, not a match
-        # (PRD 4).
+        # (PRD 4, D-100).
         report.applicability = Applicability.FAMILY_LEVEL
 
     result.verification_outcome = report.outcome
@@ -346,6 +353,20 @@ def _match_candidate(
     result.capability_text = fact.value
     result.review_required = report.review_required
     result.review_reason = "; ".join(report.reasons) or None
+    if candidate.type_unconfirmed:
+        # The search could not place the document in a product type, so the
+        # passage may answer a different product. The claim is kept but its
+        # applicability is not model-level.
+        result.review_required = True
+        result.review_reason = "; ".join(
+            part
+            for part in (
+                result.review_reason,
+                "the document does not declare its product type, so this "
+                "evidence may be for a different product type",
+            )
+            if part
+        )
 
     if not report.passed:
         # The claim could not be checked against the page, the product or the
@@ -389,7 +410,10 @@ def _match_candidate(
         # The comparison could not run, so this requirement was never checked
         # against this product. That is a limit of ours, not a finding about
         # the manufacturer: the status stays *no evidence found* (D-73) and
-        # the code says which limit stopped it (D-86).
+        # the code says which limit stopped it (D-86). The code is kept in its
+        # own field so a report can count "we could not evaluate this" apart
+        # from "the catalogue is silent" (D-101).
+        result.reason_code = evaluation.code
         result.verification_outcome = VerificationOutcome.NOT_CHECKED
         result.review_required = True
         result.review_reason = "; ".join(
@@ -596,6 +620,7 @@ def store_match(
         confidence=match.confidence,
         review_required=match.review_required,
         review_reason=match.review_reason,
+        reason_code=match.reason_code,
     )
 
 

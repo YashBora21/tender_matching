@@ -1843,3 +1843,34 @@ pass; collect 14 pass. The recall figure itself is **not measured yet**: the
 21-pair gold slice has no `gold_document`/`gold_page` values, and the harness
 refuses it (`error: ... none of the 21 row(s) names the gold document and
 page, so there is nothing to measure`, exit 1).
+
+### Step 6 - pressure-class policy, document type, reason code (D-99 to D-101)
+
+- `core/config.py`: `comparison_pressure_class_higher_covers_lower` (default
+  `false`) and `ComparisonPolicy.pressure_class_higher_covers_lower`, mapped in
+  `Settings.comparison`.
+- `comparison/registry.py`: `evaluate_ordered_categorical` is Full only on
+  equality, or on a higher class when the policy says so. A higher class is
+  otherwise Partial at `partial_score_max` with review; a lower class stays
+  Missing.
+- `data/categories.json`: `families` per valve type (globe: `Fisher globe
+  valves`; ball: `Series 7/8`, `Worcester controls`, `VM-4700-S`; control:
+  `D-Series`, `Control valves`).
+- `services/categories.py`: `ProductType.families`, family-aware `infer_type`,
+  `document_type`.
+- `services/retrieval.py`: `Candidate.document_type` / `type_unconfirmed`;
+  `_type_filter` uses the chunk's own type first, then the document's declared
+  type, and marks the candidate `type_unconfirmed` when neither names one.
+- `services/matching.py`: `type_unconfirmed` sets `applicability =
+  family_level` and a review reason; `MatchResult.reason_code`.
+- `repositories/schema.py`, `alembic/versions/0011_result_reason_code.py`:
+  `result.reason_code` (VARCHAR(64), CHECK constraint).
+- `services/findings.py`, `repositories/runs.py`, `services/report.py`: write,
+  read and expose the code in the JSON report, review queue and CSV.
+- Tests: pressure-class default/opt-in, family placement, silent-chunk
+  dropping, unknown-type family-level, unmapped-attribute vs silent corpus.
+
+*Measured:* 519 backend unit tests pass (8 skip without a database). With
+`TEST_DATABASE_URL` pointed at a disposable `tender_it`: 527 pass, including
+migration `0011`. Migration `0011_result_reason_code` applied to `tender_test`;
+corpus unchanged (7 tenders, 70 documents, 20,892 chunks, 1,368 results).

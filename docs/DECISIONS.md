@@ -1919,3 +1919,97 @@ rejected: that measures the pipeline end to end and hides a retrieval miss
 behind a verifier miss.
 
 ---
+
+---
+
+## D-99 - A higher pressure class is a partial match until a deployment says otherwise
+
+`evaluate_ordered_categorical` used to treat `offered >= required` as a full
+match. It now treats only equality as full. A higher class is a
+`partial_match` at `comparison_partial_score_max` (0.75) with
+`needs_review = True`; a lower class is still `missing_capability`, because
+that is a documented capability with a failing value.
+
+`comparison_pressure_class_higher_covers_lower` (default `false`) restores the
+old behaviour for a deployment whose buyer accepts a higher class outright.
+The setting flows through `Settings.comparison` into
+`ComparisonPolicy.pressure_class_higher_covers_lower`, so the run's config
+snapshot records which rule it was scored under (FR-34).
+
+*Why:* a pressure class is a rating, not a drop-in equivalence. A Class 300
+valve is commonly heavier, longer face-to-face and more expensive than the
+Class 150 valve the bill of quantities asked for, and the clause may also fix
+face-to-face or weight. Publishing a higher class as a full match decides an
+engineering question the evaluator cannot see. Partial + review keeps the
+claim and asks the person who can see the whole clause.
+
+*Alternatives:* full match for `>=` (the old rule) - rejected: it hides the
+interchangeability question. Missing capability for `>` - rejected: the
+capability is documented and does not fail, so calling it missing would be
+wrong under PRD 4. Convert ASME class to PN - rejected for the same reason as
+D-95: a conversion is a fact about a standard, not a guess.
+
+---
+
+## D-100 - A document's own type places a page that does not repeat it
+
+A catalogue page says "150" under a column header, not "ball valve". The type
+filter (D-97) therefore had a hole: a silent chunk from a control-valve
+brochure was kept for a gate-valve item because silence was treated as
+compatible.
+
+`categories.ProductType` now carries `families`, read from
+`data/categories.json` alongside the type terms. `document_type()` runs the
+same inference over the document's declared model/family and file name, so a
+document and an item are placed in one vocabulary. The valve families shipped
+are the ones the corpus actually declares: `Fisher globe valves` for globe,
+`Series 7/8`, `Worcester controls` and `VM-4700-S` for ball, `D-Series` and
+`Control valves` for control.
+
+`retrieval._type_filter` resolves in this order:
+
+1. the type the chunk itself names - kept if it is the wanted type, dropped if
+   it positively names a different one;
+2. otherwise the type the document declares - same rule;
+3. otherwise neither names a type: the chunk is kept, `type_unconfirmed` is
+   set, and `matching` records `applicability = family_level`, caps the score
+   and flags review.
+
+*Why:* a page belongs to the document it is in. Dropping a silent page would
+turn a corpus gap into a missing capability (PRD 4); keeping it without a
+type would let a different product answer the clause. Family-level evidence is
+the honest middle: the passage is real, its applicability is not confirmed.
+
+*Alternatives:* drop every silent chunk - rejected: silence is not a
+different type. Trust the document title alone - rejected: the stored path is
+a file name, and `model_or_family` is the field the corpus seed actually
+fills; both are read, and neither is invented. Add a new column - rejected: no
+new fact is stored, the type is derived from fields that already exist.
+
+---
+
+## D-101 - A result keeps the reason code that stopped its comparison
+
+`ReasonCode` existed on `Evaluation` (D-86) but was not persisted, so a stored
+result could not distinguish "no evaluator for this attribute" from "the
+catalogue is silent": both were `no_evidence_found`.
+
+`result.reason_code` is now a nullable VARCHAR(64) with a CHECK constraint
+(migration `0011_result_reason_code`), written by `findings.store_result`,
+carried by `MatchResult.reason_code`, read by `RunRepo.results`, and exposed
+in the JSON report, the review queue and the CSV. NULL means the status is a
+finding: the catalogue answered, or it was silent. A non-NULL code means a
+limit of ours stopped the comparison - `attribute_not_mapped`,
+`value_missing`, `grade_not_recognised`, `unit_not_comparable` or
+`operator_not_comparable`.
+
+*Why:* the two cases need opposite fixes. `attribute_not_mapped` is a
+vocabulary gap we can close; a silent catalogue is a coverage fact the buyer
+must see. Counting them together makes the unknown-attribute rate invisible
+and overstates corpus coverage.
+
+*Alternatives:* put the code in `review_reason` text - rejected: a report
+would have to parse prose. Reuse `status` - rejected: AGENTS requires status,
+`verification_outcome` and `applicability` to stay separate, and a system
+limit is not a product finding. A separate table - rejected: the code is one
+attribute of one result, and a column is the smallest change.

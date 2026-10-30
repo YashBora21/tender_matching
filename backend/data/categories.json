@@ -40,6 +40,9 @@
           "terms": [
             "globe valve",
             "glove valve"
+          ],
+          "families": [
+            "Fisher globe valves"
           ]
         },
         {
@@ -55,6 +58,11 @@
           "name": "ball",
           "terms": [
             "ball valve"
+          ],
+          "families": [
+            "Series 7/8",
+            "Worcester controls",
+            "VM-4700-S"
           ]
         },
         {
@@ -67,6 +75,10 @@
           "name": "control",
           "terms": [
             "control valve"
+          ],
+          "families": [
+            "D-Series",
+            "Control valves"
           ]
         },
         {

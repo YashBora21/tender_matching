@@ -20,6 +20,7 @@ from app.services.categories import (
     categories_path,
     category_names,
     category_types,
+    document_type,
     infer_category,
     infer_type,
     load_categories,
@@ -209,6 +210,24 @@ def test_the_valve_types_are_declared_in_the_data_file():
     assert {"gate", "globe", "check", "ball", "butterfly"} <= names
     # A category with no declared types is not an error; it simply has none.
     assert category_types("pumps") == ()
+
+
+def test_a_document_is_placed_by_its_family_not_only_its_words():
+    """A datasheet page rarely repeats "ball valve"; the cover names the
+    family. The family is in the data file and places the document (D-100)."""
+    assert document_type("valves", "D-Series").product_type == "control"
+    assert document_type("valves", "Series 7/8").product_type == "ball"
+    assert document_type("valves", "Worcester Controls").product_type == "ball"
+    assert document_type("valves", "VM-4700-S").product_type == "ball"
+
+
+def test_a_document_that_names_no_type_has_an_unknown_type():
+    """Unknown is not a different type: the caller keeps the document and
+    marks its evidence family-level (D-100)."""
+    guess = document_type("valves", "WCENBR0001_EN_AQ.pdf")
+    assert guess.product_type is None
+    assert not guess.known
+    assert guess.reason
 
 
 def test_every_item_is_classified_from_its_own_words():

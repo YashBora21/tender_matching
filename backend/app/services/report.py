@@ -295,6 +295,10 @@ def build_report(
                     "confidence": row["confidence"],
                     "review_required": bool(row["review_required"]),
                     "review_reason": row["review_reason"],
+                    # A code, when no verdict was reached for a reason that is
+                    # ours and not the product's (D-101). The status stays
+                    # *no evidence found*; the code says why.
+                    "reason_code": row.get("reason_code"),
                     "evidence": row["evidence"],
                 }
                 for row in rows
@@ -328,6 +332,7 @@ def build_report(
                         "manufacturer": row["manufacturer"],
                         "status": row["status"],
                         "reason": row["review_reason"],
+                        "reason_code": row.get("reason_code"),
                     }
                 )
 
@@ -433,6 +438,7 @@ def render_csv(report: dict) -> str:
             "confidence",
             "review_required",
             "review_reason",
+            "reason_code",
         ]
     )
 
@@ -459,6 +465,7 @@ def render_csv(report: dict) -> str:
                         _csv_safe(row.get("confidence")),
                         _csv_safe("yes" if row.get("review_required") else "no"),
                         _csv_safe(row.get("review_reason")),
+                        _csv_safe(row.get("reason_code")),
                     ]
                 )
     return buffer.getvalue()

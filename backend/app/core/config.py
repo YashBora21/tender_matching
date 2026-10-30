@@ -156,6 +156,12 @@ class Settings(BaseSettings):
     comparison_partial_score_min: float = 0.25
     comparison_partial_score_max: float = 0.75
     comparison_family_level_score: float = 0.5
+    # Whether a higher pressure class answers a lower requirement outright.
+    # Default false: a Class 300 valve against a Class 150 clause is a partial
+    # match that goes to review, because a higher rating is not automatically
+    # interchangeable (wall thickness, face-to-face, weight, cost). Set true
+    # only when the buyer has said a higher class is acceptable (D-99).
+    comparison_pressure_class_higher_covers_lower: bool = False
     # Document classes in descending authority. A conflict between two classes
     # is resolved by the higher one; a conflict inside one class stays a
     # conflict and goes to review (FR-25).
@@ -218,6 +224,9 @@ class Settings(BaseSettings):
             partial_score_max=self.comparison_partial_score_max,
             family_level_score=self.comparison_family_level_score,
             numeric_partial_tolerance=self.comparison_numeric_partial_tolerance,
+            pressure_class_higher_covers_lower=(
+                self.comparison_pressure_class_higher_covers_lower
+            ),
         )
 
     @property
@@ -267,6 +276,10 @@ class ComparisonPolicy(BaseModel):
     # How far short of a numeric requirement a capability may fall and still
     # count as a partial match rather than a capability failure.
     numeric_partial_tolerance: float = Field(default=0.1, ge=0.0, le=1.0)
+    # Whether a higher pressure class satisfies a lower requirement outright.
+    # The default is conservative: higher is a partial match that goes to
+    # review, because a higher rating is not automatically interchangeable.
+    pressure_class_higher_covers_lower: bool = False
 
     model_config = {"frozen": True}
 

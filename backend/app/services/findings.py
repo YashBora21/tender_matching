@@ -24,6 +24,7 @@ from app.schemas.enums import (
     ConfidenceLevel,
     FactVerificationStatus,
     Operator,
+    ReasonCode,
     RequirementStatus,
     VerificationOutcome,
     ValueType,
@@ -166,6 +167,7 @@ def store_result(
     confidence: ConfidenceLevel = ConfidenceLevel.LOW,
     review_required: bool = False,
     review_reason: Optional[str] = None,
+    reason_code: Optional[ReasonCode] = None,
     mandatory: bool = True,
 ) -> str:
     """Write a result and return its id."""
@@ -185,6 +187,7 @@ def store_result(
             confidence=confidence.value,
             review_required=review_required,
             review_reason=review_reason,
+            reason_code=reason_code.value if reason_code is not None else None,
         )
     )
     return str(result_id)

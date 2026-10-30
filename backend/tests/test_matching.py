@@ -260,8 +260,8 @@ def test_a_page_that_does_not_repeat_the_manufacturer_is_still_that_manufacturer
 
 def test_a_pressure_class_uses_its_ordered_evaluator(monkeypatch):
     """The model answers "class", the registry has a rule for the canonical
-    term `pressure_class`, and Class 300 meets a Class 150 requirement
-    (D-95)."""
+    term `pressure_class`, and Class 300 against a Class 150 requirement is a
+    partial match that goes to review (D-95, D-99)."""
     from app.services import matching
     from app.services.retrieval import Candidate
 
@@ -301,8 +301,9 @@ def test_a_pressure_class_uses_its_ordered_evaluator(monkeypatch):
         client=client,
     )
 
-    assert result.status is RequirementStatus.FULL_MATCH
+    assert result.status is RequirementStatus.PARTIAL_MATCH
     assert result.value_type is not None
+    assert result.review_required is True
 
 
 def test_an_extraction_that_fails_is_flagged_not_silently_empty(monkeypatch):
@@ -422,6 +423,101 @@ def test_family_level_evidence_is_capped_and_flagged_not_a_confirmed_match(monke
     assert result.applicability is Applicability.FAMILY_LEVEL
     assert result.score <= 0.5
     assert result.review_required is True
+
+
+def test_evidence_from_a_document_with_no_declared_type_is_family_level(monkeypatch):
+    """A document that never says which product type it covers may be about a
+    different product. The claim is kept, but it is not model-level evidence
+    and its score is capped (D-100)."""
+    from app.schemas.enums import Applicability
+    from app.services import matching
+    from app.services.retrieval import Candidate
+
+    candidate = Candidate(
+        chunk_id="c1",
+        document_id="d1",
+        text="Body of body shall be SS316",
+        page=1,
+        type_unconfirmed=True,
+    )
+    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(matching, "_page_text", lambda s, c: candidate.text)
+
+    client = FakeClient(
+        {
+            "requirements": [
+                {"found": True, "attribute": "body material", "value": "SS316",
+                 "unit": None, "operator": "eq", "model": None,
+                 "quote": "Body of body shall be SS316"}
+            ]
+        }
+    )
+
+    result = match_requirement(
+        FakeSession(),
+        "Body shall be SS316",
+        requirement_value="SS316",
+        requirement_operator="eq",
+        client=client,
+    )
+
+    assert result.applicability is Applicability.FAMILY_LEVEL
+    assert result.score <= 0.5
+    assert result.review_required is True
+    assert "does not declare its product type" in (result.review_reason or "")
+
+
+def test_an_unmapped_attribute_has_its_own_reason_code(monkeypatch):
+    """'We could not evaluate this attribute' is not 'the catalogue is
+    silent'. Both keep the status *no evidence found*, and the code is what
+    tells them apart (D-101)."""
+    from app.schemas.enums import ReasonCode, VerificationOutcome
+    from app.services import matching
+    from app.services.retrieval import Candidate
+
+    candidate = Candidate(
+        chunk_id="c1",
+        document_id="d1",
+        text="Wibble factor is 12",
+        page=1,
+    )
+    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(matching, "_page_text", lambda s, c: candidate.text)
+
+    client = FakeClient(
+        {
+            "requirements": [
+                {"found": True, "attribute": "wibble factor", "value": "12",
+                 "unit": None, "operator": "eq", "model": None,
+                 "quote": "Wibble factor is 12"}
+            ]
+        }
+    )
+
+    result = match_requirement(
+        FakeSession(), "Wibble factor shall be 12", client=client
+    )
+
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.reason_code is ReasonCode.ATTRIBUTE_NOT_MAPPED
+    assert result.verification_outcome is VerificationOutcome.NOT_CHECKED
+    assert result.review_required is True
+
+
+def test_a_silent_corpus_has_no_reason_code(monkeypatch):
+    """Nothing was found, so no limit of ours stopped a comparison: the code
+    stays empty, which is how a report counts silence apart from a gap in our
+    own evaluation (D-101)."""
+    from app.services import matching
+
+    monkeypatch.setattr(matching, "search", lambda *a, **k: [])
+
+    result = match_requirement(
+        FakeSession(), "Body shall be SS316", client=FakeClient({})
+    )
+
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.reason_code is None
 
 
 def test_a_verified_fact_is_answered_without_retrieving_again(monkeypatch):

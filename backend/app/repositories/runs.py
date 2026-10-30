@@ -107,6 +107,7 @@ class RunRepo:
                 result.c.confidence,
                 result.c.review_required,
                 result.c.review_reason,
+                result.c.reason_code,
                 fact.c.id,
                 fact.c.page,
                 fact.c.quote,
@@ -142,20 +143,23 @@ class RunRepo:
                     "confidence": row[9],
                     "review_required": bool(row[10]),
                     "review_reason": row[11],
+                    # Why no verdict was reached, when the limit is ours
+                    # rather than a finding about the product (D-101).
+                    "reason_code": row[12],
                     "evidence": (
                         None
-                        if row[12] is None
+                        if row[13] is None
                         else {
-                            "fact_id": str(row[12]),
-                            "page": row[13],
-                            "quote": row[14],
-                            "document_id": str(row[15]) if row[15] else None,
-                            "document": _document_name(row[16], row[19]),
-                            "doc_type": row[17],
-                            "sha256": row[18],
+                            "fact_id": str(row[13]),
+                            "page": row[14],
+                            "quote": row[15],
+                            "document_id": str(row[16]) if row[16] else None,
+                            "document": _document_name(row[17], row[20]),
+                            "doc_type": row[18],
+                            "sha256": row[19],
                             # Where the document came from, so the report can
                             # offer the source page rather than only its name.
-                            "url": row[19],
+                            "url": row[20],
                         }
                     ),
                 }

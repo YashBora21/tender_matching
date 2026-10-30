@@ -39,6 +39,7 @@ __all__ = [
     "categories_path",
     "category_names",
     "category_types",
+    "document_type",
     "infer_category",
     "infer_type",
     "load_categories",
@@ -65,10 +66,16 @@ class ProductType:
     A gate valve and a ball valve are both `valves`, but a gate-valve
     requirement is not answered by a ball-valve datasheet. The type is the
     finer scope, and it lives in the same data file as the category.
+
+    `families` are the product families the corpus declares for this type
+    ("D-Series", "Series 7/8"). A catalogue names its family on the cover and
+    rarely repeats the type on every page, so the family is how a page that
+    never says "ball valve" can still be placed (D-100).
     """
 
     name: str
     terms: tuple[str, ...]
+    families: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -162,6 +169,11 @@ def _load(target: str) -> tuple[Category, ...]:
                     for term in (_normalise(t) for t in kind.get("terms", ()))
                     if term
                 ),
+                families=tuple(
+                    family
+                    for family in (_normalise(t) for t in kind.get("families", ()))
+                    if family
+                ),
             )
             for kind in item.get("types", ())
         )
@@ -247,6 +259,10 @@ def infer_type(
     gate valve" says more than "gate valve". When two types are named equally
     the answer is ambiguous, and the caller must not filter on a guess
     (FR-T9).
+
+    A product family ("D-Series", "Series 7/8") is a type too, and it is
+    matched the same way: a document that names only its family has still
+    said what it is (D-100).
     """
     if not category:
         return TypeGuess(reason="the item's category is not known")
@@ -259,7 +275,11 @@ def infer_type(
 
     best: dict[str, str] = {}
     for kind in vocabulary:
-        matched = [term for term in kind.terms if _mentions(text, term)]
+        matched = [
+            term
+            for term in (*kind.terms, *kind.families)
+            if _mentions(text, term)
+        ]
         if matched:
             best[kind.name] = max(matched, key=len)
 
@@ -275,6 +295,25 @@ def infer_type(
             reason="the item names more than one type equally: " + ", ".join(tied),
         )
     return TypeGuess(product_type=winner, term=term)
+
+
+def document_type(
+    category: Optional[str],
+    *parts: Optional[str],
+    categories: Optional[Iterable[Category]] = None,
+) -> TypeGuess:
+    """The type a *document* declares for itself (D-100).
+
+    A datasheet page says "150" and the column header says "Pressure class";
+    the page rarely repeats "ball valve". The cover does: the document's
+    declared model or family, and its file name, are what place the whole
+    document in a type. This is the same inference the item title gets, so a
+    document and an item are compared in one vocabulary.
+
+    An unknown answer is not a different type: the caller keeps the document
+    and treats the evidence as family-level (PRD 4).
+    """
+    return infer_type(category, *parts, categories=categories)
 
 
 def mentioned_types(

@@ -134,7 +134,9 @@ def test_cast_carbon_steel_is_the_carbon_steel_alias_group() -> None:
         assert result.status is RequirementStatus.FULL_MATCH, offered
 
 
-def _pressure_class(required: str, offered: str) -> ComparisonRequest:
+def _pressure_class(
+    required: str, offered: str, *, policy=None
+) -> ComparisonRequest:
     return ComparisonRequest(
         requirement_value=required,
         requirement_operator=Operator.EQ,
@@ -146,13 +148,35 @@ def _pressure_class(required: str, offered: str) -> ComparisonRequest:
         capability_text_value=offered,
         capability_range=None,
         attribute="pressure_class",
+        policy=policy,
     )
 
 
-def test_a_higher_pressure_class_meets_a_lower_requirement() -> None:
+def test_a_higher_pressure_class_is_a_partial_match_until_reviewed() -> None:
+    """A higher class is not automatically interchangeable (D-99).
+
+    The rating is not the only difference: a Class 300 valve is often heavier
+    and longer, and the clause may also fix face-to-face. So the default is a
+    partial match that goes to review, not a full match.
+    """
     result = evaluate(_pressure_class("150", "300"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.PARTIAL_MATCH
+    assert result.score == 0.75
+    assert result.needs_review is True
+
+
+def test_a_deployment_can_say_a_higher_class_covers_a_lower_one() -> None:
+    """The rule is policy, not a hard-coded fact: a buyer who accepts a higher
+    class sets `comparison_pressure_class_higher_covers_lower` (D-99)."""
+    from app.core.config import ComparisonPolicy
+
+    policy = ComparisonPolicy(pressure_class_higher_covers_lower=True)
+    result = evaluate(
+        _pressure_class("150", "300", policy=policy), ValueType.CATEGORICAL
+    )
     assert result.status is RequirementStatus.FULL_MATCH
     assert result.score == 1.0
+    assert result.needs_review is False
 
 
 def test_the_same_pressure_class_meets_the_requirement() -> None:

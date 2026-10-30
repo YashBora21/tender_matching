@@ -76,6 +76,11 @@ class Candidate:
     # model. Evidence from it is family-level: uncertain applicability
     # (PRD 4).
     is_family_level: bool = False
+    # The type the *document* declares for itself, and whether it could be
+    # established at all (D-100). A document whose type is unknown cannot be
+    # shown to be about the wanted type, so its evidence is family-level.
+    document_type: Optional[str] = None
+    type_unconfirmed: bool = False
     # The ranks the two searches gave it, and the merged score.
     keyword_rank: Optional[int] = None
     semantic_rank: Optional[int] = None
@@ -181,7 +186,7 @@ def _type_filter(
     category: Optional[str],
     product_type: Optional[str],
 ) -> list[Candidate]:
-    """Drop the chunks that positively describe a different type (D-97).
+    """Drop the chunks that belong to a different product type (D-97, D-100).
 
     A gate-valve requirement is not answered by a ball-valve datasheet, even
     though both are `valves`. The filter is deliberately one-sided: a chunk
@@ -189,21 +194,37 @@ def _type_filter(
     and a chunk that names no type at all is kept, because silence is not a
     different type and dropping it would turn a corpus gap into a missing
     capability (PRD 4).
+
+    Silence is resolved one level up. A page that never says "ball valve" is
+    still in a ball-valve catalogue, and the cover says so; the document's own
+    declared model or family decides the type (D-100). Only when neither the
+    chunk nor the document names a type is the answer left open: the chunk is
+    kept, and the evidence is marked family-level so a reviewer sees that the
+    type was never confirmed.
     """
     if not category or not product_type:
         return candidates
-    from app.services.categories import mentioned_types
+    from app.services.categories import document_type, mentioned_types
 
     kept: list[Candidate] = []
     for candidate in candidates:
-        named = mentioned_types(
+        named = mentioned_types(category, candidate.text, candidate.section)
+        declared = document_type(
             category,
-            candidate.text,
-            candidate.section,
+            candidate.model_or_family,
+            candidate.family,
             candidate.document_title,
         )
-        if not named or product_type in named:
-            kept.append(candidate)
+        candidate.document_type = declared.product_type
+        if not named and declared.product_type:
+            named = frozenset({declared.product_type})
+        if named and product_type not in named:
+            continue
+        if not named:
+            # Neither the page nor the document says what it is. That is not
+            # a different type, and it is not a confirmed one either.
+            candidate.type_unconfirmed = True
+        kept.append(candidate)
     return kept
 
 

@@ -109,6 +109,7 @@ def _result(
     evidence=None,
     review_required=False,
     review_reason=None,
+    reason_code=None,
     capability="Body material SS316",
     verification="passed",
     applicability="model_level",
@@ -126,6 +127,7 @@ def _result(
         "confidence": "high",
         "review_required": review_required,
         "review_reason": review_reason,
+        "reason_code": reason_code,
         "evidence": evidence,
     }
 
@@ -395,6 +397,7 @@ def test_the_review_queue_names_every_flagged_result():
             "manufacturer": "Acme",
             "status": "no_evidence_found",
             "reason": "the corpus is silent",
+            "reason_code": None,
         }
     ]
 
