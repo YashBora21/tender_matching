@@ -1901,3 +1901,31 @@ butt weld only; 122 mm not stated). Flowserve Worcester Series 44/59 - item 10
 *Measured:* `recall.py --gold .../proposed-...csv` exits 1 with "none of the 6
 row(s) is confirmed", as intended. Recall is **not** measured yet: it waits on
 the reviewer confirming the six rows.
+
+### Step 8 - recall@k on the confirmed item 10/11 slice
+
+- `eval/gold/confirmed-GEM_9671792-items-10-11.csv`: the six proposals, now
+  `label_state=confirmed`, `confirmed=yes`. Nothing else changed.
+- `eval/gold/recall-GEM_9671792-items-10-11.json`: the measured report.
+
+*Measured (local `tender_test`, 20,892 embedded chunks):*
+
+| k | recall | hits |
+| --- | --- | --- |
+| 3 | 33.3% | 2/6 |
+| 20 | 66.7% | 4/6 |
+
+Misses by cause: `corpus_gap` 0, `chunking` 0, `retrieval` 2, `verifier` 0.
+Both misses are the Delval Series 7/8 bulletin, page 2, for items 10 and 11:
+the page is indexed but the product's search does not put it in the top 20.
+The four hits are Worcester item 10, Worcester item 11, and Val-Matic items 10
+and 11.
+
+The Delval document is found: page 1 is rank 1 for both items. Page 2 is the
+specification page (rating, WCB, face-to-face) and does not make the fused
+top 20. The query's distinctive terms for these items - "screwed end",
+"socket weld", "122 mm" - are absent from the whole bulletin, so ranking is
+carried by the generic terms, which page 1 matches more strongly. Both
+searches fetch 50 candidates each and the fusion returns the top 20, so page 2
+is either below 50 in a modality or loses on RRF.
+

@@ -1,0 +1,41 @@
+{
+  "k_values": [
+    3,
+    20
+  ],
+  "total": 6,
+  "unlabelled": 0,
+  "unconfirmed": 0,
+  "recall": {
+    "3": 0.3333333333333333,
+    "20": 0.6666666666666666
+  },
+  "hits": {
+    "3": 2,
+    "20": 4
+  },
+  "causes": {
+    "corpus_gap": 0,
+    "chunking": 0,
+    "retrieval": 2,
+    "verifier": 0
+  },
+  "misses": [
+    {
+      "requirement_id": "6ffe6648-a230-46c0-abbf-279384a77e54",
+      "manufacturer": "delval_flow",
+      "gold_document": "1692719045-Technical-Bulletin---118-PRODUCT-SPECIFICATION-SERIES-7-8-R1.pdf",
+      "gold_page": 2,
+      "cause": "retrieval",
+      "detail": "the page is indexed but not in the top 20"
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "manufacturer": "delval_flow",
+      "gold_document": "1692719045-Technical-Bulletin---118-PRODUCT-SPECIFICATION-SERIES-7-8-R1.pdf",
+      "gold_page": 2,
+      "cause": "retrieval",
+      "detail": "the page is indexed but not in the top 20"
+    }
+  ]
+}
