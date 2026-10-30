@@ -95,10 +95,11 @@ def test_a_row_without_a_gold_page_is_unlabelled_not_a_miss(tmp_path):
         encoding="utf-8",
     )
 
-    labels, unlabelled = recall.load_labels(path)
+    labels, unlabelled, unconfirmed = recall.load_labels(path)
 
     assert [label.requirement_id for label in labels] == ["r1"]
     assert unlabelled == 1
+    assert unconfirmed == 0
 
 
 def test_a_half_labelled_row_is_an_error_not_a_silent_drop(tmp_path):
@@ -129,11 +130,47 @@ def test_the_jsonl_form_is_read(tmp_path):
         encoding="utf-8",
     )
 
-    labels, unlabelled = recall.load_labels(path)
+    labels, unlabelled, unconfirmed = recall.load_labels(path)
 
     assert len(labels) == 1
     assert labels[0].gold_page == 3
     assert unlabelled == 0
+    assert unconfirmed == 0
+
+
+def test_a_proposed_row_is_not_measured_until_confirmed(tmp_path):
+    """A proposal is not a label: only the confirmed row counts (D-98)."""
+    path = tmp_path / "labels.csv"
+    path.write_text(
+        "requirement_id,requirement,manufacturer,item_id,item_title,"
+        "gold_document,gold_page,true_status,label_state,confirmed\n"
+        "r1,SYNTHETIC body shall be SS316,Synthetic Manufacturer,1,"
+        "SYNTHETIC GATE VALVE,gold.pdf,3,full_match,proposed,no\n"
+        "r2,SYNTHETIC trim shall be 13Cr,Synthetic Manufacturer,1,"
+        "SYNTHETIC GATE VALVE,gold.pdf,4,partial_match,confirmed,yes\n",
+        encoding="utf-8",
+    )
+
+    labels, unlabelled, unconfirmed = recall.load_labels(path)
+
+    assert [label.requirement_id for label in labels] == ["r2"]
+    assert unlabelled == 0
+    assert unconfirmed == 1
+
+
+def test_a_file_of_proposals_only_is_refused(tmp_path):
+    """A recall over labels nobody confirmed is not a measurement (D-98)."""
+    path = tmp_path / "labels.csv"
+    path.write_text(
+        "requirement_id,requirement,manufacturer,item_id,item_title,"
+        "gold_document,gold_page,true_status,label_state,confirmed\n"
+        "r1,SYNTHETIC body shall be SS316,Synthetic Manufacturer,1,"
+        "SYNTHETIC GATE VALVE,gold.pdf,3,full_match,proposed,no\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(recall.RecallError, match="none of the 1 row"):
+        recall.load_labels(path)
 
 
 def test_recall_at_three_and_twenty():

@@ -1874,3 +1874,30 @@ page, so there is nothing to measure`, exit 1).
 `TEST_DATABASE_URL` pointed at a disposable `tender_it`: 527 pass, including
 migration `0011`. Migration `0011_result_reason_code` applied to `tender_test`;
 corpus unchanged (7 tenders, 70 documents, 20,892 chunks, 1,368 results).
+
+### Step 7 - proposed gold slice for items 10 and 11 (awaiting confirmation)
+
+- `eval/gold/proposed-GEM_9671792-items-10-11.csv`: six proposals, one per
+  requirement x candidate document, for tender `GEM_9671792_Valve`
+  (`9752351d...`). Every row is `label_state=proposed`, `confirmed=no`, and
+  carries the verbatim `gold_quote`, `gold_page`, `true_status` and a
+  `proposal_reason`. Quotes were checked as exact substrings of the named PDF
+  page before the file was written.
+- `eval/recall.py`: `load_labels` now reads `label_state` / `confirmed`. A file
+  that declares those columns measures only confirmed rows; proposals are
+  counted as *unconfirmed* and a file of proposals alone is refused. A file
+  with neither column keeps the old behaviour.
+- `eval/tests/test_recall.py`: 2 new tests (a proposal is skipped, a file of
+  proposals is refused); 32 eval tests pass.
+- `eval/README.md`: the recall section documents the confirmation columns.
+
+*Proposed:* Delval Series 7/8 - items 10 and 11 `missing_capability` (flanged /
+butt weld only; 122 mm not stated). Flowserve Worcester Series 44/59 - item 10
+`partial_match` (class 600 vs 150, plus F2F/cast unstated), item 11
+`partial_match` (F2F/cast unstated). Val-Matic QuadroSphere - items 10 and 11
+`missing_capability` (no screwed/socket ends, forged not cast, three-piece and
+122 mm not stated).
+
+*Measured:* `recall.py --gold .../proposed-...csv` exits 1 with "none of the 6
+row(s) is confirmed", as intended. Recall is **not** measured yet: it waits on
+the reviewer confirming the six rows.

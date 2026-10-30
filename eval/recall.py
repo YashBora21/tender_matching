@@ -30,6 +30,13 @@ names: `requirement_id`, `requirement`, `manufacturer`, `item_id`,
 `item_title`, `gold_document`, `gold_page`, and optionally `true_status`.
 `gold_document`/`gold_page` are the labeller's answer, not the run's cited
 `document`/`page`.
+
+A file may also carry `label_state` / `confirmed`. When it does, only rows the
+reviewer confirmed are measured; a proposed row is counted as *unconfirmed*
+and left out, exactly like an unlabelled one. A file of proposals therefore
+cannot publish a recall nobody signed off. A file with neither column is read
+as before (all rows are treated as confirmed), so the existing gold slice keeps
+working.
 """
 
 from __future__ import annotations
@@ -103,6 +110,7 @@ class RecallReport:
     rows: list[RecallRow]
     k_values: tuple[int, ...] = DEFAULT_K
     unlabelled: int = 0
+    unconfirmed: int = 0
 
     @property
     def total(self) -> int:
@@ -152,13 +160,29 @@ def _gold_page(value: object) -> Optional[int]:
     return page if page >= 1 else None
 
 
-def load_labels(path: Path) -> tuple[list[RecallLabel], int]:
-    """Read the labelled rows; return them and the count that had no gold page.
+CONFIRMED_VALUES = {"yes", "true", "1", "y", "confirmed"}
 
-    A row without both `gold_document` and `gold_page` cannot say what
-    retrieval should have found. It is counted as unlabelled and left out. A
-    file with no labelled row at all is refused: it is not a recall of 0, it
-    is an empty measurement.
+
+def _is_confirmed(raw: dict, declared: bool) -> bool:
+    """Whether a row was signed off by the reviewer.
+
+    A file that declares no confirmation column is read as before: every row
+    that names a gold page is a label (D-98). A file that does declare one
+    only measures the rows that are confirmed; a proposal is not a label.
+    """
+    if not declared:
+        return True
+    confirmed = str(raw.get("confirmed") or "").strip().lower()
+    state = str(raw.get("label_state") or "").strip().lower()
+    return confirmed in CONFIRMED_VALUES or state == "confirmed"
+
+
+def load_labels(path: Path) -> tuple[list[RecallLabel], int, int]:
+    """Read the labelled rows.
+
+    Returns the confirmed labels, the count of rows with no gold page, and the
+    count of rows that were not confirmed. Neither count is measured: recall
+    over labels nobody confirmed is not a measurement (D-98).
     """
     try:
         text = path.read_text(encoding="utf-8")
@@ -188,10 +212,21 @@ def load_labels(path: Path) -> tuple[list[RecallLabel], int]:
     if not rows:
         raise RecallError(f"{path}: the label file has no rows")
 
+    # The file as a whole decides whether confirmation is required. A file that
+    # carries the columns but confirms none of them is a proposal file, and is
+    # refused below rather than silently measured.
+    declared = any(
+        ("confirmed" in raw) or ("label_state" in raw) for raw in rows
+    )
+
     labels: list[RecallLabel] = []
     unlabelled = 0
+    unconfirmed = 0
     for offset, raw in enumerate(rows):
         number = first_line + offset
+        if not _is_confirmed(raw, declared):
+            unconfirmed += 1
+            continue
         document = str(raw.get("gold_document") or "").strip()
         page = _gold_page(raw.get("gold_page"))
         if not document and page is None:
@@ -227,11 +262,16 @@ def load_labels(path: Path) -> tuple[list[RecallLabel], int]:
         )
 
     if not labels:
+        if unconfirmed:
+            raise RecallError(
+                f"{path}: none of the {len(rows)} row(s) is confirmed, so "
+                "there is nothing to measure; confirm the proposals first"
+            )
         raise RecallError(
             f"{path}: none of the {len(rows)} row(s) names the gold document "
             "and page, so there is nothing to measure"
         )
-    return labels, unlabelled
+    return labels, unlabelled, unconfirmed
 
 
 class Ranking(Protocol):
@@ -253,6 +293,7 @@ def evaluate(
     *,
     k_values: tuple[int, ...] = DEFAULT_K,
     unlabelled: int = 0,
+    unconfirmed: int = 0,
 ) -> RecallReport:
     """Measure recall@k and attribute every label that was not a hit."""
     if not labels:
@@ -306,7 +347,9 @@ def evaluate(
                 )
         rows.append(RecallRow(label=label, hit_at=hit_at, cause=cause, detail=detail))
 
-    return RecallReport(rows=rows, k_values=ks, unlabelled=unlabelled)
+    return RecallReport(
+        rows=rows, k_values=ks, unlabelled=unlabelled, unconfirmed=unconfirmed
+    )
 
 
 class DatabaseRanking:
@@ -452,6 +495,11 @@ def render(report: RecallReport) -> str:
             f"unlabelled: {report.unlabelled} row(s) had no gold document/page "
             "and are not counted"
         )
+    if report.unconfirmed:
+        lines.append(
+            f"unconfirmed: {report.unconfirmed} row(s) were proposals and are "
+            "not counted; confirm them first"
+        )
     lines.append("")
     lines.append("misses by cause:")
     for cause, count in report.causes().items():
@@ -497,7 +545,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        labels, unlabelled = load_labels(Path(args.gold))
+        labels, unlabelled, unconfirmed = load_labels(Path(args.gold))
 
         from app.repositories.db import session_scope
 
@@ -507,6 +555,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 DatabaseRanking(session),
                 k_values=tuple(args.k),
                 unlabelled=unlabelled,
+                unconfirmed=unconfirmed,
             )
     except RecallError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -518,6 +567,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             "k_values": list(report.k_values),
             "total": report.total,
             "unlabelled": report.unlabelled,
+            "unconfirmed": report.unconfirmed,
             "recall": {str(k): report.recall(k) for k in report.k_values},
             "hits": {str(k): report.hits(k) for k in report.k_values},
             "causes": report.causes(),

@@ -78,6 +78,11 @@ The input is the review CSV (or JSONL) with `requirement_id`, `requirement`,
 optionally `true_status`. `gold_document`/`gold_page` are the labeller's
 answer, not the run's cited `document`/`page`.
 
+A file may also carry `label_state` / `confirmed`. When it does, only the rows
+the reviewer confirmed are measured. A proposed row is counted as
+*unconfirmed* and left out; a file with only proposals is refused, because a
+recall over labels nobody confirmed is not a measurement.
+
 Every label that is not a hit is attributed to one of four causes:
 
 | Cause | Meaning |
@@ -87,11 +92,9 @@ Every label that is not a hit is attributed to one of four causes:
 | `retrieval` | the page is indexed, but it is not in the top *k* |
 | `verifier` | the gold page was retrieved, but the published status is wrong |
 
-The harness refuses a label file with no rows, or with no row that names a
-gold document and page: recall over an empty set is not a measurement. A row
-without a gold page is counted as *unlabelled*, never as a miss. The gold
-slice produced so far has 21 rows and no gold columns, and the harness refuses
-it for exactly that reason.
+The harness refuses a label file with no rows, or with no confirmed row that
+names a gold document and page: recall over an empty set is not a measurement.
+A row without a gold page is counted as *unlabelled*, never as a miss.
 
 ## Not built
 
