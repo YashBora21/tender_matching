@@ -42,6 +42,43 @@ export interface TenderRequirements {
   requirements: RequirementRow[]
 }
 
+/** One document a tender links to, as the manifest records it.
+ *
+ * `failed` and `restricted` are the two states the reviewer can fix by hand:
+ * the file exists, the fetch could not get it. */
+export interface AttachmentRow {
+  url: string | null
+  name: string | null
+  sha256: string | null
+  kind: string | null
+  status: string | null
+  bytes: number | null
+  pages: number | null
+  retrieved_at: string | null
+  note: string | null
+}
+
+export interface TenderAttachments {
+  tender_id: string
+  category: string | null
+  attachments: AttachmentRow[]
+  /** The URLs of the attachments that could not be fetched: what to upload. */
+  missing: (string | null)[]
+}
+
+/** What the backend says about a file it accepted in place of a failed
+ * fetch. The record is written with `manual`, because a person supplied it. */
+export interface AttachmentUpload {
+  tender_id: string
+  name: string
+  url: string
+  sha256: string
+  kind: string | null
+  bytes: number
+  pages: number | null
+  status: string
+}
+
 export interface ManufacturerRow {
   id: string
   name: string

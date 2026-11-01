@@ -6,9 +6,11 @@
  */
 
 import type {
+  AttachmentUpload,
   Manufacturers,
   Report,
   RunProgress,
+  TenderAttachments,
   TenderRequirements,
   TenderUpload,
 } from './types'
@@ -80,6 +82,34 @@ export function requirementsStreamUrl(tenderId: string): string {
 
 export function getManufacturers(): Promise<Manufacturers> {
   return request<Manufacturers>('/api/manufacturers')
+}
+
+/** The documents a tender links to, and the URLs that could not be fetched.
+ *
+ * A tender is a wrapper: it names its bill of quantities and its
+ * specification and embeds neither. When a link has moved, the reading is
+ * not wrong — it is incomplete, and the file is still with the buyer. */
+export function getAttachments(tenderId: string): Promise<TenderAttachments> {
+  return request<TenderAttachments>(`/api/tenders/${tenderId}/attachments`)
+}
+
+/** Hand over a document the backend could not fetch.
+ *
+ * `url` ties the file to the attachment it replaces, so the report keeps
+ * saying where the requirement came from. */
+export function uploadAttachment(
+  tenderId: string,
+  file: File,
+  url?: string,
+): Promise<AttachmentUpload> {
+  const body = new FormData()
+  body.append('file', file)
+  if (url) body.append('url', url)
+  // No Content-Type: the browser sets the multipart boundary.
+  return request<AttachmentUpload>(`/api/tenders/${tenderId}/attachments`, {
+    method: 'POST',
+    body,
+  })
 }
 
 export function startRun(

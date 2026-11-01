@@ -2,17 +2,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import {
+  ApiError,
+  getAttachments,
   getManufacturers,
   getRequirements,
   requirementsStreamUrl,
   startRun,
+  uploadAttachment,
   uploadTender,
 } from './api'
 import { UploadPage } from './components/UploadPage'
 import type {
+  AttachmentRow,
+  AttachmentUpload,
   Manufacturers,
   RequirementRow,
   RunProgress,
+  TenderAttachments,
   TenderRequirements,
   TenderUpload,
 } from './types'
@@ -29,10 +35,12 @@ vi.mock('./api', () => {
   }
   return {
     ApiError,
+    getAttachments: vi.fn(),
     getManufacturers: vi.fn(),
     getRequirements: vi.fn(),
     requirementsStreamUrl: vi.fn(),
     startRun: vi.fn(),
+    uploadAttachment: vi.fn(),
     uploadTender: vi.fn(),
   }
 })
@@ -60,6 +68,28 @@ const CORPUS: Manufacturers = {
       categories: ['pumps'],
     },
   ],
+}
+
+const NO_ATTACHMENTS: TenderAttachments = {
+  tender_id: 't1',
+  category: 'pumps',
+  attachments: [],
+  missing: [],
+}
+
+function attachment(overrides: Partial<AttachmentRow> = {}): AttachmentRow {
+  return {
+    url: 'https://buyer.example/spec-1.pdf',
+    name: 'spec-1.pdf',
+    sha256: 'a'.repeat(64),
+    kind: 'spec',
+    status: 'ok',
+    bytes: 20480,
+    pages: 12,
+    retrieved_at: '2026-10-21T09:00:00+00:00',
+    note: null,
+    ...overrides,
+  }
 }
 
 function requirementRow(overrides: Partial<RequirementRow> = {}): RequirementRow {
@@ -147,12 +177,15 @@ const RUN: RunProgress = {
 }
 
 beforeEach(() => {
+  vi.mocked(getAttachments).mockReset()
+  vi.mocked(uploadAttachment).mockReset()
   vi.mocked(getManufacturers).mockReset()
   vi.mocked(getRequirements).mockReset()
   vi.mocked(requirementsStreamUrl).mockReset()
   vi.mocked(startRun).mockReset()
   vi.mocked(uploadTender).mockReset()
   vi.mocked(getManufacturers).mockResolvedValue(CORPUS)
+  vi.mocked(getAttachments).mockResolvedValue(NO_ATTACHMENTS)
   vi.mocked(uploadTender).mockResolvedValue(UPLOAD)
   vi.mocked(getRequirements).mockResolvedValue(read())
   vi.mocked(startRun).mockResolvedValue(RUN)
@@ -333,5 +366,92 @@ describe('UploadPage', () => {
     await screen.findByText('Choose manufacturers')
     expect(stream.closed).toBe(true)
     expect(vi.mocked(getRequirements)).toHaveBeenCalled()
+  })
+
+  it('offers a document the fetch could not reach and takes the reviewer copy of it', async () => {
+    vi.mocked(getAttachments).mockResolvedValue({
+      ...NO_ATTACHMENTS,
+      attachments: [
+        attachment(),
+        attachment({
+          url: 'https://buyer.example/boq-2.csv',
+          name: 'boq-2.csv',
+          kind: 'boq-csv',
+          status: 'failed',
+          sha256: null,
+          bytes: null,
+          pages: null,
+          note: 'the host refused the connection',
+        }),
+        attachment({
+          url: 'https://buyer.example/form-3.pdf',
+          name: 'form-3.pdf',
+          kind: 'form',
+          status: 'restricted',
+          sha256: null,
+          note: 'the host robots.txt disallows this path',
+        }),
+      ],
+      missing: ['https://buyer.example/boq-2.csv', 'https://buyer.example/form-3.pdf'],
+    })
+    vi.mocked(uploadAttachment).mockResolvedValue({
+      tender_id: 't1',
+      name: 'boq-2.csv',
+      url: 'https://buyer.example/boq-2.csv',
+      sha256: 'f'.repeat(64),
+      kind: 'boq-csv',
+      bytes: 512,
+      pages: null,
+      status: 'manual',
+    } satisfies AttachmentUpload)
+
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+    chooseFile(container)
+
+    await screen.findByText('Attachments')
+    expect(await screen.findByText('spec-1.pdf')).toBeTruthy()
+    expect(screen.getByText(/the host refused the connection/)).toBeTruthy()
+    // Only what was not fetched is offered for supply; the fetched document
+    // is listed for provenance and left alone.
+    expect(await screen.findAllByText('Supply this document')).toHaveLength(2)
+
+    const file = new File(['1,2,3 synthetic'], 'boq-2.csv', { type: 'text/csv' })
+    const supplied = container.querySelectorAll('input[type="file"]')[1]
+    fireEvent.change(supplied, { target: { files: [file] } })
+
+    await waitFor(() => expect(uploadAttachment).toHaveBeenCalled())
+    expect(vi.mocked(uploadAttachment)).toHaveBeenCalledWith(
+      't1',
+      file,
+      'https://buyer.example/boq-2.csv',
+    )
+    // The list is asked again, so the row now reads what the record says.
+    await waitFor(() => expect(vi.mocked(getAttachments)).toHaveBeenCalledTimes(2))
+    expect(screen.getByText(/is stored against this tender/)).toBeTruthy()
+  })
+
+  it('says there is nothing to supply when the tender records no document', async () => {
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+    chooseFile(container)
+
+    await screen.findByText('Attachments')
+    expect(
+      await screen.findByText(/No document is recorded for this tender/),
+    ).toBeTruthy()
+    expect(container.querySelectorAll('input[type="file"]')).toHaveLength(1)
+  })
+
+  it('still offers the match when the attachments cannot be listed', async () => {
+    vi.mocked(getAttachments).mockRejectedValue(
+      new ApiError(500, 'the manifest could not be read'),
+    )
+    const started = vi.fn()
+    const { container } = render(<UploadPage onStarted={started} />)
+    chooseFile(container)
+
+    await screen.findByText('Choose manufacturers')
+    await screen.findByText('the manifest could not be read')
+    fireEvent.click(screen.getByRole('button', { name: 'Run the match' }))
+    await waitFor(() => expect(started).toHaveBeenCalledWith('run-1'))
   })
 })

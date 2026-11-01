@@ -166,6 +166,21 @@ class RunRepo:
             )
         return found
 
+    def answered(self, run_id: str) -> set[tuple[str, str]]:
+        """The requirement x manufacturer pairs this run already stores.
+
+        A run stopped by a limit keeps the answers it found, and resuming it
+        has to pay only for the pairs that are missing: a key with a hard
+        quota cannot afford to read the whole tender again to add the last
+        requirement (D-110).
+        """
+        rows = self.session.execute(
+            select(result.c.requirement_id, result.c.manufacturer_id).where(
+                result.c.run_id == run_id
+            )
+        ).all()
+        return {(str(row[0]), str(row[1])) for row in rows}
+
     def count_results(self, run_id: str) -> int:
         return len(
             self.session.execute(select(result.c.id).where(result.c.run_id == run_id)).all()

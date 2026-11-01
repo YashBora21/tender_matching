@@ -1,0 +1,35 @@
+{
+  "category": "valves",
+  "entries": [
+    {
+      "manufacturer": "Intervalve Poonawalla",
+      "url": "https://www.intervalvepoonawalla.com/wp-content/uploads/2024/09/PRODUCT-PORTFOLIO_REV-0.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Valve product portfolio (butterfly, ball, gate, globe, check)",
+      "note": "Official Intervalve Poonawalla product portfolio - concentric/double/triple-offset butterfly, floating and trunnion ball, cast/forged gate-globe-check, with model codes (IVTFE etc), size and pressure ranges"
+    },
+    {
+      "manufacturer": "Intervalve Poonawalla",
+      "url": "https://www.intervalvepoonawalla.com/wp-content/uploads/2024/02/PED-Module-H-Ball-Valve.pdf",
+      "doc_type": "compliance_schedule",
+      "model_or_family": "Ball valve (PED Module H)",
+      "note": "PED conformity certificate for Intervalve Poonawalla ball valves - documents the design-category/assessment basis"
+    },
+    {
+      "manufacturer": "Intervalve Poonawalla",
+      "url": "https://www.pushkarnasales.com/pdf/INTERVALVE-ELOMATIC/IV%20General%20Catalogue.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Valve and Elomatic actuator range",
+      "secondary": true,
+      "note": "Distributor (Pushkarna Sales) general catalogue for Intervalve valves and Elomatic actuators; torque and MOC tables. Secondary - does not override the manufacturer portfolio."
+    },
+    {
+      "manufacturer": "Intervalve Poonawalla",
+      "url": "https://5.imimg.com/data5/SELLER/Doc/2023/4/302651538/JJ/AR/JF/7369423/intervalve-wafer-type-swing-check-valve.pdf",
+      "doc_type": "datasheet",
+      "model_or_family": "Wafer-type swing check valve (IVC / IVCT)",
+      "secondary": true,
+      "note": "Distributor check-valve datasheet - IVC/IVCT single-plate swing check to API 6D / ASME B16.10. Secondary source."
+    }
+  ]
+}

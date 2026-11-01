@@ -83,6 +83,12 @@ class FakeRunRepo:
     def count_results(self, run_id):
         return len(self.stored)
 
+    def answered(self, run_id):
+        return {
+            (str(row["requirement_id"]), str(row["manufacturer_id"]))
+            for row in self.stored
+        }
+
 
 class FakeTenderRepo:
     def __init__(self, requirements, items=None, pages=None, tender=None) -> None:
@@ -396,6 +402,75 @@ def test_a_run_that_hits_the_rate_limit_is_recorded_as_rate_limited():
     assert session.rollbacks == 1
 
 
+def test_a_run_stopped_by_its_own_budget_is_a_stop_not_a_failure():
+    """The provider refused nothing: this process spent what it was given.
+    The answers found stay, and the run says what stopped it (D-110)."""
+    from app.services.llm import LLMBudgetExceeded
+
+    repo = FakeRunRepo()
+    technical = [
+        dict(REQUIREMENTS[0]),
+        dict(REQUIREMENTS[0], id="r3", text="Seal shall be PTFE"),
+    ]
+    asked: list[str] = []
+
+    def matcher(session, text, **kwargs):
+        if asked:
+            raise LLMBudgetExceeded("the call budget of 1 is spent (1 calls, 40 tokens)")
+        asked.append(text)
+        return _match()
+
+    outcome = execute_run(
+        RUN_ID,
+        session=FakeSession(),
+        repo=repo,
+        tender_repo=FakeTenderRepo(technical, ITEMS),
+        matcher=matcher,
+        store=_recording_store(repo, {"mfr-Acme": "Acme"}),
+    )
+
+    assert outcome.status == RunStatus.RATE_LIMITED.value
+    assert "call budget" in (outcome.error or "")
+    assert len(repo.stored) == 1
+
+
+def test_a_resumed_run_does_not_pay_twice_for_one_requirement():
+    """A run stopped by a limit kept its answers, and resuming it asks only
+    about the pairs that are missing (D-110)."""
+    repo = FakeRunRepo()
+    repo.stored = [
+        {
+            "requirement_id": "r1",
+            "manufacturer_id": "mfr-Acme",
+            "manufacturer": "Acme",
+            "status": "full_match",
+            "verification_outcome": "passed",
+            "applicability": "model_level",
+            "score": 1.0,
+            "capability_text": "Body material SS316",
+            "confidence": "high",
+            "review_required": False,
+            "review_reason": None,
+            "evidence": None,
+        }
+    ]
+    calls: list[dict] = []
+    technical = [
+        dict(REQUIREMENTS[0]),
+        dict(REQUIREMENTS[0], id="r3", text="Seal shall be PTFE"),
+    ]
+
+    outcome = _execute(
+        repo,
+        FakeTenderRepo(technical, ITEMS),
+        _recording_matcher(calls),
+        _recording_store(repo, {"mfr-Acme": "Acme"}),
+    )
+
+    assert [call["text"] for call in calls] == ["Seal shall be PTFE"]
+    assert outcome.results == 2
+
+
 def test_a_rate_limited_run_is_not_run_again():
     """The results it holds are the answer; a later run resumes from there."""
     repo = FakeRunRepo(status="rate_limited")
@@ -595,6 +670,73 @@ def test_a_run_without_manufacturers_covers_the_whole_corpus(monkeypatch):
         "embedding_backend",
         "match_max_candidates",
     } <= set(repo.created["config_snapshot"])
+
+
+def _no_model(monkeypatch) -> None:
+    """The state of a machine with no model configured: a fresh clone."""
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("LLM_API_KEY", "")
+    monkeypatch.setenv("LLM_MODEL", "model-from-env")
+    get_settings.cache_clear()
+
+
+def test_a_run_that_must_read_a_datasheet_is_refused_without_a_model(monkeypatch):
+    """No model means no answer, and that is a fact about the request.
+
+    The run used to be created and scheduled anyway, and then never move off
+    `queued`, so a caller polled a run that was never going to start and every
+    report route answered 409 with no reason (D-108).
+    """
+    _no_model(monkeypatch)
+    monkeypatch.setattr(
+        "app.services.runs.list_manufacturers", lambda session: [{"name": "Acme"}]
+    )
+    monkeypatch.setattr(
+        "app.services.runs.TenderRepo", lambda session: FakeTenderRepo(REQUIREMENTS)
+    )
+
+    with pytest.raises(ValidationError) as raised:
+        create_run(FakeSession(), TENDER_ID)
+
+    # The message names the setting to change, not just the failure.
+    assert "LLM_API_KEY" in raised.value.message
+
+
+def test_a_tender_of_only_commercial_lines_is_started_without_a_model(monkeypatch):
+    """Nothing in it is read from a datasheet, so a missing key is no reason
+    to refuse the report (FR-14, D-108)."""
+    _no_model(monkeypatch)
+    monkeypatch.setattr(
+        "app.services.runs.list_manufacturers", lambda session: [{"name": "Acme"}]
+    )
+    monkeypatch.setattr(
+        "app.services.runs.TenderRepo",
+        lambda session: FakeTenderRepo([dict(REQUIREMENTS[1])]),
+    )
+    monkeypatch.setattr("app.services.runs.corpus_hash", lambda session: "hash")
+    repo = FakeRunRepo()
+
+    assert create_run(FakeSession(), TENDER_ID, repo=repo) == RUN_ID
+
+
+def test_a_run_stopped_by_a_missing_model_records_why(monkeypatch):
+    """The state is the report: a scheduled run that cannot ask lands `failed`
+    with the reason, rather than staying `queued` for a caller to wait on."""
+    _no_model(monkeypatch)
+    repo = FakeRunRepo()
+
+    outcome = execute_run(
+        RUN_ID,
+        session=FakeSession(),
+        repo=repo,
+        tender_repo=FakeTenderRepo(REQUIREMENTS, ITEMS),
+        store=_recording_store(repo, {"mfr-Acme": "Acme"}),
+    )
+
+    assert outcome.status == RunStatus.FAILED.value
+    assert "LLM_API_KEY" in outcome.error
+    assert repo.run["status"] == RunStatus.FAILED.value
 
 
 def test_manufacturers_are_deduplicated_in_the_order_asked_for(monkeypatch):

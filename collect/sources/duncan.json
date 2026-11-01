@@ -1,0 +1,26 @@
+{
+  "category": "valves",
+  "entries": [
+    {
+      "manufacturer": "Duncan Engineering",
+      "url": "https://mkp.gem.gov.in/catalog_data/catalog_support_document/60/36/714/CatalogAttrs/SpecificationDocument/2026/5/5/2026_05_05_10_48_40_pneumatics_catalogue_duncan_11__2026-05-05-10-48-43_8a0ec9fa4f0bf622d555bc158e1809ba.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Valves, actuators and pneumatics range",
+      "note": "Duncan Engineering Ltd (formerly Schrader Duncan) brochure, uploaded by the manufacturer as a GeM catalogue support document - covers butterfly and ball valve automation, rotary actuators (4Nm to 50000Nm) and pneumatic components"
+    },
+    {
+      "manufacturer": "Duncan Engineering",
+      "url": "https://mkp.gem.gov.in/catalog_data/catalog_support_document/60/36/714/CatalogAttrs/SpecificationDocument/2025/10/17/2025_10_17_11_19_29_knife_edge_valve_duncan_-1_2025-10-17-11-19-30_ce576ca26cae87f64e026dc5a255d00d.pdf",
+      "doc_type": "specification",
+      "model_or_family": "Knife-edge / slurry valve",
+      "note": "Duncan Engineering knife-edge valve technical document from the manufacturer's GeM catalogue listing"
+    },
+    {
+      "manufacturer": "Duncan Engineering",
+      "url": "https://duncanengg.com/writable/uploads/documents/RACK-AND-PINION-ACTUATOR.pdf",
+      "doc_type": "datasheet",
+      "model_or_family": "Rack-and-pinion pneumatic rotary actuator",
+      "note": "Manufacturer datasheet from duncanengg.com - EN ISO 5211 mounting, NAMUR solenoid provisions and torque data"
+    }
+  ]
+}

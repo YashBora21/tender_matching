@@ -81,6 +81,13 @@ class Settings(BaseSettings):
     # How many times a rate-limited call is retried, and how long it waits.
     llm_max_retries: int = 3
     llm_retry_seconds: float = 5.0
+    # What one process is allowed to spend before it stops and says so. A
+    # provider's limit is not the only ceiling: an account with a small quota
+    # has to be stopped by its own budget rather than by a refusal mid-run.
+    # Zero is no ceiling. A stopped run keeps what it answered and resumes
+    # from the pairs it never asked about (D-110).
+    llm_call_budget: int = 0
+    llm_token_budget: int = 0
     # gpt-oss is a reasoning model: the answer comes after the reasoning, and
     # a small budget is spent entirely on reasoning.
     llm_max_tokens: int = 2048
@@ -118,6 +125,10 @@ class Settings(BaseSettings):
     #
     # A manufacturer is added here when its robots.txt allows its PDFs.
     # KSB and Crane are not on the list: both disallow *.pdf.
+    #
+    # This rule governs addresses read out of a tender. It does not gate
+    # `make corpus-restore`, whose addresses come from the manifests a person
+    # wrote and are checked against the hash in them (D-113).
     fetch_allowed_domains: str = (
         "gem.gov.in,bidplus.gem.gov.in,mkp.gem.gov.in,admin.gem.gov.in,"
         "fulfilment.gem.gov.in,"
@@ -127,6 +138,11 @@ class Settings(BaseSettings):
     # The largest a fetched document may be. A tender attachment is a
     # specification, not a dataset.
     fetch_max_bytes: int = 50 * 1024 * 1024
+    # A collected catalogue is a different thing from a tender attachment: the
+    # corpus on disk holds a 96 MB pump range that a fresh clone has to be able
+    # to put back (D-111). This is that cap, and it is not raised by relaxing
+    # the upload cap, which guards a request handler.
+    corpus_max_bytes: int = 200 * 1024 * 1024
     fetch_timeout_seconds: int = 60
     # A document already frozen, with this hash, is not fetched again.
     fetch_cache_enabled: bool = True

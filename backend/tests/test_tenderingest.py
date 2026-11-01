@@ -389,8 +389,8 @@ def test_a_page_that_is_mostly_a_picture_is_ocred(monkeypatch, tmp_path):
     document.close()
 
     monkeypatch.setattr(
-        "app.services.docparser.ocr_page",
-        lambda page: "5.1 The pump shall deliver 50 m3/h at 30 m head.",
+        "app.services.docparser.ocr_page_with_reason",
+        lambda page: ("5.1 The pump shall deliver 50 m3/h at 30 m head.", None),
     )
 
     read = read_specification(path)
@@ -398,6 +398,31 @@ def test_a_page_that_is_mostly_a_picture_is_ocred(monkeypatch, tmp_path):
     assert read.pages[0].method == ExtractionMethod.OCR.value
     assert read.rows[0]["extraction_method"] == ExtractionMethod.OCR.value
     assert read.rows[0]["description"].startswith("5.1 The pump shall deliver")
+
+
+def test_a_picture_page_that_cannot_be_ocred_is_a_failed_page_with_the_reason(tmp_path, monkeypatch):
+    """The page is not read as silent: the ledger says it failed, and says
+    that the machine had no OCR to read it with (AGENTS #3, FR-T2)."""
+    import pymupdf
+
+    path = tmp_path / "spec.pdf"
+    document = pymupdf.open()
+    page = document.new_page()
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 8, 8))
+    pixmap.set_rect(pixmap.irect, (255, 255, 255))
+    page.insert_image(pymupdf.Rect(0, 0, page.rect.width, page.rect.height), pixmap=pixmap)
+    document.save(path)
+    document.close()
+
+    monkeypatch.setattr(
+        "app.services.docparser.tesseract_missing",
+        lambda: "tesseract is not installed, so a page with no text layer cannot be read",
+    )
+
+    read = read_specification(path)
+
+    assert read.pages[0].status == LedgerStatus.FAILED.value
+    assert "tesseract" in read.pages[0].error
 
 
 def test_a_single_item_tender_takes_its_prose_clauses(tmp_path):

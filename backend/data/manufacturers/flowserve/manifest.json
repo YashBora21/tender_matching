@@ -1,7 +1,7 @@
 {
   "manufacturer": "Flowserve",
   "manufacturer_slug": "flowserve",
-  "updated_at": "2026-10-22T11:31:29+00:00",
+  "updated_at": "2026-11-01T06:24:48+00:00",
   "documents": [
     {
       "url": "https://www.flowserve.com/sites/default/files/dam/documents/FCENBR00002_EN_A4.pdf",
@@ -9,7 +9,7 @@
       "category": "valves",
       "doc_type": "catalogue",
       "model_or_family": "Control valves",
-      "status": "new",
+      "status": "unchanged",
       "models": [],
       "filename": "FCENBR00002_EN_A4.pdf",
       "path": "raw/FCENBR00002_EN_A4.pdf",
@@ -18,8 +18,7 @@
       "is_secondary": false,
       "notes": "Control Valve Product Guide - the general service, severe service and custom engineered ranges",
       "etag": "\"6a3b7fc2-193c866\"",
-      "last_modified": "Wed, 24 Jun 2026 06:57:06 GMT",
-      "content_type": "application/pdf"
+      "last_modified": "Wed, 24 Jun 2026 06:57:06 GMT"
     },
     {
       "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf",
@@ -27,7 +26,7 @@
       "category": "valves",
       "doc_type": "specification",
       "model_or_family": "Valtek GS",
-      "status": "new",
+      "status": "unchanged",
       "models": [],
       "filename": "VLENTB0300_EN_A4.pdf",
       "path": "raw/VLENTB0300_EN_A4.pdf",
@@ -36,8 +35,7 @@
       "is_secondary": false,
       "notes": "Valtek GS general service control valve",
       "etag": "\"6a3b84d6-2a392b\"",
-      "last_modified": "Wed, 24 Jun 2026 07:18:46 GMT",
-      "content_type": "application/pdf"
+      "last_modified": "Wed, 24 Jun 2026 07:18:46 GMT"
     },
     {
       "url": "https://www.flowserve.com/sites/default/files/dam/documents/WCENBR0001_EN_AQ.pdf",
@@ -45,7 +43,7 @@
       "category": "valves",
       "doc_type": "catalogue",
       "model_or_family": "Worcester controls",
-      "status": "new",
+      "status": "unchanged",
       "models": [],
       "filename": "WCENBR0001_EN_AQ.pdf",
       "path": "raw/WCENBR0001_EN_AQ.pdf",
@@ -54,8 +52,7 @@
       "is_secondary": false,
       "notes": "Worcester Controls product catalog",
       "etag": "\"6a3b7a44-a2d9bd\"",
-      "last_modified": "Wed, 24 Jun 2026 06:33:40 GMT",
-      "content_type": "application/pdf"
+      "last_modified": "Wed, 24 Jun 2026 06:33:40 GMT"
     }
   ]
 }

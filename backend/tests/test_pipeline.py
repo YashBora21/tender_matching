@@ -118,6 +118,9 @@ class FakeRepo:
         self.pages = list(pages)
         return len(self.pages)
 
+    def list_pages(self, tender_id):
+        return [dict(row) for row in self.pages]
+
     def list_attachments(self, tender_id):
         return [
             {"id": "attachment-1", "url": record.get("url"), "path": record.get("path")}
@@ -993,6 +996,52 @@ def test_every_page_read_ends_in_the_ledger(tmp_path, monkeypatch):
     assert repo.pages[0]["tags"] == ["technical"]
     assert repo.pages[0]["attachment_id"] == "attachment-1"
     assert repo.pages[1]["skip_reason"] == "the OCR read nothing on this page"
+
+
+def test_a_tender_read_before_the_ledger_existed_has_its_pages_recorded(tmp_path, monkeypatch):
+    """A cached requirements stage is not an excuse for no page states.
+
+    The stage key has not changed, so the requirements are not read again -
+    but the ledger is empty, so the pages are: the cost is a local read, not a
+    model call (FR-T2, D-91).
+    """
+    attachments, directory = _attachments(tmp_path)
+    pages = [PageRead(page=1, tag="technical", status="parsed", chars=1100, method="table")]
+    reads = []
+
+    def fake_read(attachment, tender_dir):
+        reads.append(attachment)
+        return SpecificationRead(
+            rows=[
+                {
+                    "row": 1,
+                    "page": 1,
+                    "number": "1",
+                    "title": "GATE VALVE SIZE 150 MM CLASS 150",
+                    "description": "The body shall be cast carbon steel.",
+                }
+            ],
+            pages=list(pages),
+        )
+
+    monkeypatch.setattr(pipeline, "_read_specification", fake_read)
+    repo = FakeRepo()
+
+    run_pipeline("T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient())
+    assert len(reads) == 1
+    assert [row["page"] for row in repo.pages] == [1]
+
+    # The ledger is gone but the requirements are stored: the state of a
+    # tender read by an earlier build of this code.
+    repo.pages = []
+    run_pipeline("T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient())
+
+    assert [row["page"] for row in repo.pages] == [1], "the empty ledger was filled in"
+    assert len(reads) == 2
+
+    # A third pass has nothing to backfill: the pages are not read again.
+    run_pipeline("T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient())
+    assert len(reads) == 2
 
 
 def test_a_specification_that_cannot_be_opened_is_a_failure(tmp_path, monkeypatch):

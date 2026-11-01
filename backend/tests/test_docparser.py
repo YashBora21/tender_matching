@@ -10,7 +10,10 @@ from app.services.docparser import (
     TEXT_CONFIDENCE,
     Chunk,
     ParsedDocument,
+    ocr_page,
+    ocr_page_with_reason,
     parse_document,
+    tesseract_missing,
 )
 
 
@@ -146,6 +149,63 @@ def test_a_page_that_cannot_be_read_is_reported_as_failed(tmp_path, monkeypatch)
     assert parsed.failed_pages == [1, 2]
     assert parsed.ocr_pages == []
     assert parsed.chunks == []
+
+
+def test_a_missing_tesseract_is_named_as_the_reason_a_page_cannot_be_read(monkeypatch):
+    """A machine without the program and a page without words are different
+    answers, and the ledger has to record the right one (FR-9)."""
+    monkeypatch.setattr("app.services.docparser.shutil.which", lambda name: None)
+
+    reason = tesseract_missing()
+
+    assert reason is not None
+    assert "tesseract is not installed" in reason
+    assert "apt-get install tesseract-ocr" in reason
+
+
+def test_a_page_is_not_handed_to_ocr_when_the_program_is_missing(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.docparser.tesseract_missing", lambda: "tesseract is not installed"
+    )
+
+    class _Page:
+        def get_textpage_ocr(self, **kwargs):
+            raise AssertionError("the page was given to an OCR that is not there")
+
+    text, reason = ocr_page_with_reason(_Page())
+
+    assert text == ""
+    assert reason == "tesseract is not installed"
+    assert ocr_page(_Page()) is None
+
+
+def test_an_ocr_that_raises_gives_the_page_a_reason(monkeypatch):
+    monkeypatch.setattr("app.services.docparser.tesseract_missing", lambda: None)
+
+    class _Page:
+        def get_textpage_ocr(self, **kwargs):
+            raise RuntimeError("tesseract returned an error")
+
+    text, reason = ocr_page_with_reason(_Page())
+
+    assert text == ""
+    assert "RuntimeError" in reason
+
+
+def test_a_page_the_ocr_reads_as_empty_says_so(monkeypatch):
+    monkeypatch.setattr("app.services.docparser.tesseract_missing", lambda: None)
+
+    class _Page:
+        def get_textpage_ocr(self, **kwargs):
+            return object()
+
+        def get_text(self, textpage=None):
+            return "   "
+
+    text, reason = ocr_page_with_reason(_Page())
+
+    assert text == ""
+    assert reason == "the OCR read nothing on this page"
 
 
 def test_a_docx_is_parsed_with_its_headings_and_tables(tmp_path):

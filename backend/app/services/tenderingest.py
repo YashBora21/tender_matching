@@ -704,19 +704,16 @@ def _image_share(page) -> float:
 
 def _ocr(document, number: int) -> tuple[str, Optional[str]]:
     """The OCRed text of one page, and why it is empty when it is."""
-    from app.services.docparser import ocr_page
+    from app.services.docparser import ocr_page_with_reason
 
     if document is None:
         return "", "the document could not be opened for OCR"
     if number > len(document):
         return "", f"page {number} is not in the document"
     try:
-        text = ocr_page(document[number - 1]) or ""
+        return ocr_page_with_reason(document[number - 1])
     except Exception as exc:  # noqa: BLE001 - the failure is the page's state
         return "", f"{type(exc).__name__}: {exc}"
-    if not text.strip():
-        return "", "the OCR read nothing on this page"
-    return text, None
 
 
 def _is_real_table(

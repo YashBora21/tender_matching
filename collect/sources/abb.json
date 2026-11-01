@@ -1,0 +1,26 @@
+{
+  "category": "motors",
+  "entries": [
+    {
+      "manufacturer": "ABB",
+      "url": "https://library.e.abb.com/public/1fd380f8ca8b4934ae3fa609d764fd33/21043_ABB_Motor_Guide_REV_D.pdf",
+      "doc_type": "specification",
+      "model_or_family": "IEC low voltage motors",
+      "note": "ABB low voltage motor guide - IEC frame ratings, efficiency classes (IE1-IE4), duty, enclosure and mounting data"
+    },
+    {
+      "manufacturer": "ABB",
+      "url": "https://library.e.abb.com/public/f6b9ac5740da479b89153f32c8a06fdf/M2BAX_71_355%20IE3%20%209AKK107238%20EN%2011-2017.pdf",
+      "doc_type": "datasheet",
+      "model_or_family": "M2BAX IE3",
+      "note": "ABB M2BAX general-performance IE3 cast iron motors, frames 71-355 - technical data sheets with performance and dimensions"
+    },
+    {
+      "manufacturer": "ABB",
+      "url": "https://library.e.abb.com/public/ec2d9e1e31e3b766c1257b130056f2a1/General%20Purpose%20Motor%20catalogue%20092003.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "General purpose motors",
+      "note": "ABB general purpose motor catalogue - frame and rating tables"
+    }
+  ]
+}

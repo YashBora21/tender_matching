@@ -2254,3 +2254,276 @@ rejected: silence is not a different category (PRD 4) and it would empty the
 corpus for manufacturers whose manifests are thin. Matching category terms
 against the passage - rejected: a valve datasheet mentions pumps in passing;
 the document's own name and declared model are what place it.
+
+---
+
+## D-108 - A run that has nobody to ask is refused at the request
+
+`create_run` asks `needs_model(requirements)` and, only when the answer is
+yes, `config_error()`. If the model is not configured the request is refused
+with the reason in the message, before a row exists. A tender whose assessable
+clauses are all commercial, legal or financial is still creatable with no key
+at all, because those are answered from their clause type and no call is made.
+`LLMClient()` is built inside the guarded block of `execute_run`, so a run that
+loses its key between the request and the worker lands `failed` with that
+reason instead of staying where a caller can only poll it.
+
+*Why:* the end-to-end audit found the flow unreachable rather than wrong: on a
+machine with no key, POST /api/runs returned 409 with no reason and the created
+run never moved off `queued`. A caller cannot tell "not yet" from "never", and
+the reviewer's first attempt at the whole flow is the one that has to say what
+it needs. Naming no provider in the refusal is deliberate - a hosted, a
+self-hosted and a local model are refused for the same reason (D-109).
+
+*Alternatives:* checking at execution only - rejected: that is what produced
+the stuck run. Refusing every run when no key is set - rejected: it withholds
+a report that needed no model to be honest. Leaving it 409 - rejected: 409 is
+for a state conflict, and the tender-not-read guard already owns that answer;
+a machine that cannot serve the request is a 400 with a reason.
+
+---
+
+## D-109 - The wait is read from the response, not from a vendor's list
+
+A rate limit is detected from the status code and the wait is taken from
+wherever the provider put it: the standard `Retry-After` header (seconds or an
+HTTP date, matched case-insensitively because a transport folds header names
+and a proxy may not), a field of the JSON error body (`retry_after`,
+`retryAfter`, `retry_delay`, `retryDelay`, at any depth), or the prose the
+provider said it in ("try again in 24.9s"). A bare number is seconds; a
+suffixed one says what it counts. The client imports no provider's exception
+class. `llm_base_url` joined the config snapshot.
+
+*Why:* the model layer is provider-agnostic by rule, and the account the
+evaluator issued is a rate-limited OpenAI-compatible endpoint that may be
+swapped. Code that catches a vendor's exception type breaks on the next swap
+and, worse, reads the swap as a generic failure - which AGENTS #3 forbids
+turning into "no evidence". The endpoint goes in the snapshot because the same
+model name served elsewhere is a different answer, and a report has to say
+which one it is quoting.
+
+*Alternatives:* importing the provider's SDK exceptions - rejected: it is the
+provider-specific coupling this rule forbids. Retrying on any 4xx - rejected:
+a 400 is a wrong request and retrying it spends the key for nothing. Assuming
+a fixed back-off - rejected: a provider that says "wait 30s" and is waited on
+5s is retried six times against the same window.
+
+---
+
+## D-110 - A run has a budget, stops at it, keeps its answers and resumes
+
+`LLM_CALL_BUDGET` and `LLM_TOKEN_BUDGET` (0 is no ceiling) are checked by the
+client before each call, against its own counters, so one budget bounds one
+run. Spending it raises `LLMBudgetExceeded`, which the run handles exactly like
+the `LLMRateLimited` D-105 propagates: the results already written stay
+committed, the run is labelled `rate_limited` - neither `done` nor `failed` -
+and the message names what was already spent. `RunRepo.answered(run_id)` gives
+the requirement x manufacturer pairs the run stores, and a resumed run skips
+them. Both budgets go into the config snapshot.
+
+*Why:* the assignment's model access is a limited corporate quota and the
+advice is to spend it carefully, so the ceiling has to be the account's own
+number, not a refusal discovered mid-run. A run that stops having kept its
+answers means the next pass pays only for the pairs still missing; without
+that, adding the last requirement costs re-reading the whole tender. The
+budget is on the snapshot because a run that stopped at a budget is only
+reproducible if the budget is known.
+
+*Alternatives:* lowering `match_max_candidates` when the quota is small -
+rejected: that changes what is looked for, not what may be spent, and the
+report would read as a corpus gap. More retries - rejected: retrying against
+a spent quota spends more. Folding the stop into `failed` - rejected: it
+loses the difference between "this stopped early" and "this broke", and the
+answers found are real. Deleting the partial results so the run starts clean -
+rejected: it pays twice for the same calls.
+
+---
+
+## D-111 - The corpus is restorable from the manifests a fresh clone already has
+
+`make corpus-restore` (`app/services.corpusrestore`) reads every manufacturer
+manifest and every catalogue manifest and writes the files back where ingestion
+looks for them. It chooses nothing: a document is fetched only from an address
+a manifest already records, and never from a guessed, searched or
+name-built one. A file whose hash does not match its manifest row is not
+written, because the report cites pages of the file the manifest describes.
+robots.txt is asked again, because a policy can change after collection, and a
+document no longer allowed is reported as a gap. A row with no address is
+reported as unrecorded. `corpus_max_bytes` (200 MB) is a separate cap from the
+upload cap: the corpus holds a 96 MB pump range. `--dry-run` reports without
+fetching, and ingestion's "no corpus found" now names the two commands that
+would put it back.
+
+*Why:* the collected PDFs are gitignored and the manifests are in git, so a
+fresh clone knows exactly which files the corpus is made of and has none of
+them - FR-8 answers "no corpus found" with no route out, and every test that
+needs a corpus is silent on a machine that just cloned this repository.
+
+*Alternatives:* committing the PDFs - rejected: 100 MB+ of third-party
+copyright in git. Making the reviewer run `make collect` - rejected: it
+searches, which finds different files than the ones the citations name. A
+symlink to another disk - rejected: not reproducible anywhere else.
+
+---
+
+## D-112 - Tender to report in one command, and a preflight that answers first
+
+`make e2e TENDER=<pdf|dir|tender_id>` runs the API's own chain in the
+foreground and one process: corpus, embedding, tender read, matching, report.
+Each step checks its precondition before it starts and the command stops at the
+first it cannot meet, with the reason and the command that fixes it; a step
+already done reports `skipped`, which is not `blocked`. `ARGS=--check` answers
+without running anything. `GET /api/preflight` is the same question over HTTP,
+with `can_run`, `why_not` and `next_steps`. It downloads nothing and calls no
+model: it reads the database and the configuration.
+
+*Why:* the assignment is satisfied by an end-to-end flow, and a reviewer with
+a fresh clone cannot reach a report by reading the code to work out the order.
+D-108 fixed the worst symptom by refusing the request; this makes the answer
+available before any request is made, so the first attempt either produces a
+report or names the one thing missing.
+
+*Alternatives:* a shell or docker script that chains the commands - rejected:
+it would be a second copy of the chain, and the chain a reviewer runs has to
+be the one production runs. A background job - rejected: the value is seeing
+each step's state. A README list of five commands - rejected: it works only
+for someone who already knows which of the five will fail.
+
+---
+
+## D-113 - A manifest address is not gated by the rule written for a tender's links
+
+`check_url` and `fetch` take `from_document` (default True). The host
+allowlist applies to an address read out of a document; `make corpus-restore`
+passes `from_document=False`. Every other guard still applies to both paths:
+the scheme, no private address after DNS resolution, no redirect to another
+host, the size cap, the time cap, and robots.txt.
+
+*Why:* the two addresses have different trust. A tender is untrusted input -
+its links are written by whoever uploaded it, so an allowlist is the fence.
+A manifest row names a host a person chose and recorded, and the file it
+fetches is checked against the hash in that same row, so the integrity guard
+is the hash rather than the list. The first attempt at this widened
+`fetch_allowed_domains` instead, and that was wrong twice over: it loosened a
+fence designed for untrusted links, and `fetch_allowed_domains` is folded into
+`stage_keys` as `fetch_config`, so changing the default invalidates the stored
+tender's stages and forces a paid re-extraction against the limited key (D-110).
+
+*Alternatives:* widening the allowlist - rejected, for both reasons above. A
+separate `CORPUS_ALLOWED_DOMAINS` - rejected: a second list to keep in step
+with the manifests, when the manifest already names the host. Turning the
+checks off in restore - rejected: that removes the SSRF guard along with the
+host rule.
+
+---
+
+## D-114 - A page that cannot be read says why, and the image carries the reader
+
+`ocr_page_with_reason` returns the text and the reason there is none, and the
+tender reader puts that reason in the ledger's `skip_reason`. Three answers
+that used to look identical are now distinct: this machine has no OCR program
+(`tesseract_missing()` names it and gives the install command), the OCR failed
+on this page (the exception's type and message), the page holds nothing to read.
+The backend image installs `tesseract-ocr` and `tesseract-ocr-eng`.
+
+*Why:* Tesseract is a program the image has to carry, not a package `pip`
+installs, so it is the one dependency an image-only BOQ page depends on - and
+the reason is the only thing a reviewer sees. AGENTS #3 makes a failed page a
+state of its own precisely so "this page is blank" and "this machine cannot
+read pages" are not the same answer; a skip_reason that says only "no text"
+sends the reviewer to the wrong fix.
+
+*Alternatives:* raising when Tesseract is missing - rejected: one page's
+dependency must not stop the other forty pages of a tender, and the ledger
+already carries the failure. Returning empty text and letting the page count
+as parsed - rejected: that is the silent page loss FR-9 forbids. Keeping
+`ocr_page`'s `Optional[str]` shape and guessing from emptiness - rejected: it
+is the collision this fixes.
+
+---
+
+## D-115 - The page ledger is backfilled for a tender read before the ledger existed
+
+When the requirements stage is skipped because the tender is already stored,
+the pipeline asks whether the ledger is empty (`_ledger_is_empty`) and, if it
+is, re-reads the pages locally and writes them. `list_pages` now orders by
+page. A repository that cannot answer counts as having a ledger: not writing
+is the safe answer when the state of the pages is unknown.
+
+*Why:* the ledger is a state of the *pages*, not of the requirements, so a
+tender read before the ledger was written has requirements and no page states
+at all - and because its requirements stage key has not changed, the stage
+would never run again and the ledger would stay empty forever. Every page has
+to end in a state (FR-T2), and the incomplete-ingestion guard cannot tell an
+unread page from a page that was fine. Re-reading costs no model call: the
+pages come from the parser on disk.
+
+*Alternatives:* changing the requirements stage key to force a re-read -
+rejected: it pays a model call to produce page states the local parser can
+give. Writing the ledger in a SQL migration - rejected: the states are the
+result of parsing the PDF, which is code, not data. Leaving it and requiring a
+re-upload - rejected: it throws away the extraction the key already paid for.
+
+---
+
+## D-116 - A document the fence refused is supplied by hand, in the UI
+
+The upload page lists a stored tender's attachments from
+`GET /api/tenders/{id}/attachments` - name, address, hash, kind, status, size,
+pages - and marks the rows whose status is `failed` or `restricted` as ones to
+supply. The file picker posts them to `POST /api/tenders/{id}/attachments`,
+which freezes the file with its hash and records it in the manifest like any
+fetched document. The notice after an upload says to re-upload the tender to
+have it read with the new document, and that the stages which do not depend on
+it are not run twice.
+
+*Why:* the endpoints already existed and nothing in the product surfaced them,
+so the only way a reviewer could use a document on a host the fence refuses -
+or one behind a login they have and the collector does not - was to find the
+directory in the source. A hand-supplied file carries the same provenance as a
+fetched one, and it does not loosen the fence for every future tender.
+
+*Alternatives:* telling the reviewer to copy the file into the tender directory
+- rejected: that is a step only someone who has read the code can take. Adding
+the host to `fetch_allowed_domains` - rejected: it changes a rule about
+untrusted links to solve one tender. Making the upload replace the tender
+- rejected: the tender and its attachments are separate rows, and replacing
+loses the requirement list the read already produced.
+
+---
+
+## D-117 - A wildcard robots.txt rule is a rule, and the standard library does not read it
+
+`app/core/robots.py` matches a robots.txt itself: `*` is any sequence, a `$`
+anchors the end, a rule with no `$` decides by prefix, the longest matching
+path wins and an Allow of the same length wins the tie, and the group that
+applies is the one whose agent token appears in the user agent, with `*` as the
+fallback. `core/fetching.robots_allows` and the collector's robots check both
+use it; `urllib.robotparser` is used by neither.
+
+*Why:* auditing the corpus's 101 recorded addresses against this matcher found
+four the collector had fetched anyway - four KSB catalogues on `www.ksb.com`,
+whose robots.txt says `Disallow: *.pdf`. The project's own rules name that
+reason: `fetch_allowed_domains` leaves KSB and Crane out *because* they disallow
+`*.pdf`, and FR-4 is the promise that a host's robots.txt is obeyed. So the
+policy was written down, and the code meant to enforce it silently disagreed
+with it: CPython's parser ignores a rule that carries a wildcard - `*.pdf`,
+`/*.pdf` and `/*.pdf$` were each tested, and none of them blocked anything. A
+compliance check that fails open is the worst kind of check, because it reads as
+compliance.
+
+*Alternatives:* keep `RobotFileParser` and rewrite the rule into a form it
+honours - rejected: there is no such form, which
+`test_the_standard_library_parser_does_not_ban_that_document` pins. Fix only the
+collector - rejected: the fence in `core.fetching` asks the same rule of the
+same file, and two implementations of it is how they came to disagree; the
+collector now imports the app's matcher instead of carrying a copy. Read an
+unparsable rule as no restriction - rejected: the safe direction for a
+compliance check is to refuse, and a rule this project cannot read is not a rule
+this project may ignore.
+
+*Boundary:* prefix semantics are deliberate and are the more careful of the two
+readings: `Disallow: /a.pdf` also refuses `/a.pdf.old`. A document on a
+distributor's own host is judged by that host's robots.txt, not the
+manufacturer's - which is why the KSB booklets held as secondary sources stand
+and the four fetched from ksb.com do not.

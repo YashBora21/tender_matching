@@ -19,7 +19,7 @@ import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, Iterable, Optional
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -28,6 +28,11 @@ logger = get_logger(__name__)
 
 # A reasoning model may wrap its answer, or a chat model may fence it.
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
+
+# How much of an error body is read looking for a wait: enough for an
+# explanation and the field that follows it, bounded so a page of HTML from a
+# proxy cannot be pulled into memory.
+_LIMIT_BODY_BYTES = 65536
 
 
 class LLMError(Exception):
@@ -50,12 +55,207 @@ class LLMRateLimited(LLMError):
         self.retry_after = retry_after
 
 
+class LLMBudgetExceeded(LLMError):
+    """The spend this process was allowed is used up, so it stops on its own.
+
+    The same shape as a provider's limit and a different cause: nobody refused
+    a call, the operator's own budget ran out first. It is its own error
+    because a report has to say which of the two stopped, and a budget is
+    raised before a request is made rather than in answer to one.
+    """
+
+
 class _RateLimited(Exception):
-    """The provider's limit was hit. Worth retrying."""
+    """The provider's limit was hit. Worth retrying.
+
+    `wait` is the pause the provider asked for, read when the answer arrives
+    and its body is still whole.
+    """
+
+    def __init__(self, message: str, *, wait: Optional[float] = None):
+        super().__init__(message)
+        self.wait = wait
 
 
-# The provider says how long to wait: "Please try again in 24.9s".
-_RETRY_AFTER = re.compile(r"try again in\s+([\d.]+)\s*s", re.IGNORECASE)
+NO_MODEL = "no LLM model is configured (set LLM_MODEL)"
+NO_API_KEY = "no LLM api key is configured (set LLM_API_KEY)"
+
+
+def _missing(model: Optional[str], api_key: Optional[str]) -> Optional[str]:
+    """The reason this configuration cannot be called, or None.
+
+    One answer for both the preflight and the client, so they cannot drift
+    into refusing for different words.
+    """
+    if not model:
+        return NO_MODEL
+    if not api_key:
+        return NO_API_KEY
+    return None
+
+
+def config_error() -> Optional[str]:
+    """Why the LLM cannot be used right now, or None when it can.
+
+    A caller about to start minutes of work asks this first, so an
+    unconfigured model is refused at the request instead of discovered as a
+    run that died. It names no provider: a hosted, a self-hosted and a local
+    model are refused for the same reason - there is nothing to call.
+    """
+    settings = get_settings()
+    return _missing(settings.llm_model, settings.llm_api_key)
+
+
+# A wait is told in one of three places, and none of them is a vendor's
+# invention: the standard `Retry-After` header, a field of the JSON error body,
+# or the prose the provider said it in. All three are read, so a provider this
+# code has never met needs no code change (D-109).
+_RETRY_HEADER = "retry-after"
+_RETRY_FIELDS = frozenset(
+    {"retryafter", "retry_after", "retrydelay", "retry_delay"}
+)
+
+# A bare number is seconds; a suffixed one says what it counts.
+_DURATION = re.compile(
+    r"^\s*([\d.]+)\s*(ms|msec|millisec(?:ond)?s?|s|sec|secs|seconds?"
+    r"|m|mins?|minutes?)?\s*$",
+    re.IGNORECASE,
+)
+_UNIT_SECONDS = {
+    "ms": 0.001,
+    "msec": 0.001,
+    "millisec": 0.001,
+    "milliseccond": 0.001,
+    "millisecconds": 0.001,
+    "millisecond": 0.001,
+    "milliseconds": 0.001,
+    "s": 1.0,
+    "sec": 1.0,
+    "secs": 1.0,
+    "second": 1.0,
+    "seconds": 1.0,
+    "m": 60.0,
+    "min": 60.0,
+    "mins": 60.0,
+    "minute": 60.0,
+    "minutes": 60.0,
+}
+
+# "try again in 24.9s", "please retry after 30 seconds", "retry in 1 minute".
+_PROSE_WAIT = re.compile(
+    r"(?:try\s+again|retry|resend|wait)[^0-9]{0,40}?([\d.]+)\s*"
+    r"(ms|milliseconds|s|sec|secs|seconds|minutes?)\b",
+    re.IGNORECASE,
+)
+
+
+def _seconds(value: object) -> Optional[float]:
+    """A wait written as a number of seconds, or as a duration string."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if not isinstance(value, str):
+        return None
+    match = _DURATION.match(value)
+    if not match:
+        return None
+    unit = (match.group(2) or "s").lower()
+    return float(match.group(1)) * _UNIT_SECONDS.get(unit, 1.0)
+
+
+def _walk_waits(node: object) -> Iterable[object]:
+    """Every value a JSON error body names as a wait, however deep it sits."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if str(key).lower().replace("-", "_") in _RETRY_FIELDS:
+                yield value
+            yield from _walk_waits(value)
+    elif isinstance(node, list):
+        for item in node:
+            yield from _walk_waits(item)
+
+
+def _header_value(headers: object) -> Optional[str]:
+    """The `Retry-After` header, whatever case the transport kept it in.
+
+    An HTTP message folds header names; a dict handed over by a test, a proxy
+    or a library does not, so the name is matched case-insensitively rather
+    than assumed.
+    """
+    if headers is None:
+        return None
+    try:
+        value = headers.get(_RETRY_HEADER)
+    except (AttributeError, TypeError):
+        return None
+    if value is not None:
+        return value
+    try:
+        items = headers.items()
+    except (AttributeError, TypeError):
+        return None
+    for key, item in items:
+        if str(key).replace("_", "-").lower() == _RETRY_HEADER:
+            return item
+    return None
+
+
+def _header_seconds(headers: object) -> Optional[float]:
+    """The `Retry-After` header: seconds, or the date to wait until."""
+    raw = _header_value(headers)
+    if raw is None:
+        return None
+    seconds = _seconds(raw)
+    if seconds is not None:
+        return seconds
+    # The header's other form is an HTTP date, and only the local clock knows
+    # how far off it is.
+    from datetime import datetime, timezone
+    from email.utils import parsedate_to_datetime
+
+    try:
+        when = parsedate_to_datetime(str(raw))
+    except (TypeError, ValueError):
+        return None
+    if when is None:
+        return None
+    if when.tzinfo is None:
+        return None
+    return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
+
+
+def _body_seconds(text: str) -> Optional[float]:
+    """A wait named as a field of the error body, when the body is JSON."""
+    try:
+        decoded = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    for value in _walk_waits(decoded):
+        seconds = _seconds(value)
+        if seconds is not None:
+            return seconds
+    return None
+
+
+def _prose_seconds(text: str) -> Optional[float]:
+    """A wait named in the sentence the provider said it in."""
+    match = _PROSE_WAIT.search(text)
+    if not match:
+        return None
+    return float(match.group(1)) * _UNIT_SECONDS[match.group(2).lower()]
+
+
+def _limit_seconds(headers: object, text: str) -> Optional[float]:
+    """How long the provider asked for, from the first place it said it.
+
+    The header is the standard channel, a named field is more exact than a
+    sentence, and a sentence is what a provider falls back to.
+    """
+    for read in (_header_seconds(headers), _body_seconds(text), _prose_seconds(text)):
+        if read is not None:
+            return read
+    return None
 
 
 def _retry_after(error: Exception, fallback: float) -> float:
@@ -66,13 +266,12 @@ def _retry_after(error: Exception, fallback: float) -> float:
     retried into with a five second wait, so the provider's own advice is
     used when it gives any.
     """
-    match = _RETRY_AFTER.search(str(error))
-    if match:
-        try:
-            return max(fallback, float(match.group(1)))
-        except ValueError:
-            pass
-    return fallback
+    stated = getattr(error, "wait", None)
+    if stated is None:
+        stated = _limit_seconds(getattr(error, "headers", None), str(error))
+    if stated is None:
+        return fallback
+    return max(fallback, float(stated))
 
 
 @dataclass
@@ -120,10 +319,13 @@ class LLMClient:
         self.model = model or settings.llm_model
         self.base_url = (base_url or settings.llm_base_url).rstrip("/")
         self.api_key = settings.llm_api_key
-        if not self.model:
-            raise LLMError("no LLM model is configured")
-        if not self.api_key:
-            raise LLMError("no LLM api key is configured")
+        # The same question `config_error` answers, so a caller that checked
+        # first and a client built without checking refuse for one reason.
+        # The resolved values are checked, not the settings: a caller that
+        # named a model on the call is configured even when the env is empty.
+        reason = _missing(self.model, self.api_key)
+        if reason:
+            raise LLMError(reason)
         # What this client has spent. Kept here so a caller can report the
         # calls, tokens and retries a run cost (FR-34), instead of the numbers
         # disappearing into the log.
@@ -135,6 +337,25 @@ class LLMClient:
     @property
     def tokens(self) -> int:
         return self.prompt_tokens + self.completion_tokens
+
+    def _check_budget(self) -> None:
+        """Stop before a call this process was not allowed to make.
+
+        The counters are the client's own, so the budget bounds one run: a
+        caller that wants a cheaper run caps the candidates it reads, and a
+        caller that wants a bounded one sets the budget. Zero is no ceiling,
+        and a stop names what was already spent (D-110).
+        """
+        settings = get_settings()
+        spent = f"{self.calls} calls, {self.tokens} tokens"
+        if settings.llm_call_budget and self.calls >= settings.llm_call_budget:
+            raise LLMBudgetExceeded(
+                f"the call budget of {settings.llm_call_budget} is spent ({spent})"
+            )
+        if settings.llm_token_budget and self.tokens >= settings.llm_token_budget:
+            raise LLMBudgetExceeded(
+                f"the token budget of {settings.llm_token_budget} is spent ({spent})"
+            )
 
     def chat(self, system: str, user: str, *, max_tokens: Optional[int] = None) -> LLMResult:
         """Ask the model one question and get one answer.
@@ -148,6 +369,7 @@ class LLMClient:
         last_error: Optional[str] = None
         budget = max_tokens or settings.llm_max_tokens
         for attempt in range(settings.llm_max_retries + 1):
+            self._check_budget()
             try:
                 result = self._chat_once(system, user, max_tokens=budget)
             except _RateLimited as exc:
@@ -210,10 +432,19 @@ class LLMClient:
             with urllib.request.urlopen(request, timeout=settings.llm_timeout_seconds) as response:
                 data = json.loads(response.read())
         except urllib.error.HTTPError as exc:
-            detail = exc.read()[:300].decode("utf-8", "replace")
+            # The body is read past its first sentence: a wait can sit in a
+            # field after a long explanation, and a truncated read loses the
+            # one number that says how long to pause.
+            body = exc.read(_LIMIT_BODY_BYTES).decode("utf-8", "replace")
             if exc.code == 429:
-                raise _RateLimited(f"the model is rate limited: {detail}") from exc
-            raise LLMError(f"the model returned HTTP {exc.code}: {detail}") from exc
+                raise _RateLimited(
+                    f"the model is rate limited: {body[:300]}",
+                    wait=_limit_seconds(exc.headers, body),
+                ) from exc
+            raise LLMError(
+                f"{self.model} at {self.base_url} returned HTTP {exc.code}: "
+                f"{body[:300]}"
+            ) from exc
         except Exception as exc:  # noqa: BLE001 - the reason is reported, not raised past
             raise LLMError(f"{type(exc).__name__}: {exc}") from exc
 

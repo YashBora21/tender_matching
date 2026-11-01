@@ -1,0 +1,100 @@
+BACKFILL NOTES — real source URLs for documents already on disk
+================================================================
+These are the four manufacturers that were added to backend/data/catalogue/manifest.csv
+by hand and therefore have a BLANK source_url. For each on-disk filename I searched for
+the document's own home and, where possible, fetched it (HTTP 200/206 + %PDF magic or
+Content-Type application/pdf). The manifest.csv itself was NOT edited.
+
+CONFIDENCE KEY
+  HIGH  = URL fetched this run, returns a PDF; on-disk filename is identical to the URL's
+          last path segment (exact match).
+  MED   = URL fetched and is a PDF, but the on-disk filename differs slightly from the
+          live URL (renamed / de-duplicated copy), so the link is inferred not identical.
+  NONE  = could not find and verify a public direct-PDF URL; left blank rather than guessed.
+  NOTE  = a restriction or reason that blocks a clean link.
+
+-------------------------------------------------------------------------------
+VALMATIC  (category: valves / check valves — valmatic.com, Portals/0/drawings/)
+-------------------------------------------------------------------------------
+CONFIDENCE: HIGH (7 of 10 rows). Each URL below was fetched this run and returned %PDF.
+VM-4700-S_9-21-20.pdf                 https://www.valmatic.com/Portals/0/drawings/VM-4700-S_9-21-20.pdf
+VMC-4702A1L_11-18-14.pdf              https://www.valmatic.com/Portals/0/drawings/VMC-4702A1L_11-18-14.pdf
+VMC-4702A3L_11-18-14.pdf              https://www.valmatic.com/Portals/0/drawings/VMC-4702A3L_11-18-14.pdf
+VMC-4702A6L_11-18-14.pdf              https://www.valmatic.com/Portals/0/drawings/VMC-4702A6L_11-18-14.pdf
+VMC-4702A9L-A9W_11-18-14.pdf          https://www.valmatic.com/Portals/0/drawings/VMC-4702A9L-A9W_11-18-14.pdf
+VMC-4702AAL-AAW_11-18-14.pdf          https://www.valmatic.com/Portals/0/drawings/VMC-4702AAL-AAW_11-18-14.pdf
+VMC-4702ABL-ABW_11-18-14.pdf          https://www.valmatic.com/Portals/0/drawings/VMC-4702ABL-ABW_11-18-14.pdf
+
+DesignSelectionCheckValves.pdf        https://www.valmatic.com/Portals/0/drawings/... (folder for this
+                                      whitepaper was not found — CONFIDENCE NONE, do not guess)
+DynamicCharacteristicsofCheckValves_18.pdf   CONFIDENCE NONE (not located / not verified)
+LRQA_ISO_9001_2015_Certificate_24-27.pdf     CONFIDENCE NONE (ISO certificate; not on the drawings
+                                             path and not independently located this run)
+
+-------------------------------------------------------------------------------
+SULZER  (category: pumps — sulzer.com media library)
+-------------------------------------------------------------------------------
+salesprogram_e00543.pdf               https://www.sulzer.com/en/-/media/files/products/common/salesprogram_e00543.pdf
+                                      CONFIDENCE HIGH (fetched this run, %PDF, exact filename match;
+                                      this is the Sulzer Pump Equipment sales program).
+salesprogram_e00543-2.pdf             likely the same sales program; CONFIDENCE MED — the "-2" suffix
+                                      looks like a de-duplicated copy of the URL above, not a distinct
+                                      document. Verify by hash before pointing both rows at one URL.
+submersibledewateringpumps_e10361.pdf (+ -2 / _60hz / _us variants)
+municipalwatertreatmentsupplydistribution_e10415.pdf
+wastewatertreatment_e10316.pdf (+ -2)
+                                      CONFIDENCE NONE — the parallel /products/water-utilities/<name>.pdf
+                                      candidate paths returned HTTP 404 this run, so I did not record
+                                      them. They live under a different media folder that was not
+                                      located; leave blank rather than point at a 404.
+
+-------------------------------------------------------------------------------
+WILO  (category: pumps)
+-------------------------------------------------------------------------------
+wilo170027.pdf, wilo170070.pdf, wilo186165.pdf, wilo798102.pdf, wilo798103.pdf
+                                      CONFIDENCE NONE for all five. Wilo's data sheets are served
+                                      through an id-based download endpoint and the search results
+                                      came back only as Google redirect wrappers (google.com/url?...),
+                                      not clean direct-PDF URLs. I could not verify a stable
+                                      wilo-hosted direct URL this run, so these are left blank rather
+                                      than guessed. To backfill later, resolve each id through
+                                      Wilo's document download service and re-verify.
+
+-------------------------------------------------------------------------------
+BHARAT BIJLEE  (category: motors — bharatbijlee.com, official Electric Motors catalogues page)
+-------------------------------------------------------------------------------
+Every URL below was fetched this run and returned %PDF. Source page listing all of them:
+https://www.bharatbijlee.com/electric-motors/catalogues/
+The live paths use /wp-content/uploads/2026/04/ (the site re-hosted the files in April 2026);
+the on-disk filenames match the last path segment exactly.
+
+lv-motors-product-range-flyer-061223.pdf
+   https://www.bharatbijlee.com/wp-content/uploads/2026/04/lv-motors-product-range-flyer-061223.pdf
+   CONFIDENCE HIGH
+lv-motors-hazardous-area-application-ie2-energy-efficiency-series-110225r-1.pdf
+   https://www.bharatbijlee.com/wp-content/uploads/2026/04/lv-motors-hazardous-area-application-ie2-energy-efficiency-series-110225r-1.pdf
+   CONFIDENCE HIGH
+lv-motors-hazardous-area-application-ie3-energy-efficiency-series-110225r-compressed.pdf
+   https://www.bharatbijlee.com/wp-content/uploads/2026/04/lv-motors-hazardous-area-application-ie3-energy-efficiency-series-110225r-compressed.pdf
+   CONFIDENCE HIGH
+crane-hoist-duty-motors-catalogue-110225r_compressed_compressed-compressed.pdf
+   https://www.bharatbijlee.com/wp-content/uploads/2026/04/crane-hoist-duty-motors-catalogue-110225r_compressed_compressed-compressed.pdf
+   CONFIDENCE HIGH
+iss-brochure-design_compressed.pdf
+   https://www.bharatbijlee.com/wp-content/uploads/2026/04/iss-brochure-design_compressed.pdf
+   CONFIDENCE HIGH
+project-brochure.pdf
+   https://www.bharatbijlee.com/wp-content/uploads/2026/04/projectbrochure.pdf
+   CONFIDENCE MED — fetched and is a PDF, but the live name has no hyphen ("projectbrochure.pdf")
+   while the on-disk copy is "project-brochure.pdf". Same corporate brochure, different filename.
+
+dc-brochure.pdf                         CONFIDENCE NONE — not on the electric-motors catalogue page;
+                                        likely under /drives or another product page, not verified.
+transformer-brochure.pdf                CONFIDENCE NONE — the transformer brochures page
+                                        (https://www.bharatbijlee.com/transformers/brochures/) exists,
+                                        but the exact file was not matched/verified this run.
+motors-flyer.pdf                        CONFIDENCE NONE — ambiguous name; the closest live file is
+                                        lv-motors-product-range-flyer / flame-proof-motor-flyer, which
+                                        do not match this name. Left blank.
+BB-Priavcy-Policy.pdf                   CONFIDENCE NONE — this is the site Privacy Policy page saved as
+                                        a PDF, not a product document; no product source_url applies.

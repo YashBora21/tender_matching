@@ -1,0 +1,42 @@
+{
+  "category": "pumps",
+  "entries": [
+    {
+      "manufacturer": "KSB",
+      "url": "https://www.ksb.com/resource/blob/96392/00268a58935b79437776892b71af1446/dow-expertise-data.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Pump and valve product range (corporate)",
+      "note": "KSB corporate capability brochure - pumps, valves and hydraulic systems overview"
+    },
+    {
+      "manufacturer": "KSB",
+      "url": "https://www.ksb.com/resource/blob/520390/cc167d4dd470d52fec125abd0c06b3e8/dow-materials-technology-competences-data.pdf",
+      "doc_type": "specification",
+      "model_or_family": "Materials and corrosion resistance",
+      "note": "KSB materials technology competence brochure - grades and their application limits for pump and valve wetted parts"
+    },
+    {
+      "manufacturer": "KSB",
+      "url": "https://www.ksb.com/resource/blob/1337250/c239706fe0313f4322cfcaa40760e549/dow-product-portfolio-mechanical-seals-and-supply-systems-en-data.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Mechanical seals and supply systems",
+      "note": "KSB product portfolio - cartridge mechanical seals matched to the pump type series"
+    },
+    {
+      "manufacturer": "KSB",
+      "url": "https://www.lenntech.com/Data-sheets/KSB-Etanorm-L.pdf",
+      "doc_type": "datasheet",
+      "model_or_family": "Etanorm",
+      "secondary": true,
+      "note": "KSB Etanorm type-series booklet (radially split volute casing pump) - performance curves, dimensions and materials. Distributor copy (Lenntech); the live KSB datasheet is generated per pump set, so this is used as a secondary source."
+    },
+    {
+      "manufacturer": "KSB",
+      "url": "https://www.puffer.com/getattachment/0da620c0-4550-4b75-a098-c103106f732d/ksb-industrial-hot-oil-thermal-fluids-brochure-2026.pdf",
+      "doc_type": "brochure",
+      "model_or_family": "Etanorm SYT",
+      "secondary": true,
+      "note": "KSB hot-oil and thermal-fluids brochure (Etanorm SYT heat-transfer pump). Distributor-hosted (Puffer); secondary source."
+    }
+  ]
+}

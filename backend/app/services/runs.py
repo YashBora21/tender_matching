@@ -45,7 +45,8 @@ from app.schemas.enums import (
     TenderStatus,
     VerificationOutcome,
 )
-from app.services.llm import LLMClient, LLMRateLimited
+from app.services.llm import LLMBudgetExceeded, LLMClient, LLMRateLimited
+from app.services.llm import config_error
 from app.services.scoring import (
     ScoredResult,
     score_manufacturer,
@@ -73,6 +74,20 @@ def assessable(requirements: list[dict]) -> list[dict]:
         for requirement in requirements
         if _requirement_type(requirement.get("type")) is not RequirementType.UNKNOWN
     ]
+
+
+def needs_model(requirements: list[dict]) -> bool:
+    """Whether a run over these requirements has to ask the model anything.
+
+    Only a technical or certification clause is searched and read, so a tender
+    that is nothing but commercial and legal lines is answered from its clause
+    types alone. Refusing to start that run because no model is configured
+    would withhold a report that needed no model to be honest.
+    """
+    return any(
+        _requirement_type(requirement.get("type")) in MATCHABLE
+        for requirement in assessable(requirements)
+    )
 
 
 # A tender in one of these states has no complete requirement list: it is still
@@ -143,6 +158,10 @@ def config_snapshot() -> dict:
         "prompt_version": PROMPT_VERSION,
         "scoring_policy_version": SCORING_POLICY_VERSION,
         "llm_model": settings.llm_model,
+        # Which OpenAI-compatible endpoint answered: the same model name served
+        # elsewhere is a different answer, and a report has to say which one it
+        # is quoting (D-109).
+        "llm_base_url": settings.llm_base_url,
         "embedding_model": settings.embedding_model,
         "embedding_dimension": settings.embedding_dimension,
         # The backend decides whether the query vector is normalised, which
@@ -152,6 +171,10 @@ def config_snapshot() -> dict:
         # How many passages a requirement may be read against: a smaller cap
         # finds less evidence, so the report has to name it (D19).
         "match_max_candidates": settings.match_max_candidates,
+        # What the run was allowed to spend. A run that stopped at its own
+        # budget is reproducible only if the budget is on the record (D-110).
+        "llm_call_budget": settings.llm_call_budget,
+        "llm_token_budget": settings.llm_token_budget,
         "scoring": settings.scoring.model_dump(),
         "comparison": settings.comparison.model_dump(),
     }
@@ -215,6 +238,16 @@ def create_run(
             f"tender {tender_id} has not been read yet (status {tender.get('status')})",
             {"status": tender.get("status")},
         )
+
+    # A clause only a model can read needs a model, and asking that here is
+    # what keeps a run from being created, scheduled, and then never moving off
+    # `queued` because there was nothing to call (D-108). A tender that is
+    # nothing but commercial lines is answered from its clause types alone, so
+    # it is not refused for want of a key.
+    if needs_model(tender_repo.list_requirements(tender_id)):
+        reason = config_error()
+        if reason:
+            raise ValidationError(reason)
 
     names = _manufacturer_names(session, manufacturers)
     run_repo = repo or RunRepo(session)
@@ -292,21 +325,31 @@ def execute_run(
     ):
         return progress
 
-    if matcher is None and client is None:
-        # One client for the run: its counters are what the run spent, and a
-        # client per requirement would lose them (D4).
-        client = LLMClient()
-
     try:
+        if matcher is None and client is None and needs_model(requirements):
+            # One client for the run: its counters are what the run spent, and a
+            # client per requirement would lose them (D4). Built inside the
+            # guarded block because an unconfigured model raises here: a run
+            # that cannot ask has to land `failed` with that reason, not stay
+            # `queued` for a caller to poll and never hear back.
+            client = LLMClient()
+
         run_repo.set_status(run_id, RunStatus.RETRIEVING)
         session.commit()
 
         items = {item["item_id"]: item for item in tenders.list_items(run["tender_id"])}
+        # The pairs this pass must not ask about again. A run that stopped at a
+        # limit kept its answers, and a resumed run pays only for the pairs
+        # that are missing (D-110).
+        answered = run_repo.answered(run_id)
         for name in names:
             identifier = manufacturer_id(session, name)
             if identifier is None:  # pragma: no cover - create_run checked it
                 raise ValidationError(f"the corpus has no manufacturer named {name}")
             for requirement in to_assess:
+                pair = (str(requirement["id"]), str(identifier))
+                if pair in answered:
+                    continue
                 outcome, category = _assess(
                     session,
                     requirement,
@@ -350,13 +393,16 @@ def execute_run(
         _record_usage(progress, client)
         session.commit()
         return progress
-    except LLMRateLimited as exc:
-        # The provider's limit stopped the run before every requirement was
-        # answered. The results already found are committed and kept; the run
-        # records why it stopped, and is distinct from a failed run.
+    except (LLMRateLimited, LLMBudgetExceeded) as exc:
+        # The run stopped before every requirement was answered, whether the
+        # provider refused the call or this process spent the budget it was
+        # given. The results already found are committed and kept; the run
+        # records why it stopped, and is distinct from a failed run. It is not
+        # `done`: a half-read tender must not read as a finished answer, and a
+        # resumed run starts from the pairs still missing (D-110).
         session.rollback()
         message = str(exc)
-        logger.warning("run %s rate limited: %s", run_id, message)
+        logger.warning("run %s stopped: %s", run_id, message)
         run_repo.set_status(run_id, RunStatus.RATE_LIMITED, error=message)
         session.commit()
         progress.status = RunStatus.RATE_LIMITED.value

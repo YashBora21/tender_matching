@@ -409,6 +409,49 @@ select {
   line-height: 1.5;
 }
 
+/* --- tender attachments ------------------------------------------------- */
+
+/* The list of documents a tender links to. Each line carries the file the
+   fetch could not reach and, for that line, the control that replaces it. */
+.attachment-list {
+  list-style: none;
+  padding: 0;
+}
+
+.attachment-list li {
+  padding: 0.6rem 0;
+  border-top: 1px solid var(--line);
+  line-height: 1.5;
+}
+
+.attachment-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.attachment-url {
+  font-size: 0.78rem;
+  word-break: break-all;
+}
+
+.attachment-supply {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.tag-warn {
+  border-color: var(--warn);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-weight: 600;
+}
+
 /* --- run progress ------------------------------------------------------ */
 
 .run-head {

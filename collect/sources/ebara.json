@@ -1,0 +1,34 @@
+{
+  "category": "pumps",
+  "entries": [
+    {
+      "manufacturer": "Ebara",
+      "url": "https://www.ebara.co.th/wp-content/uploads/2024/10/EBARA-THAILAND-LIMITED_General-Product-Catalogue-Sep-30-2024Edit-HO-address.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "General pump range",
+      "note": "Ebara general product catalogue (Ebara Thailand, official) - centrifugal, multistage, submersible and booster pump families with hydraulic and material data"
+    },
+    {
+      "manufacturer": "Ebara",
+      "url": "https://ebarapumps.vn/wp-content/uploads/2017/11/Catalogue-Ebara-FSA.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "FSA split-case pump",
+      "note": "Ebara FSA axial/mid-split pump catalogue (Ebara Vietnam, official) - back pull-out construction, performance and dimensions"
+    },
+    {
+      "manufacturer": "Ebara",
+      "url": "https://www.pumpsebara.com/wp-content/uploads/DLU_tech.pdf",
+      "doc_type": "datasheet",
+      "model_or_family": "DLU submersible sewage pump",
+      "note": "Ebara Pumps America (official) DLU submersible sewage pump technical data - head/capacity, HP and materials"
+    },
+    {
+      "manufacturer": "Ebara",
+      "url": "https://www.makoswater.com/wp-content/uploads/2021/04/EBARA-CATALOGUE.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Centrifugal and submersible pumps",
+      "secondary": true,
+      "note": "Distributor Ebara pump catalogue with specifications and JIS material data. Secondary source."
+    }
+  ]
+}

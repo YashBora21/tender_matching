@@ -105,6 +105,156 @@ def test_a_rate_limited_call_waits_as_long_as_the_provider_says(monkeypatch):
     assert _retry_after(plain, 5.0) == 5.0
 
 
+def test_a_retry_after_header_is_read_both_ways_it_can_be_written():
+    """The standard header is the channel every provider has, whatever it is
+    called: seconds, or the moment to come back."""
+    import urllib.error
+
+    from app.services.llm import _retry_after
+
+    seconds = urllib.error.HTTPError(
+        "u", 429, "slow down", {"Retry-After": "12"}, None
+    )
+    assert _retry_after(seconds, 5.0) == 12.0
+
+    from datetime import datetime, timedelta, timezone
+    from email.utils import format_datetime
+
+    until = format_datetime(datetime.now(timezone.utc) + timedelta(seconds=30))
+    dated = urllib.error.HTTPError("u", 429, "slow down", {"Retry-After": until}, None)
+    assert 20.0 <= _retry_after(dated, 5.0) <= 31.0
+
+
+def test_a_wait_named_in_a_body_field_is_found_however_deep_it_sits():
+    """Some providers answer with a long explanation and put the wait in a
+    field after it, so the field is read wherever it lives."""
+    from app.services.llm import _body_seconds
+
+    body = (
+        '{"error": {"code": 429, "message": "Resource has been exhausted.",'
+        ' "status": "RESOURCE_EXHAUSTED",'
+        ' "details": [{"@type": "RetryInfo", "retryDelay": "45.123s"}]}}'
+    )
+    assert _body_seconds(body) == pytest.approx(45.123)
+
+    # A number is already seconds, and a snake_case name is the same field.
+    assert _body_seconds('{"error": {"retry_after": 30}}') == 30.0
+
+    # A body that is not JSON says nothing through this channel.
+    assert _body_seconds("<html>429 Too Many Requests</html>") is None
+
+
+def test_a_wait_named_in_prose_is_read_in_the_usual_ways():
+    from app.services.llm import _prose_seconds
+
+    assert _prose_seconds("Please try again in 12.5s") == 12.5
+    assert _prose_seconds("please retry after 30 seconds") == 30.0
+    assert _prose_seconds("too many requests, retry in 1 minute") == 60.0
+    assert _prose_seconds("the model is rate limited") is None
+
+
+def test_the_header_is_believed_before_the_body_and_the_body_before_prose():
+    """A provider can say the same wait three ways. The most formal channel
+    wins, because it is the one the provider is least likely to get wrong."""
+    from app.services.llm import _limit_seconds
+
+    body = '{"error": {"message": "try again in 5s", "retryDelay": "20s"}}'
+
+    assert _limit_seconds({"Retry-After": "60"}, body) == 60.0
+    assert _limit_seconds({}, body) == 20.0
+    assert _limit_seconds(None, "try again in 5s") == 5.0
+
+
+def test_a_limit_answered_with_a_header_stops_the_run_with_that_wait(monkeypatch):
+    """The wait is carried out with the error, so a caller that stops can say
+    when it is worth trying again - whatever channel the provider used."""
+    import io
+    import urllib.error
+
+    from app.services.llm import LLMRateLimited
+
+    def fake_urlopen(request, timeout=None):
+        raise urllib.error.HTTPError(
+            request.full_url, 429, "Too Many Requests", {"Retry-After": "9"}, io.BytesIO(b"{}")
+        )
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "a-model")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "0")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    with pytest.raises(LLMRateLimited) as caught:
+        LLMClient().chat("system", "user")
+
+    assert caught.value.retry_after == 9.0
+
+
+def test_a_refused_call_names_the_model_and_the_address_it_was_sent_to(monkeypatch):
+    """A key that does not match the host is the likeliest mistake when the
+    provider is changed by env, and `HTTP 401` alone does not say so."""
+    import io
+    import urllib.error
+
+    from app.services.llm import LLMError
+
+    def fake_urlopen(request, timeout=None):
+        raise urllib.error.HTTPError(
+            request.full_url, 401, "Unauthorized", {}, io.BytesIO(b'{"error": "bad key"}')
+        )
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "a-model")
+    monkeypatch.setenv("LLM_BASE_URL", "https://api.example.test/v1")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    with pytest.raises(LLMError) as raised:
+        LLMClient().chat("system", "user")
+
+    assert "a-model" in str(raised.value)
+    assert "api.example.test" in str(raised.value)
+
+
+def test_a_body_is_read_past_its_first_sentence_for_the_wait(monkeypatch):
+    """A truncating read loses the number that decides how long to pause.
+
+    The message is kept short for the log; the wait is read from the whole
+    body, which can put its field after a long explanation.
+    """
+    import io
+    import urllib.error
+
+    from app.services.llm import LLMRateLimited
+
+    payload = (
+        '{"error": {"message": "' + "x" * 400 + '",'
+        ' "details": [{"retryDelay": "77s"}]}}'
+    ).encode("utf-8")
+
+    def fake_urlopen(request, timeout=None):
+        raise urllib.error.HTTPError(
+            request.full_url, 429, "Too Many Requests", {}, io.BytesIO(payload)
+        )
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "a-model")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "0")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    with pytest.raises(LLMRateLimited) as caught:
+        LLMClient().chat("system", "user")
+
+    assert caught.value.retry_after == 77.0
+
+
 def test_a_model_error_is_reported_not_raised_past(monkeypatch):
     """A failed call is a failed extraction, and the caller decides what to
     do about it."""
@@ -295,3 +445,72 @@ def test_no_retries_left_raises_the_limit_on_the_first_attempt(monkeypatch):
 
     assert client.calls == 1
     assert client.retries == 0
+
+
+def test_a_call_budget_stops_before_the_request_is_made(monkeypatch):
+    """The budget is checked before the call, because the spend it prevents is
+    a call that should never have been paid for (D-110)."""
+    from app.services.llm import LLMBudgetExceeded
+
+    sent: list[str] = []
+
+    def fake_urlopen(request, timeout=None):
+        sent.append(request.full_url)
+        raise AssertionError("the budget should have stopped the call")
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "a-model")
+    monkeypatch.setenv("LLM_CALL_BUDGET", "3")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    client = LLMClient()
+    client.calls = 3
+    with pytest.raises(LLMBudgetExceeded) as raised:
+        client.chat("system", "user")
+
+    # The stop says what was already spent, so the caller can size the next run.
+    assert "3" in str(raised.value)
+    assert sent == []
+
+
+def test_a_token_budget_stops_the_client_that_spent_it(monkeypatch):
+    from app.services.llm import LLMBudgetExceeded
+
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "a-model")
+    monkeypatch.setenv("LLM_TOKEN_BUDGET", "100")
+    monkeypatch.setenv("LLM_CALL_BUDGET", "0")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    client = LLMClient()
+    client.prompt_tokens = 90
+    client.completion_tokens = 20
+    with pytest.raises(LLMBudgetExceeded):
+        client.chat("system", "user")
+
+
+def test_no_budget_means_no_ceiling(monkeypatch):
+    """Zero is the default and asks no question: an uncapped run is the
+    behaviour the tests and the README already describe."""
+    from app.services.llm import LLMBudgetExceeded
+
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "a-model")
+    monkeypatch.setenv("LLM_CALL_BUDGET", "0")
+    monkeypatch.setenv("LLM_TOKEN_BUDGET", "0")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    client = LLMClient()
+    client.calls = 10_000
+    client.prompt_tokens = 1_000_000
+    try:
+        client._check_budget()
+    except LLMBudgetExceeded:  # pragma: no cover - the failure is the bug
+        raise AssertionError("a zero budget must not stop a run")

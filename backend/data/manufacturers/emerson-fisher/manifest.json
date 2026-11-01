@@ -1,7 +1,7 @@
 {
   "manufacturer": "Emerson Fisher",
   "manufacturer_slug": "emerson-fisher",
-  "updated_at": "2026-10-22T11:31:00+00:00",
+  "updated_at": "2026-11-01T06:24:47+00:00",
   "documents": [
     {
       "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/documents/d103311x012.pdf",
@@ -9,7 +9,7 @@
       "category": "valves",
       "doc_type": "specification",
       "model_or_family": "Fisher D series",
-      "status": "new",
+      "status": "unchanged",
       "models": [],
       "filename": "d103311x012.pdf",
       "path": "raw/d103311x012.pdf",
@@ -17,8 +17,7 @@
       "retrieved_at": "2026-10-22T11:30:51+00:00",
       "is_secondary": false,
       "notes": "D series valve selection guide",
-      "last_modified": "Wed, 01 Oct 2025 21:47:59 GMT",
-      "content_type": "application/pdf"
+      "last_modified": "Wed, 01 Oct 2025 21:47:59 GMT"
     },
     {
       "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/documents/d103554x012.pdf",
@@ -26,7 +25,7 @@
       "category": "valves",
       "doc_type": "specification",
       "model_or_family": "Fisher large ED/EWD ET/EWT",
-      "status": "new",
+      "status": "unchanged",
       "models": [],
       "filename": "d103554x012.pdf",
       "path": "raw/d103554x012.pdf",
@@ -34,8 +33,7 @@
       "retrieved_at": "2026-10-22T11:31:00+00:00",
       "is_secondary": false,
       "notes": "Large ED/EWD and ET/EWT valves, NPS 12-30",
-      "last_modified": "Wed, 01 Oct 2025 21:48:49 GMT",
-      "content_type": "application/pdf"
+      "last_modified": "Wed, 01 Oct 2025 21:48:49 GMT"
     },
     {
       "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/documents/d352343x012.pdf",
@@ -43,7 +41,7 @@
       "category": "valves",
       "doc_type": "catalogue",
       "model_or_family": "Fisher globe valves",
-      "status": "new",
+      "status": "unchanged",
       "models": [],
       "filename": "d352343x012.pdf",
       "path": "raw/d352343x012.pdf",
@@ -51,8 +49,7 @@
       "retrieved_at": "2026-10-22T11:30:49+00:00",
       "is_secondary": false,
       "notes": "Fisher Globe Valves product guide - the sliding stem and rotary families",
-      "last_modified": "Tue, 08 Sep 2026 11:11:18 GMT",
-      "content_type": "application/pdf"
+      "last_modified": "Tue, 08 Sep 2026 11:11:18 GMT"
     },
     {
       "url": "https://www.emerson.com/is/content/emerson/en/final-control/flow-controls/valves/documents/control-valve-handbook-en-3661206.pdf",
@@ -60,7 +57,7 @@
       "category": "valves",
       "doc_type": "catalogue",
       "model_or_family": "Control valve handbook",
-      "status": "new",
+      "status": "unchanged",
       "models": [],
       "filename": "control-valve-handbook-en-3661206.pdf",
       "path": "raw/control-valve-handbook-en-3661206.pdf",
@@ -68,8 +65,7 @@
       "retrieved_at": "2026-10-22T11:30:57+00:00",
       "is_secondary": false,
       "notes": "Control Valve Handbook, 6th edition - sizing, materials, trims and actuators",
-      "last_modified": "Thu, 05 Mar 2026 07:53:36 GMT",
-      "content_type": "application/pdf"
+      "last_modified": "Thu, 05 Mar 2026 07:53:36 GMT"
     }
   ]
 }

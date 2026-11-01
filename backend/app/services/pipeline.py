@@ -443,6 +443,7 @@ def run_pipeline(
         if repo is not None:
             _save_failed(repo, result, settings)
         return result
+    backfill = False
     if changed(STAGE_REQUIREMENTS):
         read = _read_specification(spec, tender_dir)
         if read.error:
@@ -517,9 +518,19 @@ def run_pipeline(
         # id, which is not a no-op (D-93).
         result.requirements = _stored_records(repo, tender_id)
         requirements_state.status = STATUS_SKIPPED
+        # The ledger is a state of the *pages*, not of the requirements, so a
+        # tender read before the ledger was written (D-91) has requirements and
+        # no page states at all - and its stage key has not changed, so it
+        # would never be written again. Re-reading the pages costs no model
+        # call, and every page ends in a state (FR-T2).
+        backfill = repo is not None and _ledger_is_empty(repo, tender_id)
+        if backfill:
+            result.pages = _read_specification(spec, tender_dir).pages
     requirements_state.rows = len(result.requirements)
     result.stages[STAGE_REQUIREMENTS] = requirements_state
-    if requirements_state.status == STATUS_DONE and repo is not None and result.pages:
+    if result.pages and repo is not None and (
+        requirements_state.status == STATUS_DONE or backfill
+    ):
         # The ledger is written with the pages that were just read, so every
         # page the tender declares ends in a state (FR-T2). It is written
         # before the extraction runs: a read that stops at the provider's
@@ -788,6 +799,18 @@ def _attachment_id(repo, tender_id: str, attachment: dict) -> Optional[str]:
         if record.get("url") == url:
             return record.get("id")
     return None
+
+
+def _ledger_is_empty(repo, tender_id: str) -> bool:
+    """Whether no page of this tender has a state recorded yet.
+
+    A repository that cannot answer is taken to have a ledger: not writing is
+    the safe answer when the state of the pages is unknown.
+    """
+    lister = getattr(repo, "list_pages", None)
+    if lister is None:
+        return False
+    return not lister(tender_id)
 
 
 def _page_rows(pages: list[PageRead], attachment_id: Optional[str]) -> list[dict]:

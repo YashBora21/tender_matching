@@ -2156,3 +2156,220 @@ bharat_bijlee's motors) are no longer searched for a valve item.
   default cap is 20.
 - The audit sheet in `eval/audit/` is the pre-fix sample; re-exporting it at
   the same seed is a separate, LLM-costed step.
+
+---
+
+## Phase 18 - the flow a reviewer can actually run (started 2026-11-01)
+
+The assignment PDF was read against the codebase, end to end, with the question
+"can a person who has only this repository get from a tender PDF to a report?".
+The verdicts and the guards were mostly right; what was broken was reachability.
+Four paths stopped short: a machine with no model key produced a run that never
+left `queued`; a fresh clone had no corpus and no way to get one; the tender
+already in the database had no page ledger; and a document the collector could
+not fetch had no way in except the filesystem. This phase opens those four,
+then strengthens the corpus itself. No LLM call was made in this phase.
+
+### Step 1 - a run with nobody to ask is refused at the request (D-108)
+
+- `services/runs.py`: `needs_model(requirements)` decides whether the tender
+  has to ask anything at all, and only then does `create_run` call
+  `config_error()`. A refusal carries the reason in the message; the 409 "the
+  tender has not been read" path is unchanged. `LLMClient()` is constructed
+  inside `execute_run`'s guarded block, so a run that loses its key between the
+  request and the worker lands `failed` with that reason.
+- `services/e2e.py` and the tests keep the same split: a tender of nothing but
+  commercial lines is answerable with no key.
+
+### Step 2 - the wait is read from the response (D-109)
+
+- `services/llm.py`: `Retry-After` (seconds or an HTTP date, header name
+  matched case-insensitively), a JSON body field at any depth
+  (`retry_after`/`retryAfter`/`retry_delay`/`retryDelay`), or prose ("try
+  again in 24.9s") - a bare number is seconds, a suffix says what it counts.
+  No provider's exception class is imported. `config_error()` names no
+  provider.
+- `services/runs.py`: `llm_base_url` is in the config snapshot, because the
+  same model name served from a different endpoint is a different answer.
+
+### Step 3 - a budget the run stops at, and resumes past (D-110)
+
+- `core/config.py`: `llm_call_budget` and `llm_token_budget` (0 is no
+  ceiling), and both in the snapshot.
+- `services/llm.py`: `_check_budget` before every call, against the client's
+  own counters, raising `LLMBudgetExceeded` with what was already spent.
+- `repositories/runs.py`: `answered(run_id)` - the requirement x manufacturer
+  pairs the run stores.
+- `services/runs.py`: the loop skips answered pairs; `LLMBudgetExceeded` joins
+  `LLMRateLimited` in the handler that commits what it found, labels the run
+  `rate_limited` and names why, so the next pass pays only for the rest.
+
+### Step 4 - the corpus comes back on a machine that only has the manifests (D-111, D-113)
+
+- `services/corpusrestore.py` (new) and `make corpus-restore`: fetches only
+  addresses a manifest already records, refuses to write a file whose hash
+  differs from the manifest, re-asks robots.txt, and reports an address-less
+  row as unrecorded. `--dry-run` reports without fetching.
+- `core/config.py`: `corpus_max_bytes` (200 MB), separate from the upload cap.
+- `core/fetching.py`: `check_url`/`fetch` take `from_document`. The host
+  allowlist is a rule about where an address came from - it gates a link read
+  out of a tender, not an address a person recorded and hashed. The private
+  address, redirect, size, time and robots checks apply to both paths.
+- `services/ingestion.py`: "no corpus found" is a warning that names the two
+  commands that would put it back, and `main` prints the same on stderr when
+  the directory holds no document.
+- The default `fetch_allowed_domains` was left exactly as it was: widening it
+  would have loosened the fence for untrusted links **and** changed
+  `stage_keys(fetch_config=...)`, invalidating the stored tender's stages and
+  forcing a paid re-extraction.
+
+### Step 5 - tender to report in one command (D-112)
+
+- `services/e2e.py` (new) and `make e2e TENDER=<pdf|dir|tender_id> [ARGS=--check]`:
+  corpus -> embedding -> tender -> matching -> report, each step checking its
+  own precondition and the command stopping at the first it cannot meet, with
+  the reason and the command that fixes it. `skipped` and `blocked` are
+  different answers.
+- `api/routes.py`: `GET /api/preflight`, with `can_run`, `why_not` and
+  `next_steps`. It downloads nothing and calls no model.
+
+### Step 6 - a page that cannot be read says why (D-114)
+
+- `services/docparser.py`: `tesseract_missing()` and `ocr_page_with_reason`;
+  `ocr_page` keeps its old shape as the thin wrapper.
+- `services/tenderingest.py`: `_ocr` returns the reason, so the ledger's
+  `skip_reason` distinguishes "this machine has no OCR program" from "the OCR
+  failed on this page" from "this page holds nothing to read".
+- `backend/Dockerfile`: installs `tesseract-ocr` and `tesseract-ocr-eng` -
+  Tesseract is a program the image carries, not a package `pip` installs.
+
+### Step 7 - the page ledger is backfilled for the tender already read (D-115)
+
+- `services/pipeline.py`: `_ledger_is_empty`, and the requirements-skipped
+  branch re-reads the pages locally and writes the ledger. No model call: the
+  pages come from the parser on disk.
+- `repositories/tender.py`: `list_pages` orders by page.
+- `tests/test_ledger_db.py` (new, integration): every page state round-trips
+  including the failed page's reason and its attachment; a second read
+  replaces rather than appends; an unread tender has an empty ledger; writing
+  no pages leaves none.
+
+### Step 8 - a document the fence refused is supplied in the UI (D-116)
+
+- `frontend/src/api.ts`, `types.ts`: `getAttachments` and `uploadAttachment`
+  for the endpoints that already existed and nothing surfaced.
+- `frontend/src/components/UploadPage.tsx`: an attachments panel under the
+  tender - name, address, hash, kind, status, size, pages - with the
+  `failed` and `restricted` rows marked as ones to supply and a file picker
+  that posts them. The notice says to re-upload the tender PDF to have the
+  document read with it, and that the stages which do not depend on it are not
+  run twice.
+- `frontend/src/styles.css`: the list, the warning tag and the supply block.
+
+### Step 9 - the corpus is less generic
+
+- `collect/sources/`: nine new source files - ABB, AVK, Bharat Bijlee, Bray,
+  Crompton, Duncan Engineering, Ebara, Intervalve Poonawalla, KSB (pumps and
+  valves) - 51 entries, every one a real address that was fetched, with its
+  note naming what the document is. Distributor copies (Lenntech, Puffer,
+  VVF) carry `"secondary": true`, which is what ranks them below a canonical
+  one in `services/evidence.py`.
+- The run collected 40 new documents and failed on none.
+- `backend/data/catalogue/manifest.csv`: 14 hand-added rows had no address.
+  The address was recovered for 7 of them - valmatic's drawings, sulzer's
+  E00543 and bharat_bijlee's six - and recorded only where the live host
+  serves bytes whose sha256 equals the file on disk. The other 20 blanks stay
+  blank: `sulzer/salesprogram_e00543.pdf` is served as a different revision
+  now, and a row that vouches for a file the host no longer has would make the
+  report's page citations point at something else.
+- Grundfos and Wilo are reported gaps, not gaps in the effort: Grundfos'
+  robots.txt and CDN block the PDF paths, and Wilo's catalogue is served
+  through a form rather than a direct address.
+
+### Step 10 - a wildcard robots.txt rule is honoured, and the corpus was re-audited (D-117)
+
+Writing step 9 down meant checking that every document in it was collected the
+way the project says documents are collected. It was not.
+
+- `app/core/robots.py` (new): the matcher - `*` is any sequence, `$` anchors
+  the end, an unanchored rule decides by prefix, the longest matching path wins,
+  an Allow of the same length wins the tie, and the group is the one whose agent
+  token appears in the user agent with `*` as the fallback.
+  `urllib.robotparser` ignores a rule carrying a wildcard, tested against
+  `*.pdf`, `/*.pdf` and `/*.pdf$`: none of them blocked anything.
+- `core/fetching.py` and `collect/collect.py` both use it, so the collector and
+  the fence give one answer to "did this host allow this". The collector imports
+  the app's matcher rather than carrying a second copy of the rule.
+- `tests/test_robots.py` (new): 13 tests, including the gap pinned from the
+  other side - the standard library's parser still allows the document this one
+  refuses.
+- *Audited:* the corpus's 101 recorded addresses against their live robots.txt.
+  Four are refused by the corrected rule, all four KSB catalogues fetched from
+  `www.ksb.com`, whose robots.txt says `Disallow: *.pdf` - the rule
+  `fetch_allowed_domains` already cites as the reason KSB is off the tender-link
+  allowlist. The two KSB booklets held from distributor hosts (lenntech.com,
+  puffer.com) pass those hosts' own rules and stay, marked secondary.
+- `make corpus-restore` now refuses the four, so a fresh clone reports them as
+  gaps instead of fetching them again.
+
+**Withdrawn, with the user's agreement:** the four files were on disk and in the
+database, so a report could have cited documents the host does not allow
+fetching. They were removed - `raw/dow-*.pdf`, 1,025 chunks and 4 document rows
+(0 facts depended on them) - and their manifest rows now say what a row says
+when a host has refused the document: `status: restricted`, the
+`restriction_note`, the URL kept so a person can see what is missing and why,
+and no file claimed. A manifest row is the record of an attempt, not a promise
+that the bytes are here. Deleting them cannot be undone by re-fetching, because
+the fence now refuses them, which is the point.
+
+*Measured:*
+
+- Targeted backend unit tests (the eight files this phase touched -
+  `test_llm`, `test_runs`, `test_e2e`, `test_corpusrestore`, `test_fetching`,
+  `test_docparser`, `test_pipeline`, `test_tenderingest`): **178 passed,
+  1 skipped.** `test_robots.py` 13 passed; `test_fetching`, `test_corpusrestore`
+  and `test_tendercollect` together 40 passed; `collect/test_collect.py` 14
+  passed. The full suite was not run, by instruction.
+- `test_ledger_db.py`: 4 integration tests pass against the running database.
+- Frontend: `UploadPage.test.tsx` 10/10, `tsc --noEmit` clean, `vite build`
+  clean.
+- Corpus ingest of the new collection: **35 documents read, 9821 chunks written,
+  97 unchanged, 0 failed**, and 10 documents labelled *incomplete* because some
+  of their pages carry no text layer - `bbl_craneduty.pdf` 15 pages,
+  `dow-product-portfolio-data.pdf` 64. This machine has no Tesseract, so D-114's
+  reason is what those pages record: install the UB-Mannheim build, or run the
+  stack with `make docker-up`, whose image carries it.
+- The database after this phase: 105 documents, 30713 chunks, 99 products.
+  `make embed` added the 9821 vectors the ingest wrote and failed on none, so
+  every chunk in the corpus has one.
+- After the withdrawal: **101 documents and 29,688 chunks**, `make ingest`
+  reads the tree clean (0 new, 128 unchanged, 0 failed) and
+  `make corpus-restore --dry-run` counts 117 documents in place with none
+  failing. The two counts are different sets, and the difference is open below.
+- `make e2e TENDER=<id> ARGS=--check` on the stored GeM-Bidding-9713870 tender
+  answers, without a call or a download: `corpus 105 document(s), 30713
+  chunk(s) from 20 maker(s); 132 file(s) on disk`, `model configured`, `ocr not
+  available here`. The one thing between this machine and a report is Tesseract
+  for the image-only pages, and the run itself.
+
+**Open:**
+
+- **Nothing has been measured end to end with a model.** `make e2e` is
+  verified up to the step that needs a key: `--check` and the preflight answer
+  correctly with no configuration, and the refusal names what is missing. The
+  first real report still has to be produced by the user's corporate key.
+- The stored tender's `tender_page` rows exist only after the pipeline is run
+  on it again; the backfill is unit-tested and the writer is proven against the
+  database, but the stored tender has not been re-run in this phase.
+- The 20 catalogue rows with no recorded address are documents a fresh clone
+  cannot restore. They need a person to record an address, not a guess.
+- The corpus has no KSB document fetched from `www.ksb.com` at all, and the two
+  that remain are distributor copies (Lenntech, Puffer) marked secondary. If
+  KSB coverage matters for a tender, the way to get it is a source the host
+  allows - a distributor, or a `manual` entry a person supplies - not a fetch
+  the fence refuses.
+- **Tesseract is not installed on this machine**, so a page with no text layer
+  is recorded as `failed` with the reason rather than read. 10 corpus documents
+  are *incomplete* for that cause. Install the UB-Mannheim build or run the
+  stack, whose image carries it.
+- `eval/audit/` is still the pre-fix sample; re-exporting it is LLM-costed.

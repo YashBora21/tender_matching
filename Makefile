@@ -8,7 +8,7 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev migrate downgrade run test test-unit test-integration \
-        test-collect collect ingest embed match report tenders tenders-audit eval eval-check \
+        test-collect collect corpus-restore ingest embed match report tenders tenders-audit e2e eval eval-check \
         recall \
         docker-build docker-up docker-down \
         docker-logs clean
@@ -51,6 +51,9 @@ test-collect: ## Run only the collector tests
 collect: ## Collect the manufacturer corpus (writes the manifest)
 	$(VENV)/Scripts/python.exe collect/collect.py
 
+corpus-restore: ## Put the corpus back from the addresses its manifests record (ARGS="--dry-run")
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpusrestore $(ARGS)
+
 ingest: ## Parse the collected corpus into the database
 	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.ingestion
 
@@ -62,6 +65,9 @@ match: ## Answer a requirement from the corpus: make match REQ="body shall be SS
 
 report: ## Build a run's report: make report RUN=<run_id> FORMAT=json|html|csv
 	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.report "$(RUN)" --format $(if $(FORMAT),$(FORMAT),json) $(if $(OUT),--out $(OUT),)
+
+e2e: ## One command, tender to report: make e2e TENDER=<pdf|dir|id> [ARGS=--check]
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.e2e "$(TENDER)" $(ARGS)
 
 tenders: ## Process the tender corpus and report what it gave
 	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpus

@@ -448,7 +448,9 @@ class TenderRepo:
                 tender_page.c.ledger_status,
                 tender_page.c.skip_reason,
                 tender_page.c.attachment_id,
-            ).where(tender_page.c.tender_id == tender_id)
+            )
+            .where(tender_page.c.tender_id == tender_id)
+            .order_by(tender_page.c.page)
         ).all()
         return [
             {

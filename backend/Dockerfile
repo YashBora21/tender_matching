@@ -8,8 +8,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+# Tesseract is the OCR engine: a GeM tender page is often a picture of a
+# typed BOQ, and a page with no text layer is unreadable without it. It is a
+# program, not a package, so the image carries it (FR-9).
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \
+        tesseract-ocr tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 # Dependencies first so code edits do not invalidate the install layer.

@@ -59,6 +59,30 @@ def test_a_subdomain_of_an_allowed_host_is_allowed(monkeypatch):
     check_url("https://bidplus.gem.gov.in/a.pdf")
 
 
+def test_the_host_rule_is_a_rule_about_a_links_source_not_about_every_fetch(
+    monkeypatch,
+):
+    """A corpus manifest records addresses a person wrote down and pins each
+    one with a hash, so it is fetched from a host a tender may not name. The
+    rest of the fence - the scheme, the private address - still applies."""
+    monkeypatch.setenv("FETCH_ALLOWED_DOMAINS", "gem.gov.in")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    _resolves_to(monkeypatch, "160.187.232.19")
+
+    check_url("https://lenntech.com/etanorm.pdf", from_document=False)
+
+    _resolves_to(monkeypatch, "10.1.2.3")
+    with pytest.raises(FetchRefused) as caught:
+        check_url("https://lenntech.com/etanorm.pdf", from_document=False)
+    assert "private address" in str(caught.value)
+
+    with pytest.raises(FetchRefused) as caught:
+        check_url("https://lenntech.com/etanorm.pdf")
+    assert "allowlist" in str(caught.value)
+
+
 def test_a_nat64_address_is_judged_by_the_ipv4_it_carries(monkeypatch):
     """On an IPv4-only network with DNS64, a public name resolves into
     64:ff9b::/96. Python classes that prefix as reserved, but the IPv4 inside

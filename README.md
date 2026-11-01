@@ -82,6 +82,78 @@ corpus on disk and the embedding model's weights (the first `make embed`
 downloads them, ~130 MB for the default `BAAI/bge-small-en-v1.5`). Without them
 the app starts with an empty corpus and reports it as empty.
 
+A fresh clone has the manifests and none of the PDFs. `make corpus-restore`
+replays the addresses those manifests record and checks each file against the
+hash written beside it: what is already in place is left alone, what fails the
+check is not written, and a document with no address on record is reported as a
+gap rather than guessed (`make corpus-restore ARGS=--dry-run` prints the list
+first, `ARGS="--only flowserve"` limits it to one maker). The host's robots.txt
+is asked again before each fetch, so a document a manufacturer has since
+withdrawn from crawling stays withdrawn.
+
+### One command, tender to report
+
+```bash
+make e2e TENDER=path/to/tender.pdf      # upload, read, match, report
+make e2e TENDER=<tender_id>             # match a tender already read
+make e2e TENDER=<id> ARGS=--check       # say what is missing, change nothing
+curl localhost:8000/api/preflight       # the same answer as JSON
+```
+
+`make e2e` runs the chain in the foreground: ingest the corpus if the database
+has not, embed the chunks that have no vector, read the tender, run the
+matching, write `report-<run_id>.{json,html,csv}`. It checks each step's
+precondition before taking it and stops at the first one it cannot meet — an
+empty corpus, an unread tender, a model that is not configured — with the
+reason and the command that fixes it. The exit code is 0 when the report was
+written, 2 when it stopped before starting, 1 when a step failed.
+
+`GET /api/preflight` measures the same things without writing or calling
+anything: the corpus counts, whether a model is configured, and what a run
+would need first. It downloads nothing and makes no model call, so it is safe
+to point a monitor at.
+
+### Spending a limited key
+
+Two settings bound what one process may ask: `LLM_CALL_BUDGET` and
+`LLM_TOKEN_BUDGET` (0 is no ceiling). A run that reaches one keeps every answer
+it already wrote and ends `rate_limited`, not `failed` and not `done`, with the
+message naming what was spent — and a run started against the same tender pays
+only for the pairs still missing, so a small quota is spent forward rather than
+twice over. The provider is read from the response, not assumed: the wait is
+taken from `Retry-After`, from a field of the JSON error body, or from the prose
+the provider said it in, which is what lets a hosted model, a self-hosted one
+and a local one all be the same code. `LLM_BASE_URL` is recorded in every run's
+config snapshot, because the same model name served elsewhere is a different
+answer.
+
+A tender whose assessable clauses are all commercial, legal or financial is
+answered from their clause types and needs no key at all, so it is not refused
+for want of one.
+
+### When a document cannot be fetched
+
+A tender links to documents on other hosts, and the collector follows those
+links only within `FETCH_ALLOWED_DOMAINS`, never to a private address, never
+past a redirect, and only where robots.txt allows it. KSB and Crane are not on
+that list: both disallow `*.pdf`. That list is a rule about a link found inside
+a document; it does not gate `make corpus-restore`, whose addresses were
+recorded by a person and are checked against the hash beside them.
+
+robots.txt is matched by `backend/app/core/robots.py`, not by
+`urllib.robotparser`, because the standard library ignores a rule that carries
+a wildcard — `Disallow: *.pdf` is the line a manufacturer writes to keep its
+catalogues out of crawlers, and the library reads it as no rule at all. `*` is
+any sequence, `$` anchors the end, a rule with no `$` decides by prefix, and the
+longest match wins. Both fetch paths use that one matcher, so the collector and
+the fence cannot disagree about what a host allowed.
+
+When an attachment still cannot be had — a host off the list, a PDF behind a
+login, a link that has moved — the upload page lists it and takes the file from
+disk instead. The document is frozen with its hash and recorded in the tender's
+manifest like any fetched one, so the report can still say which file a quote
+came from; re-uploading the tender PDF reads it with the rest.
+
 ### Locally
 
 ```bash
@@ -95,6 +167,15 @@ cd frontend && npm install && npm run dev   # Vite on :5173
 Tests: `make test` (all), `make test-unit` (no database needed),
 `make test-integration` (needs `TEST_DATABASE_URL`). The frontend has its own
 suite: `cd frontend && npm test`.
+
+One dependency is not a Python package: **Tesseract**, the OCR engine a page
+with no text layer needs (FR-9). The backend image installs it
+(`apt-get install tesseract-ocr tesseract-ocr-eng`); on Windows install the
+UB-Mannheim build and put `tesseract.exe` on `PATH`, setting `TESSDATA_PREFIX`
+if the language data is not found. Without it nothing breaks and nothing is
+guessed — the page is recorded in the ledger as `failed` with the reason, the
+tender is labelled *incomplete ingestion*, and `GET /api/preflight` says the
+machine has no OCR. An unread page is never read as a missing capability.
 
 Every threshold, weight, model name and path comes from the environment
 (`backend/app/core/config.py`). There are no thresholds written into the
@@ -361,26 +442,44 @@ both new attributes being recognised and old ones stopping being recognised).
 
 ## Current state
 
-Phases 0–10 are built and tested, and Phase 11 packaging is in place: the two
-images, the compose stack and the commands above. What that covers end to end is
-the corpus collector, tender ingestion with a four-state page ledger, retrieval
-and LLM extraction behind the verifier, deterministic comparison and scoring,
-runs and their reports (JSON, HTML, CSV), the React frontend, and the offline
-evaluation harness.
+Phases 0–10 are built and tested, Phase 11 packaging is in place, and the
+phases after that worked the match and the flow until a person holding only
+this repository could take a tender PDF to a report: the corpus collector,
+tender ingestion with a four-state page ledger, retrieval and LLM extraction
+behind the verifier, deterministic comparison and scoring, runs and their
+reports (JSON, HTML, CSV), the React frontend, the offline evaluation harness,
+`make corpus-restore`, `make e2e` and `GET /api/preflight`.
+
+The corpus on this machine is ~720 MB across 121 documents on record - 51 in
+the manufacturer manifests and 70 in the catalogue - and all 121 are present and
+hashed. 117 of them come back on a fresh clone from the address their manifest
+records; four KSB catalogues do not, because `www.ksb.com` disallows `*.pdf` and
+the restore honours that (D-117) — they were collected before the rule was read
+correctly, and are named rather than hidden. It covers valves, pumps, motors and
+actuators from ABB, AVK, Bharat Bijlee, Bray, Crompton, Circor/Flowserve,
+Duncan Engineering, Ebara, Emerson Fisher, Godwin/Goulds, Intervalve Poonawalla,
+KSB, Delval, Sulzer, Val-Matic and Wilo.
 
 Still open, and named rather than hidden:
 
-- **No real gold set.** The 50–100 hand-labelled pairs need requirements from a
-  live model run; the harness and format are ready for them.
+- **No real gold set.** 6 confirmed pairs and 22 proposed atomic rows exist;
+  the 50–100 hand-labelled pairs need requirements from a live model run, and
+  the harness and format are ready for them.
 - **No published images.** Nothing is pushed to Docker Hub from here, and there
   is no CI pipeline.
-- **The corpus is not in git** (~157 MB of PDFs); only manifests and source
-  configs are tracked, so a fresh clone starts with an empty corpus.
+- **The corpus is not in git**; only manifests and source configs are tracked,
+  so a fresh clone starts with no PDFs and runs `make corpus-restore` to get
+  them. 20 catalogue rows carry no address at all - the live host serves other
+  bytes than the file on disk - so those documents do not come back on a fresh
+  clone, and they are reported as gaps rather than guessed.
 - **No authentication** in front of the API; it assumes a trusted network.
 - **The matching pipeline has not run end to end here**, because there is no
-  live LLM on this machine, and the 6 database integration tests skip without
-  `TEST_DATABASE_URL`. The stack itself — migrations, health, empty corpus —
-  was verified against a real PostgreSQL.
+  live LLM on this machine. What was verified instead is that the flow says so
+  rather than hanging: a run is refused at the request with the reason,
+  `make e2e ARGS=--check` names the first step that cannot be met, and
+  `GET /api/preflight` answers the same question over HTTP. The 13 database
+  integration tests run against a live PostgreSQL and skip without
+  `TEST_DATABASE_URL`.
 
 See [`docs/WORKLOG.md`](docs/WORKLOG.md) for what each phase built and what was
 tested, and [`docs/DECISIONS.md`](docs/DECISIONS.md) for the decision log.

@@ -37,7 +37,6 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.robotparser
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -49,6 +48,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCES_DIR = Path(__file__).resolve().parent / "sources"
 DEFAULT_DATA_DIR = REPO_ROOT / "backend" / "data"
 DOC_TYPES_PATH = REPO_ROOT / "backend" / "data" / "doc_types.json"
+
+# One robots rule, one implementation. It lives with the app because the app's
+# fetch fence has to answer the same question as this collector; a second copy
+# is how a host's `Disallow: *.pdf` came to be read as nothing in one place and
+# honoured in the other.
+sys.path.insert(0, str(REPO_ROOT / "backend"))
+
+from app.core.robots import allows as robots_allows  # noqa: E402
 
 # The collector identifies itself so a site can see who is asking, and so a
 # robots.txt rule can target it deliberately.
@@ -218,6 +225,10 @@ def _robots_verdict(url: str) -> RobotsVerdict:
     not fetched. A robots.txt that cannot be read is not a restriction: a
     server error is a broken site, not a policy, and it is recorded as a note
     so the run can be read afterwards.
+
+    The rules are matched by `app.core.robots`, which honours a wildcard,
+    because `Disallow: *.pdf` is how a manufacturer bans its catalogues and
+    the standard library's parser reads that line as no rule at all.
     """
     parts = urllib.parse.urlsplit(url)
     robots_url = urllib.parse.urlunsplit((parts.scheme, parts.netloc, "/robots.txt", "", ""))
@@ -236,13 +247,10 @@ def _robots_verdict(url: str) -> RobotsVerdict:
     except urllib.error.URLError as exc:
         return RobotsVerdict(True, f"robots.txt could not be fetched ({exc.reason}); no restriction applied")
 
-    parser = urllib.robotparser.RobotFileParser()
-    parser.parse(text.splitlines())
-    if parser.can_fetch(USER_AGENT, url):
-        return RobotsVerdict(True)
-    return RobotsVerdict(
-        False, "robots.txt disallows this path for the collector's user agent", True
-    )
+    allowed, note = robots_allows(url, text, USER_AGENT)
+    if allowed:
+        return RobotsVerdict(True, note)
+    return RobotsVerdict(False, note, True)
 
 
 # --- fetching ----------------------------------------------------------------

@@ -1,0 +1,25 @@
+{
+  "manufacturer": "AVK",
+  "manufacturer_slug": "avk",
+  "updated_at": "2026-11-01T06:21:39+00:00",
+  "documents": [
+    {
+      "url": "https://assets.ctfassets.net/71o30wuv1rls/PcFKTbr06odvGj1vNU9gX/622a413cd5961c8ea35100a73f117ad9/AVK-Valves-Brochure.pdf",
+      "manufacturer": "AVK",
+      "category": "valves",
+      "doc_type": "catalogue",
+      "model_or_family": "Gate, butterfly and check valves (Series 06/71/820)",
+      "status": "new",
+      "models": [],
+      "filename": "AVK-Valves-Brochure.pdf",
+      "path": "raw/AVK-Valves-Brochure.pdf",
+      "sha256": "099032dc4dad0657445a8718301b25b6d1772e757799dffe965be6bc2c07b043",
+      "retrieved_at": "2026-11-01T06:21:39+00:00",
+      "is_secondary": false,
+      "notes": "AVK global valves brochure - gate, butterfly and swing check valve series with DN/PN ranges, materials and standards. Served from AVK's Contentful CDN; the avkvalves.com/avkventiler.dk Sitecore hosts disallow the collector via robots.txt and were dropped.",
+      "etag": "\"6d6633868bcef6bddce9a53b8bbd06fa-2\"",
+      "last_modified": "Sat, 24 Jan 2026 22:24:02 GMT",
+      "content_type": "application/pdf"
+    }
+  ]
+}

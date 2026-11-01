@@ -24,6 +24,7 @@ from __future__ import annotations
 import gc
 import os
 import re
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable, Optional
@@ -165,13 +166,33 @@ def _rows_to_markdown(rows: list[list[Optional[str]]]) -> list[tuple[str, str, s
     return out
 
 
-def ocr_page(pymupdf_page) -> Optional[str]:
-    """Read a page through OCR, when Tesseract is available.
+def tesseract_missing() -> Optional[str]:
+    """Why OCR cannot run on this machine, or None when it can.
 
-    Tesseract is an external program, not a Python package, so it may not be
-    installed. When it is missing the page is not OCRed: it is reported as
-    failed, so the corpus is never silently missing a page.
+    Tesseract is a program the image has to carry, not a package `pip`
+    installs, so it is the one dependency a page with no text layer depends
+    on. Naming it here is what keeps "this page is blank" and "this machine
+    cannot read pages" from becoming the same answer.
     """
+    if shutil.which("tesseract"):
+        return None
+    return (
+        "tesseract is not installed, so a page with no text layer cannot be read "
+        "(apt-get install tesseract-ocr tesseract-ocr-eng, or the Windows installer)"
+    )
+
+
+def ocr_page_with_reason(pymupdf_page) -> tuple[str, Optional[str]]:
+    """The text OCR read on a page, and why there is none.
+
+    The two ways a page comes back empty are different answers, and the ledger
+    has to say which one it recorded: a machine that is missing the program, or
+    a page that holds nothing to read.
+    """
+    missing = tesseract_missing()
+    if missing:
+        return "", missing
+
     prefix = get_settings().tessdata_prefix
     if prefix:
         os.environ.setdefault("TESSDATA_PREFIX", prefix)
@@ -186,12 +207,26 @@ def ocr_page(pymupdf_page) -> Optional[str]:
         # with "weakly-referenced object no longer exists".
         gc.disable()
         try:
-            return pymupdf_page.get_text(textpage=textpage)
+            text = pymupdf_page.get_text(textpage=textpage) or ""
         finally:
             gc.enable()
     except Exception as exc:  # noqa: BLE001 - the reason is reported, not raised
-        logger.warning("OCR failed for page: %s", exc)
-        return None
+        logger.warning("OCR failed for a page: %s", exc)
+        return "", f"the OCR could not read this page: {type(exc).__name__}: {exc}"
+
+    if not text.strip():
+        return "", "the OCR read nothing on this page"
+    return text, None
+
+
+def ocr_page(pymupdf_page) -> Optional[str]:
+    """The text OCR read on a page, when it can (FR-9).
+
+    A page that could not be read is None, and the caller records it as a
+    failed page: the corpus is never silently missing one.
+    """
+    text, _ = ocr_page_with_reason(pymupdf_page)
+    return text or None
 
 
 def _parse_pdf(path: Path) -> ParsedDocument:

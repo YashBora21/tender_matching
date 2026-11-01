@@ -1,7 +1,7 @@
 {
   "manufacturer": "CIRCOR",
   "manufacturer_slug": "circor",
-  "updated_at": "2026-10-22T11:30:48+00:00",
+  "updated_at": "2026-11-01T06:23:03+00:00",
   "documents": [
     {
       "url": "https://www.circor.com/sites/default/files/imported-files/All-Valves-Brochures-CIRCOR_D-Series_Product_Brochure.pdf",
@@ -9,7 +9,7 @@
       "category": "valves",
       "doc_type": "catalogue",
       "model_or_family": "D-Series",
-      "status": "new",
+      "status": "unchanged",
       "models": [],
       "filename": "All-Valves-Brochures-CIRCOR_D-Series_Product_Brochure.pdf",
       "path": "raw/All-Valves-Brochures-CIRCOR_D-Series_Product_Brochure.pdf",
@@ -17,8 +17,7 @@
       "retrieved_at": "2026-10-22T11:30:48+00:00",
       "is_secondary": false,
       "notes": "D-Series product brochure - the general valve range",
-      "last_modified": "Thu, 03 Mar 2022 13:56:46 GMT",
-      "content_type": "application/pdf"
+      "last_modified": "Thu, 03 Mar 2022 13:56:46 GMT"
     }
   ]
 }

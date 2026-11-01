@@ -1,0 +1,47 @@
+{
+  "category": "valves",
+  "entries": [
+    {
+      "manufacturer": "Bray",
+      "url": "https://www.bray.com/docs/default-source/brochures/product-brochures/en_b-1050_rsb_valves_web.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Series 1050 resilient seated butterfly valves",
+      "note": "Bray resilient seated butterfly valve product brochure - sizes, materials, pressure/temperature limits and Cv/face-to-face tables"
+    },
+    {
+      "manufacturer": "Bray",
+      "url": "https://www.bray.com/docs/default-source/brochures/product-brochures/en-bro-2101-ball-valve-overview-web.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Ball valve range",
+      "note": "Bray ball valve overview - floating, trunnion and hollow-ball families with seat/material options"
+    },
+    {
+      "manufacturer": "Bray",
+      "url": "https://www.bray.com/docs/default-source/manuals-guides/selection-guides/control_valve_selection_guide_v2_2024.pdf",
+      "doc_type": "specification",
+      "model_or_family": "Control valves",
+      "note": "Bray control valve selection guide - sizing, trims, actuators and Cv data"
+    },
+    {
+      "manufacturer": "Bray",
+      "url": "https://www.bray.com/docs/default-source/brochures/product-brochures/en_ovw_rcv_20210621_01-min.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Rotary control valves",
+      "note": "Bray rotary control valve overview brochure"
+    },
+    {
+      "manufacturer": "Bray",
+      "url": "https://www.bray.com/docs/default-source/manuals-guides/technical-manuals/tm-1050_resilient.pdf",
+      "doc_type": "datasheet",
+      "model_or_family": "Series 1050 resilient seated butterfly valves",
+      "note": "Bray Series 1050 technical manual - installation, torque and dimensional data"
+    },
+    {
+      "manufacturer": "Bray",
+      "url": "https://www.bray.com/docs/default-source/manuals-guides/technical-sales-guide/en_gbl_tsm_s4x.pdf",
+      "doc_type": "specification",
+      "model_or_family": "Series S4x high performance butterfly valves",
+      "note": "Bray double-offset high performance butterfly valve technical sales guide"
+    }
+  ]
+}

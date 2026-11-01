@@ -1,0 +1,83 @@
+{
+  "category": "motors",
+  "entries": [
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.bharatbijlee.com/wp-content/uploads/2026/04/lv-motors-product-range-flyer-061223.pdf",
+      "doc_type": "brochure",
+      "model_or_family": "Low voltage motors - product range",
+      "note": "Bharat Bijlee LV three-phase squirrel-cage induction motor product range flyer - frame sizes, kW range and pole counts"
+    },
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.bharatbijlee.com/wp-content/uploads/2026/04/lv-motors-ie2-safe-area-catalogue-compressed.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "LV motors - safe area IE2",
+      "note": "Bharat Bijlee IE2 safe-area LV motor catalogue with performance, dimensions and rating tables"
+    },
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.bharatbijlee.com/wp-content/uploads/2026/04/lv-motors-ie3-safe-area-catalogue.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "LV motors - safe area IE3",
+      "note": "Bharat Bijlee IE3 energy-efficient safe-area LV motor catalogue"
+    },
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.bharatbijlee.com/wp-content/uploads/2026/04/lv-motors-hazardous-area-application-ie2-energy-efficiency-series-110225r-1.pdf",
+      "doc_type": "specification",
+      "model_or_family": "LV motors - hazardous area IE2",
+      "note": "Bharat Bijlee flameproof / hazardous-area IE2 LV motor specification"
+    },
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.bharatbijlee.com/wp-content/uploads/2026/04/lv-motors-hazardous-area-application-ie3-energy-efficiency-series-110225r-compressed.pdf",
+      "doc_type": "specification",
+      "model_or_family": "LV motors - hazardous area IE3",
+      "note": "Bharat Bijlee flameproof / hazardous-area IE3 LV motor specification"
+    },
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.bharatbijlee.com/wp-content/uploads/2026/04/flame-proof-motor-flyer.pdf",
+      "doc_type": "brochure",
+      "model_or_family": "Flame proof motors",
+      "note": "Bharat Bijlee flame-proof motor flyer"
+    },
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.bharatbijlee.com/wp-content/uploads/2026/04/crane-hoist-duty-motors-catalogue-110225r_compressed_compressed-compressed.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Crane and hoist duty motors",
+      "note": "Bharat Bijlee crane/hoist duty motor catalogue - high-slip designs, frame and kW range"
+    },
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.bharatbijlee.com/wp-content/uploads/2026/04/SynchroVERT-IE4-IE5-6-page-catalogue-R.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "SynchroVERT IE4/IE5",
+      "note": "Bharat Bijlee SynchroVERT IE4/IE5 permanent-magnet motor catalogue"
+    },
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.bharatbijlee.com/wp-content/uploads/2026/04/motors-mv-catalogue.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Medium voltage motors",
+      "note": "Bharat Bijlee medium voltage motor catalogue"
+    },
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.bharatbijlee.com/wp-content/uploads/2026/04/iss-brochure-design_compressed.pdf",
+      "doc_type": "brochure",
+      "model_or_family": "Corporate product range",
+      "note": "Bharat Bijlee corporate product brochure spanning motors, transformers, drives and projects"
+    },
+    {
+      "manufacturer": "Bharat Bijlee",
+      "url": "https://www.makhariaelectricals.net/assets/pdf/bbl_craneduty.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Crane and hoist duty motors",
+      "secondary": true,
+      "note": "Distributor copy (Makharia) of Bharat Bijlee crane/hoist duty induction motor data - frame 71-355L, 0.37-400 kW. Secondary source."
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "category": "motors",
+  "entries": [
+    {
+      "manufacturer": "Crompton",
+      "url": "https://www.makhariaelectricals.net/assets/pdf/CG-Crompton-Standard-Motor.pdf",
+      "doc_type": "datasheet",
+      "model_or_family": "Standard LV squirrel-cage motors",
+      "secondary": true,
+      "note": "Distributor copy (Makharia) of Crompton (CG) standard LV induction motor data - bearing sizes, shaft extensions and rating tables. Crompton's own site did not expose a clean public datasheet PDF, so this is recorded as a secondary source."
+    },
+    {
+      "manufacturer": "Crompton",
+      "url": "https://5.imimg.com/data5/SELLER/Doc/2021/8/OO/OU/KT/3138466/crompton-greaves-flameproof-motor.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Flameproof motors (Ex d, gas group IIC)",
+      "secondary": true,
+      "note": "Distributor flameproof Crompton Greaves motor catalogue for Indian industries. Secondary source."
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "manufacturer": "KSB",
+  "manufacturer_slug": "ksb",
+  "updated_at": "2026-11-01T06:25:41+00:00",
+  "documents": [
+    {
+      "url": "https://www.ksb.com/resource/blob/1337250/c239706fe0313f4322cfcaa40760e549/dow-product-portfolio-mechanical-seals-and-supply-systems-en-data.pdf",
+      "manufacturer": "KSB",
+      "category": "pumps",
+      "doc_type": "catalogue",
+      "model_or_family": "Mechanical seals and supply systems",
+      "status": "restricted",
+      "models": [],
+      "is_secondary": false,
+      "notes": "KSB product portfolio - cartridge mechanical seals matched to the pump type series; held from 2026-11-01 until the robots.txt rule was read correctly; the file was withdrawn rather than kept, because the host disallows it",
+      "restriction_note": "robots.txt disallows this path for the collector's user agent"
+    },
+    {
+      "url": "https://www.ksb.com/resource/blob/520390/cc167d4dd470d52fec125abd0c06b3e8/dow-materials-technology-competences-data.pdf",
+      "manufacturer": "KSB",
+      "category": "pumps",
+      "doc_type": "specification",
+      "model_or_family": "Materials and corrosion resistance",
+      "status": "restricted",
+      "models": [],
+      "is_secondary": false,
+      "notes": "KSB materials technology competence brochure - grades and their application limits for pump and valve wetted parts; held from 2026-11-01 until the robots.txt rule was read correctly; the file was withdrawn rather than kept, because the host disallows it",
+      "restriction_note": "robots.txt disallows this path for the collector's user agent"
+    },
+    {
+      "url": "https://www.ksb.com/resource/blob/96392/00268a58935b79437776892b71af1446/dow-expertise-data.pdf",
+      "manufacturer": "KSB",
+      "category": "pumps",
+      "doc_type": "catalogue",
+      "model_or_family": "Pump and valve product range (corporate)",
+      "status": "restricted",
+      "models": [],
+      "is_secondary": false,
+      "notes": "KSB corporate capability brochure - pumps, valves and hydraulic systems overview; held from 2026-11-01 until the robots.txt rule was read correctly; the file was withdrawn rather than kept, because the host disallows it",
+      "restriction_note": "robots.txt disallows this path for the collector's user agent"
+    },
+    {
+      "url": "https://www.lenntech.com/Data-sheets/KSB-Etanorm-L.pdf",
+      "manufacturer": "KSB",
+      "category": "pumps",
+      "doc_type": "datasheet",
+      "model_or_family": "Etanorm",
+      "status": "new",
+      "models": [],
+      "filename": "KSB-Etanorm-L.pdf",
+      "path": "raw/KSB-Etanorm-L.pdf",
+      "sha256": "e1c8fcc48094550ad9fcd0ab1eabddfc6fc834c487a3a65d64254a94f587c9de",
+      "retrieved_at": "2026-11-01T06:25:23+00:00",
+      "is_secondary": true,
+      "notes": "KSB Etanorm type-series booklet (radially split volute casing pump) - performance curves, dimensions and materials. Distributor copy (Lenntech); the live KSB datasheet is generated per pump set, so this is used as a secondary source.",
+      "content_type": "application/pdf"
+    },
+    {
+      "url": "https://www.puffer.com/getattachment/0da620c0-4550-4b75-a098-c103106f732d/ksb-industrial-hot-oil-thermal-fluids-brochure-2026.pdf",
+      "manufacturer": "KSB",
+      "category": "pumps",
+      "doc_type": "brochure",
+      "model_or_family": "Etanorm SYT",
+      "status": "new",
+      "models": [],
+      "filename": "ksb-industrial-hot-oil-thermal-fluids-brochure-2026.pdf",
+      "path": "raw/ksb-industrial-hot-oil-thermal-fluids-brochure-2026.pdf",
+      "sha256": "454ba002dcd0fc48b4c288219b4fb2a6ef6e5c3e71e16ef832fd6f229b8d8642",
+      "retrieved_at": "2026-11-01T06:25:26+00:00",
+      "is_secondary": true,
+      "notes": "KSB hot-oil and thermal-fluids brochure (Etanorm SYT heat-transfer pump). Distributor-hosted (Puffer); secondary source.",
+      "etag": "\"en-us|0da620c0-4550-4b75-a098-c103106f732d|639200566514353279|true\"",
+      "last_modified": "Sun, 19 Jul 2026 18:17:31 GMT",
+      "content_type": "application/pdf"
+    },
+    {
+      "url": "https://www.ksb.com/resource/blob/1458146/26541591957f6329c12ec8878de954dc/dow-product-portfolio-data.pdf",
+      "manufacturer": "KSB",
+      "category": "valves",
+      "doc_type": "catalogue",
+      "model_or_family": "Control valves for process industries (MIL series)",
+      "status": "restricted",
+      "models": [],
+      "is_secondary": false,
+      "notes": "KSB control valve product portfolio - MIL 10000/21000/70000 general and severe service valves, materials and sizing. Canonical www.ksb.com resource path (the live-resources-e2e-sales subdomain serves the same document).; held from 2026-11-01 until the robots.txt rule was read correctly; the file was withdrawn rather than kept, because the host disallows it",
+      "restriction_note": "robots.txt disallows this path for the collector's user agent"
+    }
+  ]
+}

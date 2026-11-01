@@ -10,6 +10,7 @@ time and change nothing.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -62,7 +63,11 @@ def ingest_corpus(
     documents += list(iter_csv_corpus(data_dir / "catalogue"))
 
     if not documents:
-        logger.info("no corpus found under %s", data_dir)
+        logger.warning(
+            "no corpus found under %s; the collected PDFs are not in git - run "
+            "make corpus-restore or make collect",
+            data_dir,
+        )
         return report
 
     for file_path, entry in documents:
@@ -148,6 +153,15 @@ def main() -> int:
         stale = remove_stale_products(session)
 
     print(f"documents ingested: {report.documents}")
+    if report.documents == 0 and report.skipped_unchanged == 0:
+        # The usual reason on a fresh clone: the manifests are in git and the
+        # files they describe are not.
+        print(
+            "the corpus directory holds no document. The collected PDFs are not in git;\n"
+            "  make corpus-restore  fetches the addresses the manifests record\n"
+            "  make collect         searches for documents afresh",
+            file=sys.stderr,
+        )
     print(f"chunks written:     {report.chunks}")
     print(f"unchanged, skipped: {report.skipped_unchanged}")
     print(f"metadata refreshed: {report.metadata_refreshed}")

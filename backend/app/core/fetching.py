@@ -22,10 +22,10 @@ import socket
 import urllib.error
 import urllib.parse
 import urllib.request
-import urllib.robotparser
 from dataclasses import dataclass
 from typing import Optional
 
+from app.core import robots
 from app.core.config import get_settings
 from app.core.logging import get_logger
 
@@ -124,8 +124,16 @@ def _address_is_refused(address: str) -> bool:
 
 
 
-def check_url(url: str) -> None:
-    """Refuse a URL that must not be fetched. Raises with the reason."""
+def check_url(url: str, *, from_document: bool = True) -> None:
+    """Refuse a URL that must not be fetched. Raises with the reason.
+
+    `from_document` says where the address came from. An address read out of a
+    tender is data, not a request: it is only fetched when its host is one the
+    configuration names. An address in a corpus manifest was written by the
+    person running the collection, and the manifest's own hash is what checks
+    it, so the host rule does not apply to it. Every other guard applies to
+    both: the scheme, the address, the redirect, the size and the time.
+    """
     parts = urllib.parse.urlsplit(url)
     if parts.scheme not in ("http", "https"):
         raise FetchRefused(f"'{parts.scheme}' is not a scheme that can be fetched")
@@ -133,11 +141,12 @@ def check_url(url: str) -> None:
     if not host:
         raise FetchRefused("the URL names no host")
 
-    domains = allowed_domains()
-    if not _host_is_allowed(host, domains):
-        raise FetchRefused(
-            f"'{host}' is not on the allowlist ({', '.join(domains) or 'none'})"
-        )
+    if from_document:
+        domains = allowed_domains()
+        if not _host_is_allowed(host, domains):
+            raise FetchRefused(
+                f"'{host}' is not on the allowlist ({', '.join(domains) or 'none'})"
+            )
     if _resolves_to_private(host):
         raise FetchRefused(f"'{host}' resolves to a private address")
 
@@ -160,13 +169,18 @@ def fetch(
     max_bytes: Optional[int] = None,
     timeout: Optional[int] = None,
     headers: Optional[dict] = None,
+    from_document: bool = True,
 ) -> Fetched:
-    """Fetch a document, within the limits the configuration sets."""
+    """Fetch a document, within the limits the configuration sets.
+
+    `from_document` decides whether the host allowlist applies; see
+    `check_url`.
+    """
     settings = get_settings()
     max_bytes = max_bytes or settings.fetch_max_bytes
     timeout = timeout or settings.fetch_timeout_seconds
 
-    check_url(url)
+    check_url(url, from_document=from_document)
 
     request_headers = {"User-Agent": USER_AGENT}
     request_headers.update(headers or {})
@@ -212,6 +226,10 @@ def robots_allows(url: str) -> tuple[bool, Optional[str]]:
     A robots.txt that cannot be read is not a restriction: a server error is
     a broken site, not a policy. A 401 or 403 *is* a policy, and is treated
     as disallow-all.
+
+    The rules are matched by `app.core.robots`, not by the standard library's
+    parser, because a manufacturer's `Disallow: *.pdf` is a rule about its
+    catalogues and the parser reads it as nothing (D-117).
     """
     parts = urllib.parse.urlsplit(url)
     robots_url = urllib.parse.urlunsplit((parts.scheme, parts.netloc, "/robots.txt", "", ""))
@@ -228,8 +246,4 @@ def robots_allows(url: str) -> tuple[bool, Optional[str]]:
     except Exception as exc:  # noqa: BLE001
         return True, f"robots.txt could not be fetched ({type(exc).__name__}); no restriction applied"
 
-    parser = urllib.robotparser.RobotFileParser()
-    parser.parse(text.splitlines())
-    if parser.can_fetch(USER_AGENT, url):
-        return True, None
-    return False, "robots.txt disallows this path for the collector's user agent"
+    return robots.allows(url, text, USER_AGENT)

@@ -1,0 +1,12 @@
+{
+  "category": "valves",
+  "entries": [
+    {
+      "manufacturer": "KSB",
+      "url": "https://www.ksb.com/resource/blob/1458146/26541591957f6329c12ec8878de954dc/dow-product-portfolio-data.pdf",
+      "doc_type": "catalogue",
+      "model_or_family": "Control valves for process industries (MIL series)",
+      "note": "KSB control valve product portfolio - MIL 10000/21000/70000 general and severe service valves, materials and sizing. Canonical www.ksb.com resource path (the live-resources-e2e-sales subdomain serves the same document)."
+    }
+  ]
+}

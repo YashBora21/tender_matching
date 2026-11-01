@@ -1,0 +1,61 @@
+{
+  "manufacturer": "ABB",
+  "manufacturer_slug": "abb",
+  "updated_at": "2026-11-01T06:21:37+00:00",
+  "documents": [
+    {
+      "url": "https://library.e.abb.com/public/1fd380f8ca8b4934ae3fa609d764fd33/21043_ABB_Motor_Guide_REV_D.pdf",
+      "manufacturer": "ABB",
+      "category": "motors",
+      "doc_type": "specification",
+      "model_or_family": "IEC low voltage motors",
+      "status": "new",
+      "models": [],
+      "filename": "21043_ABB_Motor_Guide_REV_D.pdf",
+      "path": "raw/21043_ABB_Motor_Guide_REV_D.pdf",
+      "sha256": "ad8c6e3a60dd8dc6f49dbcd04a9d3b3490b6f3e89d1deb301ca3247192f117df",
+      "retrieved_at": "2026-11-01T06:21:32+00:00",
+      "is_secondary": false,
+      "notes": "ABB low voltage motor guide - IEC frame ratings, efficiency classes (IE1-IE4), duty, enclosure and mounting data",
+      "etag": "\"4505e360fac930a135c25a6c332ee67c-7\"",
+      "last_modified": "Sun, 17 Mar 2024 20:45:43 GMT",
+      "content_type": "application/pdf"
+    },
+    {
+      "url": "https://library.e.abb.com/public/ec2d9e1e31e3b766c1257b130056f2a1/General%20Purpose%20Motor%20catalogue%20092003.pdf",
+      "manufacturer": "ABB",
+      "category": "motors",
+      "doc_type": "catalogue",
+      "model_or_family": "General purpose motors",
+      "status": "new",
+      "models": [],
+      "filename": "General_Purpose_Motor_catalogue_092003.pdf",
+      "path": "raw/General_Purpose_Motor_catalogue_092003.pdf",
+      "sha256": "d94026dac3840dc6d63f9f59e115557ae234ef764d11c7e255daff8ee28347bc",
+      "retrieved_at": "2026-11-01T06:21:37+00:00",
+      "is_secondary": false,
+      "notes": "ABB general purpose motor catalogue - frame and rating tables",
+      "etag": "\"24b50883e2ed26255db5fc6515721922-2\"",
+      "last_modified": "Thu, 14 Mar 2024 18:57:58 GMT",
+      "content_type": "application/pdf"
+    },
+    {
+      "url": "https://library.e.abb.com/public/f6b9ac5740da479b89153f32c8a06fdf/M2BAX_71_355%20IE3%20%209AKK107238%20EN%2011-2017.pdf",
+      "manufacturer": "ABB",
+      "category": "motors",
+      "doc_type": "datasheet",
+      "model_or_family": "M2BAX IE3",
+      "status": "new",
+      "models": [],
+      "filename": "M2BAX_71_355_IE3_9AKK107238_EN_11-2017.pdf",
+      "path": "raw/M2BAX_71_355_IE3_9AKK107238_EN_11-2017.pdf",
+      "sha256": "967641e6bb55e607beb53b8980c9cae62f19d1f1b5ec863f6774cab5dddca6a4",
+      "retrieved_at": "2026-11-01T06:21:32+00:00",
+      "is_secondary": false,
+      "notes": "ABB M2BAX general-performance IE3 cast iron motors, frames 71-355 - technical data sheets with performance and dimensions",
+      "etag": "\"be655899319e1b101a98608f9f51244d-1\"",
+      "last_modified": "Sat, 16 Mar 2024 17:12:03 GMT",
+      "content_type": "application/pdf"
+    }
+  ]
+}

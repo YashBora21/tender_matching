@@ -7,14 +7,18 @@ Phase 0 ships one route: GET /api/health (PRD 11). The remaining PRD 11 endpoint
 from __future__ import annotations
 
 import time
+from typing import Optional
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Depends, Query, Response, status
+from sqlalchemy.orm import Session
 
+from app.api.deps import get_session
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.repositories.db import ping
 from app.schemas.enums import HealthState
 from app.schemas.models import DependencyHealth, HealthResponse
+from app.services.e2e import preflight
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["health"])
@@ -59,3 +63,21 @@ def health(response: Response) -> HealthResponse:
         dependencies=dependencies,
         config=settings.public_summary(),
     )
+
+
+@router.get("/preflight")
+def preflight_route(
+    session: Session = Depends(get_session),
+    tender: Optional[str] = Query(
+        default=None,
+        description="a stored tender id or a tender directory, to ask about one tender",
+    ),
+) -> dict:
+    """What a matching run needs here, before anyone asks for one (D-112).
+
+    `can_run` is the answer to "will a run produce a report on this machine?";
+    `why_not` and `next_steps` name what is missing and the command that fixes
+    it. Nothing is downloaded and no model is called: this reads the database
+    and the configuration.
+    """
+    return preflight(session, tender_ref=tender)

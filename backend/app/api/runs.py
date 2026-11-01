@@ -93,6 +93,9 @@ def start_run(
         # a run against no manufacturer has nothing to report.
         raise ValidationError("manufacturers is empty; omit it to use the whole corpus")
 
+    # `create_run` refuses a run that would have to read a datasheet with no
+    # model configured, so the caller learns that here instead of polling a
+    # run that never stopped being `queued` (D-108).
     run_id = create_run(session, tender_id, request.manufacturers)
     # Committed before the background task is scheduled: that task opens its
     # own session, and it must be able to see the row it was told to run.

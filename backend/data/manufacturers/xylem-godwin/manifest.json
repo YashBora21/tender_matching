@@ -1,7 +1,7 @@
 {
   "manufacturer": "Xylem Godwin",
   "manufacturer_slug": "xylem-godwin",
-  "updated_at": "2026-10-22T11:31:37+00:00",
+  "updated_at": "2026-11-01T06:25:42+00:00",
   "documents": [
     {
       "url": "https://www.xylem.com/siteassets/brand/godwin/resources/brochure/godwin_product_catalog_us17.pdf",
@@ -9,7 +9,7 @@
       "category": "pumps",
       "doc_type": "catalogue",
       "model_or_family": "Godwin dewatering pumps",
-      "status": "new",
+      "status": "unchanged",
       "models": [],
       "filename": "godwin_product_catalog_us17.pdf",
       "path": "raw/godwin_product_catalog_us17.pdf",
@@ -18,8 +18,7 @@
       "is_secondary": false,
       "notes": "Godwin product catalog - Dri-Prime, Heidra, Sub-Prime, Wellpoint and Rotary Lobe",
       "etag": "\"1d99d012a214e96\"",
-      "last_modified": "Mon, 12 Jun 2023 07:40:31 GMT",
-      "content_type": "application/pdf"
+      "last_modified": "Mon, 12 Jun 2023 07:40:31 GMT"
     }
   ]
 }

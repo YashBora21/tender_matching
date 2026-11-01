@@ -2,17 +2,29 @@ import { useEffect, useRef, useState } from 'react'
 
 import {
   ApiError,
+  getAttachments,
   getManufacturers,
   getRequirements,
   requirementsStreamUrl,
   startRun,
+  uploadAttachment,
   uploadTender,
 } from '../api'
 import { errorMessage } from '../errors'
-import type { ManufacturerRow, Manufacturers, TenderRequirements } from '../types'
+import type {
+  AttachmentRow,
+  ManufacturerRow,
+  Manufacturers,
+  TenderAttachments,
+  TenderRequirements,
+} from '../types'
 import { Notice } from './Notice'
 
 const POLL_MS = 1000
+
+/** What a reviewer may hand over in place of a document that could not be
+ * fetched — the same set the backend accepts. */
+const ATTACHMENT_ACCEPT = 'application/pdf,.pdf,.docx,.csv'
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -257,6 +269,10 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
         {tender && <TenderSummary tender={tender} />}
       </section>
 
+      {tender && phase !== 'uploading' && phase !== 'reading' && (
+        <AttachmentsPanel tenderId={tender.tender_id} />
+      )}
+
       {tender && phase === 'reading' && <LiveRequirements tender={tender} />}
 
       {phase === 'failed' && tender && (
@@ -373,6 +389,137 @@ function TenderSummary({ tender }: { tender: TenderRequirements }) {
 
 function plural(count: number, one: string, many: string): string {
   return `${count} ${count === 1 ? one : many}`
+}
+
+/** The two states a fetch ends in that a person can still fix. */
+function isUnsupplied(row: AttachmentRow): boolean {
+  return row.status === 'failed' || row.status === 'restricted'
+}
+
+/**
+ * The documents the tender links to, and the way to supply one the backend
+ * could not fetch (PRD 5.3.1, FR-T4).
+ *
+ * A link that moved is not a tender with fewer requirements. The reading
+ * stopped at that page, so the reviewer — who can still open the buyer's
+ * portal — hands the file over, and the same tender read again picks it up.
+ */
+function AttachmentsPanel({ tenderId }: { tenderId: string }) {
+  const [data, setData] = useState<TenderAttachments | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [recorded, setRecorded] = useState<string | null>(null)
+  const [reload, setReload] = useState(0)
+
+  useEffect(() => {
+    let live = true
+    getAttachments(tenderId)
+      .then((answer) => {
+        if (live) {
+          setData(answer)
+          setError(null)
+        }
+      })
+      .catch((cause) => {
+        if (live) setError(errorMessage(cause))
+      })
+    return () => {
+      live = false
+    }
+  }, [tenderId, reload])
+
+  async function send(file: File, url: string | null) {
+    setBusy(url ?? file.name)
+    setError(null)
+    try {
+      const stored = await uploadAttachment(tenderId, file, url ?? undefined)
+      setRecorded(stored.name)
+      setReload((count) => count + 1)
+    } catch (cause) {
+      setError(errorMessage(cause))
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const rows = data?.attachments ?? []
+  const unsupplied = rows.filter(isUnsupplied)
+
+  return (
+    <section className="panel">
+      <h2>Attachments</h2>
+      <p className="lede">
+        The tender only names its documents; the backend fetches each one. A link
+        that could not be reached leaves the reading incomplete, it does not mean
+        the tender states less.
+      </p>
+
+      {error && (
+        <Notice variant="error" title="The attachments could not be read">
+          {error}
+        </Notice>
+      )}
+      {!data && !error && <p className="muted">Loading the attachments…</p>}
+      {data && rows.length === 0 && (
+        <p className="muted">
+          No document is recorded for this tender, so there is nothing to supply.
+        </p>
+      )}
+      {recorded && (
+        <Notice variant="info" title="Supplied">
+          {`“${recorded}” is stored against this tender. Upload the tender PDF again to read
+           it with this document: the stages that do not depend on it are not run twice.`}
+        </Notice>
+      )}
+
+      {unsupplied.length > 0 && (
+        <p className="muted">
+          {plural(unsupplied.length, 'document', 'documents')} could not be fetched.
+          Choose the file you downloaded from the buyer to take its place.
+        </p>
+      )}
+
+      {rows.length > 0 && (
+        <ul className="compact-list attachment-list">
+          {rows.map((row, index) => (
+            <li key={row.url ?? `attachment-${index}`}>
+              <div className="attachment-head">
+                <strong>{row.name ?? row.url ?? 'an unnamed document'}</strong>
+                <span className={`tag${isUnsupplied(row) ? ' tag-warn' : ''}`}>
+                  {row.status ?? 'unknown'}
+                </span>
+                {row.kind && <span className="tag">{row.kind}</span>}
+                {typeof row.pages === 'number' && (
+                  <span className="muted">{plural(row.pages, 'page', 'pages')}</span>
+                )}
+              </div>
+              {row.url && row.url !== row.name && (
+                <p className="muted attachment-url">{row.url}</p>
+              )}
+              {row.note && <p className="muted">{row.note}</p>}
+              {isUnsupplied(row) && (
+                <label className="attachment-supply">
+                  <span className="muted">
+                    {busy === row.url ? 'Storing the file…' : 'Supply this document'}
+                  </span>
+                  <input
+                    type="file"
+                    accept={ATTACHMENT_ACCEPT}
+                    disabled={busy !== null}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (file) void send(file, row.url)
+                      event.target.value = ''
+                    }}
+                  />
+                </label>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
 }
 
 /**
