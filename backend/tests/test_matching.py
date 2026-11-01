@@ -270,6 +270,52 @@ def test_a_quote_that_is_not_on_the_page_fails_the_citation_layer(monkeypatch):
     assert result.quote == "Body of body shall be SS316"
 
 
+def test_a_range_clause_is_compared_with_the_pair_it_states(monkeypatch):
+    """"Between 10 and 20 m3/h", answered by a document that states 15.
+
+    The clause keeps its value as the text it was written in ("10-20"), and the
+    comparison was handed `None` for the pair, so a document that answered the
+    requirement published *no evidence found* - the registry's range rule was
+    never reachable from a run (D-121).
+    """
+    from app.services import matching
+    from app.services.retrieval import Candidate
+
+    passage = "Rated flow 15 m3/h at 8 bar."
+    candidate = Candidate(
+        chunk_id="c1", document_id="d1", text=passage, page=1, model="SYNTHETIC-1"
+    )
+    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(matching, "_page_text", lambda s, c: passage)
+    client = FakeClient(
+        {
+            "requirements": [
+                {
+                    "found": True,
+                    "attribute": "flow rate",
+                    "value": "15",
+                    "unit": "m**3/hour",
+                    "operator": "eq",
+                    "model": None,
+                    "quote": "Rated flow 15 m3/h at 8 bar.",
+                }
+            ]
+        }
+    )
+
+    result = match_requirement(
+        FakeSession(),
+        "Flow rate between 10 and 20 m3/h",
+        requirement_value="10-20",
+        requirement_unit="m**3/hour",
+        requirement_operator="between",
+        client=client,
+    )
+
+    assert result.status is RequirementStatus.FULL_MATCH
+    assert "within 10-20" in result.reason
+
+
 def test_a_page_that_does_not_repeat_the_manufacturer_is_still_that_manufacturers_evidence(
     monkeypatch,
 ):

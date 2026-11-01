@@ -39,6 +39,14 @@ class DocumentClass(StrEnum):
 DOC_TYPES_PATH = Path(__file__).resolve().parents[2] / "data" / "doc_types.json"
 
 
+def doc_types_path() -> str:
+    """The document-type vocabulary file: the configured one, or the shipped
+    default. The attribute and category vocabularies already had a setting; this
+    one was only reachable by editing code, and a relocated data directory
+    silently produced an empty vocabulary rather than an error."""
+    return get_settings().doc_types_path or str(DOC_TYPES_PATH)
+
+
 @dataclass(frozen=True)
 class DocTypeVocabulary:
     """The document-type vocabulary, loaded from the data file.
@@ -77,7 +85,7 @@ def load_doc_types(path: Optional[str] = None) -> DocTypeVocabulary:
     documents are just not classified."""
     import json
 
-    target = Path(path) if path else DOC_TYPES_PATH
+    target = Path(path) if path else Path(doc_types_path())
     if not target.exists():
         return DocTypeVocabulary()
     try:

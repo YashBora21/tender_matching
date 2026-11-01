@@ -46,8 +46,6 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SOURCES_DIR = Path(__file__).resolve().parent / "sources"
-DEFAULT_DATA_DIR = REPO_ROOT / "backend" / "data"
-DOC_TYPES_PATH = REPO_ROOT / "backend" / "data" / "doc_types.json"
 
 # One robots rule, one implementation. It lives with the app because the app's
 # fetch fence has to answer the same question as this collector; a second copy
@@ -55,12 +53,22 @@ DOC_TYPES_PATH = REPO_ROOT / "backend" / "data" / "doc_types.json"
 # honoured in the other.
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
+from app.core.config import get_settings  # noqa: E402
 from app.core.robots import allows as robots_allows  # noqa: E402
+from app.services.evidence import doc_types_path  # noqa: E402
 
-# The collector identifies itself so a site can see who is asking, and so a
-# robots.txt rule can target it deliberately.
-USER_AGENT = os.getenv("COLLECT_USER_AGENT", "tender-corpus-collector/1.0")
-TIMEOUT_SECONDS = int(os.getenv("COLLECT_TIMEOUT_SECONDS", "30"))
+# The collector asks the same sites the app's fence will ask later, so it does
+# not carry its own copy of the rules: who it identifies as, how long it waits,
+# how big a document it will take, where the corpus goes and which vocabulary
+# names a document type all come from the same settings the app reads. Two
+# drifts this closed: this timeout was 30 against the configured 60, and the
+# size cap lived only in the fence - so `make collect` could store a document
+# that `make corpus-restore` would then refuse to fetch back.
+_settings = get_settings()
+DEFAULT_DATA_DIR = Path(_settings.data_dir)
+USER_AGENT = _settings.fetch_user_agent
+TIMEOUT_SECONDS = _settings.fetch_timeout_seconds
+MAX_BYTES = _settings.corpus_max_bytes
 
 
 def load_doc_types() -> list[str]:
@@ -68,9 +76,10 @@ def load_doc_types() -> list[str]:
 
     The same file carries the document classes, the filename markers and the
     file extensions the app side reads, so the collector and the app cannot
-    disagree about what a document type is.
+    disagree about what a document type is - including where the file lives,
+    which is the app's answer, not a second one (D-121).
     """
-    data = json.loads(DOC_TYPES_PATH.read_text(encoding="utf-8"))
+    data = json.loads(Path(doc_types_path()).read_text(encoding="utf-8"))
     return list(data["doc_types"])
 
 
@@ -266,14 +275,32 @@ class FetchResult:
     note: Optional[str] = None
 
 
-def _http_get(url: str, headers: dict[str, str]) -> FetchResult:
-    """GET a URL. Never raises: a failed fetch is a recorded outcome."""
+def _http_get(url: str, headers: dict[str, str], max_bytes: Optional[int] = None) -> FetchResult:
+    """GET a URL. Never raises: a failed fetch is a recorded outcome.
+
+    `max_bytes` bounds the read. A response larger than it is refused rather
+    than swallowed, because the app's fence would refuse the same document on
+    the way back and the manifest would claim a file the corpus cannot restore.
+    """
     request = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            if max_bytes is not None:
+                declared = response.headers.get("Content-Length")
+                if declared and declared.isdigit() and int(declared) > max_bytes:
+                    return FetchResult(
+                        "too_large", note=f"{declared} bytes, over the {max_bytes}-byte cap"
+                    )
+            body = bytearray()
+            for chunk in iter(lambda: response.read(1 << 20), b""):
+                body.extend(chunk)
+                if max_bytes is not None and len(body) > max_bytes:
+                    return FetchResult(
+                        "too_large", note=f"more than {max_bytes} bytes streamed"
+                    )
             return FetchResult(
                 "ok",
-                data=response.read(),
+                data=bytes(body),
                 etag=response.headers.get("ETag"),
                 last_modified=response.headers.get("Last-Modified"),
                 content_type=response.headers.get("Content-Type"),
@@ -378,7 +405,7 @@ def collect_entry(
         if previous.get("last_modified"):
             headers["If-Modified-Since"] = previous["last_modified"]
 
-    result = _http_get(entry.url, headers)
+    result = _http_get(entry.url, headers, max_bytes=MAX_BYTES)
 
     if result.status == "not_modified":
         # The server says the file is unchanged, but the file has to be on disk
@@ -387,7 +414,7 @@ def collect_entry(
         if not (raw_dir / name).exists():
             headers.pop("If-None-Match", None)
             headers.pop("If-Modified-Since", None)
-            result = _http_get(entry.url, headers)
+            result = _http_get(entry.url, headers, max_bytes=MAX_BYTES)
         else:
             record.status = "unchanged"
             record.filename = name
@@ -398,7 +425,10 @@ def collect_entry(
             record.last_modified = (previous or {}).get("last_modified")
             return record
 
-    if result.status == "error":
+    if result.status in ("error", "too_large"):
+        # A document over the cap is not collected: the fence on the way back
+        # has the same cap, so storing it here would write a manifest that a
+        # fresh clone could never restore.
         record.status = "failed"
         record.notes = "; ".join(filter(None, [record.notes, result.note]))
         return record

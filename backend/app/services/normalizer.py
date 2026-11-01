@@ -18,9 +18,6 @@ from app.comparison.units import parse_unit
 from app.comparison.vocabulary import load_vocabulary
 from app.schemas.enums import Operator, ValueType
 
-# Words that mark a requirement as optional, per attributes.OPTIONAL_MARKERS.
-_UNDERSCORE = re.compile(r"(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)")
-
 # "<= 40", "<=40", "not exceeding 40", "max 40", "maximum of 40", "up to 40"
 _MAX_PATTERNS = (
     r"(?:<=|≤|not\s+exceed(?:ing|s)?|max(?:imum)?(?:\s+of)?|up\s+to|at\s+most|no\s+more\s+than)\s*"
@@ -104,6 +101,23 @@ def _first_match(text: str, patterns: tuple[str, ...]) -> Optional[tuple]:
         if match:
             return match
     return None
+
+
+def parse_range(text: Optional[str]) -> Optional[tuple[float, float]]:
+    """The two numbers in a value written as a range: "10-20", "10 to 20".
+
+    A `between` clause keeps its value as the text it was written in, and a
+    datasheet that lists the values a product is offered in answers the same
+    way. The comparison needs the pair, so it is read back here with the grammar
+    that parsed the clause - a range is never invented from a single number.
+    """
+    if not text:
+        return None
+    match = _first_match(text, _BETWEEN_PATTERNS)
+    if match is None:
+        return None
+    low, high = float(match.group(1)), float(match.group(2))
+    return (low, high) if low <= high else None
 
 
 def _extract_unit(text: str, value: str) -> Optional[str]:
@@ -244,11 +258,10 @@ def normalize(text: str, *, default_unit: Optional[str] = None) -> NormalizedReq
         if result.unit is None:
             result.warnings.append("no unit could be determined")
         if operator is Operator.BETWEEN:
-            low, _, high = raw.partition("-")
-            try:
-                result.range = (float(low), float(high))
-            except ValueError:
-                result.warnings.append("range could not be parsed")
+            # The pair is read from the clause, not from the text `_numeric`
+            # joined the two numbers back into: "10-20" re-split on "-" loses
+            # the sign of a range that starts below zero.
+            result.range = parse_range(text)
         return result
 
     # Boolean requirements: "shall be X" where the attribute is a yes/no.

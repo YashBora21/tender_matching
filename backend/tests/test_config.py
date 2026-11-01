@@ -98,3 +98,42 @@ def test_the_llm_client_refuses_to_start_without_a_key(
 
     with pytest.raises(LLMError):
         LLMClient()
+
+
+# Variables `.env.example` documents that no setting reads: the compose file,
+# the scripts and Tesseract itself consume these.
+NOT_A_SETTING = {
+    "DATABASE_URL_DOCKER",
+    "POSTGRES_USER",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_DB",
+    "TESSDATA_PREFIX",
+    "VITE_API_URL",
+    "TEST_DATABASE_URL",
+}
+
+
+def test_the_example_env_file_and_the_settings_are_the_same_list() -> None:
+    """Every setting has a line in `.env.example`, and every line is a setting.
+
+    The example file is the whole documented interface to a deployment, so it is
+    checked against the model instead of kept in step by memory: a setting with
+    no line is a knob nobody can find, and a line with no setting is a knob that
+    silently does nothing (D-121).
+    """
+    import re
+    from pathlib import Path
+
+    example = (
+        Path(__file__).resolve().parents[2] / ".env.example"
+    ).read_text(encoding="utf-8")
+    documented = {
+        match.group(1)
+        # A commented line is still documentation: an optional setting ships
+        # commented out, with its default as the example value.
+        for match in re.finditer(r"^#?\s*([A-Z][A-Z0-9_]*)=", example, re.MULTILINE)
+    }
+    settings = {name.upper() for name in Settings.model_fields}
+
+    assert sorted(settings - documented) == []
+    assert sorted(documented - settings - NOT_A_SETTING) == []

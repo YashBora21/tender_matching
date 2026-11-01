@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # --- application ---
     app_name: str = "tender-backend"
     app_version: str = "0.1.0"
+    # Which deployment the health endpoint says it is. The health payload
+    # reported "local" from a container because the string was written in the
+    # route instead of here.
+    app_environment: str = "local"
     log_level: str = "INFO"
     # How often a tender being read is written down and streamed to the UI
     # (D-82). It bounds both the extra database writes and how stale the live
@@ -67,6 +71,11 @@ class Settings(BaseSettings):
     # words that name them (FR-16). Also a data file: a category is added by
     # editing it, not by editing code (FR-6).
     category_vocabulary_path: Optional[str] = None
+    # The document-type vocabulary: the classes, filename markers and
+    # extensions the collector and the evidence layer both read. It was the
+    # one vocabulary with its path written into the code instead of here, so
+    # a deployment could not relocate the data directory without an edit.
+    doc_types_path: Optional[str] = None
 
     # --- llm / embeddings ---
     # The LLM is reached over an OpenAI-compatible API, so the provider is a
@@ -105,6 +114,11 @@ class Settings(BaseSettings):
     # model, and the migrated column is vector(384): changing the model means
     # a migration and re-embedding (D-6).
     embedding_dimension: int = 384
+    # How many texts one embedding call carries. The local model runs out of
+    # memory on a large batch, and a smaller one is only a little slower. Both
+    # the corpus walk and the encoder read this: the batch written and the
+    # batch encoded have to be the same batch.
+    embedding_batch_size: int = 32
 
     # --- matching ---
     # How many retrieved passages one requirement may be read against. Every
@@ -144,6 +158,12 @@ class Settings(BaseSettings):
     # the upload cap, which guards a request handler.
     corpus_max_bytes: int = 200 * 1024 * 1024
     fetch_timeout_seconds: int = 60
+    # Who the site is asked to let in. A robots.txt rule can target it
+    # deliberately, and a deployment that collects under a different name
+    # changes it here rather than in two files - the collector and the fence
+    # read the same value, which is what makes "did this host allow this" have
+    # one answer.
+    fetch_user_agent: str = "tender-corpus-collector/1.0"
     # A document already frozen, with this hash, is not fetched again.
     fetch_cache_enabled: bool = True
     # Hosts that are allowed to be private. A local server is on the loopback
@@ -218,9 +238,6 @@ class Settings(BaseSettings):
     # The version of the stored record's shape. A change to it invalidates
     # the records that were written with the old one.
     schema_version: str = "1"
-    # How many tenders are processed at once. The LLM's rate limit is shared,
-    # so this is the knob that keeps a run inside it.
-    pipeline_concurrency: int = 4
 
     @property
     def cors_origin_list(self) -> list[str]:

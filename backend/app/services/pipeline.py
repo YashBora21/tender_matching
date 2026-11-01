@@ -29,6 +29,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.repositories.tender import LLMCache, StoredRequirement, TenderRepo
 from app.schemas.enums import RequirementType
+from app.schemas.models import EXTRACTION_VERSION
 from app.services.atomizer import atomize_records
 from app.services.extractor import (
     ExtractedRequirement,
@@ -1064,10 +1065,20 @@ def to_stored(
     model: Optional[str] = None,
     prompt_version: Optional[str] = None,
     input_hash: Optional[str] = None,
-    schema_version: str = "1",
-    extraction_version: str = "1",
+    schema_version: Optional[str] = None,
+    extraction_version: Optional[str] = None,
 ) -> StoredRequirement:
-    """A requirement, as it is stored."""
+    """A requirement, as it is stored.
+
+    The versions default to what this deployment runs, not to a literal kept
+    beside the signature: the stage keys and the cache are built from the
+    setting, so a row stamped with a different version is a row nothing reads.
+    """
+    settings = get_settings()
+    if schema_version is None:
+        schema_version = settings.schema_version
+    if extraction_version is None:
+        extraction_version = EXTRACTION_VERSION
     return StoredRequirement(
         tender_id=tender_id,
         item_id=requirement.item_id or None,

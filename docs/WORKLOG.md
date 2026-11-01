@@ -2380,8 +2380,60 @@ run as a plain failure; it now names the results the run kept and says the same
 command continues, and `test_e2e.py` pins both wordings. No call was made in
 this step: the budget is set, the run is not.
 
+### Step 12 - the numbers that were written twice (D-119)
+
+A sweep of the repo for literals that a deployment would have to change in code,
+run against the rule `AGENTS.md` already states (config and thresholds come from
+the environment). Seven closed; one class deliberately left alone.
+
+- **The fetch timeout had two answers.** `robots_allows()` used `timeout=30`
+  while `fetch_timeout_seconds` says 60, so how long a site is waited for
+  depended on which code path asked it. It now reads the setting.
+- **The user agent had no home.** The same string was written in
+  `core/fetching.py` and `collect/collect.py`; both now read
+  `fetch_user_agent`, which is what makes "did this host let this agent in"
+  answerable once.
+- **The collector had no size cap while the restore does.** `make collect` would
+  store a document `make corpus-restore` refuses to bring back, because the
+  former streamed without limit and the latter checks `corpus_max_bytes`. The
+  collector now pre-checks `Content-Length` and stops mid-stream at the same
+  cap, reporting `too_large` rather than writing the bytes.
+- **The document-type vocabulary was the one vocabulary with its path in code**
+  (`attribute_vocabulary_path` and `category_vocabulary_path` both had a
+  setting); it got `doc_types_path`, and `collect/collect.py` now imports
+  `get_settings` instead of re-deriving the data directory, the timeout and the
+  manifest paths.
+- **The embedding batch size was 32 in two files** - the corpus walk and the
+  encoder - so a change to one silently split a batch. `embedding_batch_size`
+  is read by both; `embed_corpus`'s unused `batch_size=` parameter went with it.
+- **The health endpoint said `environment="local"`** from a string in the route,
+  on any machine, including a container. That is `app_environment` now.
+- **A stored row's version came from a literal beside the signature** while the
+  stage key and the cache came from `settings.schema_version` - the combination
+  that writes rows no resume path reads. `to_stored` defaults both versions to
+  their single sources and `StoredRequirement` no longer carries defaults for
+  them, so a caller has to say which shape it wrote.
+
+Left as constants, on purpose: the pure geometry inside the page parsers - a
+table's column tolerance, a run's pixel bounds - is not a deployment's choice,
+and a setting for it is a value nobody would tune. The tender-*reading*
+thresholds (`tenderingest.py`'s minimum text length, image share and fragment
+rules, `matching.py`'s high-match cut-off, `retrieval.py`'s default limits) are
+the same class of number with a different answer: they change what a report
+says. They are listed under Open, not changed here.
+
 *Measured:*
 
+- Step 12: `test_config.py` 9, `test_health.py` 4, `test_pipeline.py` 32,
+  `test_embeddings.py` 9, `test_llm.py` 23 → **77 collected, 76 passed, 1
+  skipped**; `collect/test_collect.py` 15 passed (the new cap test among them),
+  `test_fetching.py` + `test_corpusrestore.py` + `test_robots.py` 61 passed. Two
+  of the new tests pin the sweep itself: the health payload reports the
+  configured environment, and a row written by `to_stored` carries the versions
+  the run's own cache key is built from. `.env.example` was diffed against
+  `Settings.model_fields` - every setting is now documented, and
+  `pipeline_concurrency`, which no code read, was removed rather than
+  documented as a knob that does nothing.
 - Step 11: `test_ingestion.py` 10 passed (the new dedup test among them) and
   `test_e2e.py` 21 passed, 1 skipped (the stopped-run and endpoint-name tests
   among them); the whole corpus was re-ingested twice and the second pass wrote
@@ -2441,6 +2493,22 @@ this step: the budget is set, the run is not.
   did not change. Exposing `--force` and re-running is what turns those 10 into
   `ocr` pages - no model call, 79 image-only pages.
 - `eval/audit/` is still the pre-fix sample; re-exporting it is LLM-costed.
+- **The thresholds that change what a report says are still literals.**
+  `matching.py`'s 0.99 high-match cut-off, `tenderingest.py`'s minimum text
+  length (40, where `INGEST_MIN_CHARS_FOR_TEXT` says 10 for the same question),
+  its image-share and fragment rules, `tendercollect.py`'s copy of the same
+  0.5, and `retrieval.py`'s two default limits, which shadow
+  `MATCH_MAX_CANDIDATES` when a caller does not pass one. Each decides a status
+  or a recall, so each is a deployment's choice and belongs in config.
+- **The container does not read `.env`.** The two empty-string model defaults
+  are gone (Step 14), and what is left is the rest of the same gap:
+  `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tender}` still contradicts
+  `.env.example`'s `change-me`, and the image carries no `.env`, so of the knobs
+  now documented, only the handful the compose file names reach the app.
+- **The frontend restates numbers the backend owns.** `ReportPage.tsx` writes
+  "mandatory ×2, optional ×1" in prose while the report payload carries no
+  weights, and `POLL_MS = 1000` is declared twice. The prose is the kind of
+  thing that stays true in the UI after `SCORING_WEIGHT_MANDATORY` changes.
 
 ### Step 13 - a read no process will finish is reconciled at startup (D-120)
 
@@ -2493,3 +2561,71 @@ being read", and the UI spun because `phaseOf()` maps every other state to
   repair fixes the row, not the silence: a read that is genuinely still running
   has no reason to show, and one that stopped now lands in a state the UI
   already renders.
+
+### Step 14 - the unreachable rule and the unread knob (D-121)
+
+The whole tree, not the last diff, read through for code that costs a reader to
+find and no reader to notice. Four answers were written twice with one copy out
+of reach; all four now have one home.
+
+- **"Between 10 and 20" was never compared.** `matching.py` built the request
+  with both ranges `None`, and `evaluate_numeric` failed its own
+  *needs a number on both sides* gate before the range branch below it. The pair
+  is read back with the grammar that parsed the clause
+  (`normalizer.parse_range()` - one pattern list, not a second in the
+  comparison) and threaded at the extraction site and the cached-fact site. A
+  requirement that states a pair no longer needs a single `required` number to
+  reach the comparison.
+- **A `between` clause with no pair stopped being blamed on the product.** That
+  path returned `missing capability` - a statement that the documents state a
+  failing value - when what happened is that we read no pair. It now falls
+  through to *no evidence found* with `operator_not_comparable` and goes to
+  review (AGENTS #4).
+- **The pair is read from the clause, not from the joined text.** The old
+  `raw.partition("-")` in `normalize()` turned "between -10 and 20 degC" into
+  `('', '10-20')` and dropped a warning; the range now keeps its sign.
+- **`SCORING_FULL_SCORE` and `SCORING_MISSING_SCORE` do what they say.** Both
+  were in `.env.example`, in `ScoringPolicy` and in the policy a run snapshots,
+  and no code read either: every evaluator wrote its own `1.0`/`0.0`. The
+  declared score is applied once, in `registry.evaluate()`, and a partial keeps
+  the band's graded score.
+- **The container keeps its model names.** `LLM_MODEL: ${LLM_MODEL:-}` and
+  `EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}` set an empty string when the host had
+  no value, which outranked the configured default inside the container. They
+  are pass-through now, so unset means "use what the backend is configured
+  with". `docker compose config` resolves the real names.
+- **Two dead names gone.** `services/facts.py`'s second `PROMPT_VERSION` (no
+  cache key or caller ever read it; `extractor.py`'s is the live one) and
+  `normalizer.py`'s unused range regex, whose comment described optional
+  wording. `collect/collect.py` now calls the app's `doc_types_path()` instead
+  of re-deriving configured-or-default.
+- **The example file is checked, not remembered.** `test_config.py` compares
+  `.env.example` against `Settings.model_fields` in both directions, with the
+  seven compose/script/Tesseract names listed as deliberately not settings.
+
+*Measured:*
+
+- `test_normalizer.py`, `test_comparison.py`, `test_matching.py`,
+  `test_config.py` → **91 passed**. Six of them are new: a range requirement
+  against a single value (full match inside, missing outside), a `between`
+  clause with no pair answered as *no evidence found* and not as a capability
+  failure, the declared full/missing scores arriving with a changed environment,
+  a range clause reaching the registry from a run end to end, and the pair read
+  back from "10 to 20"/"-10 and 20".
+- `test_resolution.py` + `test_evidence.py` + `test_facts.py` +
+  `test_pipeline.py` + `test_scoring.py` + `test_report.py` +
+  `test_no_hardcoding.py` + `test_runs.py` → **122 passed**, and
+  `collect/test_collect.py` → **15 passed**. No model call was made.
+- One of the two scoring settings, `scoring_partial_default`, is still read by
+  nobody - a partial's score comes from the comparison band. Recorded under Open.
+
+**Open (added):**
+
+- `scoring_partial_default` (and `ScoringPolicy.partial_default`) is a knob with
+  no reader. Either PRD 8's flat partial score replaces the band, or the setting
+  and its `.env.example` line go.
+- The deletions the same review found - the FR-25 consolidation layer
+  (`services/evidence.py`, `EVIDENCE_PRIORITY`, `VerificationOutcome.CONFLICTING`
+  inside a database check constraint) and `schemas/models.py`'s unified record -
+  are held for the two named decisions, not done here: both are cited by
+  `AGENTS.md`, and `CONFLICTING` cannot leave without a migration.

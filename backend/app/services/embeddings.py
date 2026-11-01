@@ -24,15 +24,12 @@ from typing import Optional, Sequence
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.repositories.schema import chunk, document, manufacturer, product
 from app.services.llm import embed
 
 logger = get_logger(__name__)
-
-# How many chunks are embedded at once. The local model runs out of memory on
-# a large batch, and a smaller one is only a little slower.
-BATCH_SIZE = 32
 
 
 # One statement for a whole batch. `unnest` of two arrays pairs them by
@@ -137,7 +134,6 @@ class EmbeddingReport:
 def embed_corpus(
     session: Session,
     *,
-    batch_size: int = BATCH_SIZE,
     force: bool = False,
 ) -> EmbeddingReport:
     """Embed every chunk that has no embedding.
@@ -146,6 +142,7 @@ def embed_corpus(
     not change, and re-embedding the corpus is the expensive part.
     """
     report = EmbeddingReport()
+    batch_size = get_settings().embedding_batch_size
 
     statement = (
         select(

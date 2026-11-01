@@ -34,6 +34,7 @@ from app.schemas.enums import (
     Applicability,
     ConfidenceLevel,
     FactVerificationStatus,
+    Operator,
     ReasonCode,
     RequirementStatus,
     ValueType,
@@ -41,6 +42,7 @@ from app.schemas.enums import (
 )
 from app.services.facts import extract_fact
 from app.services.llm import LLMClient
+from app.services.normalizer import parse_range
 from app.services.retrieval import Candidate, search
 from app.services.verifier import check_citation, listed_set_exclusion, verify
 
@@ -412,17 +414,19 @@ def _match_candidate(
 
     value_type = _value_type(fact.attribute)
     result.value_type = value_type
+    requirement_op = _operator(requirement_operator)
+    capability_op = _operator(fact.operator)
     evaluation = evaluate(
         ComparisonRequest(
             requirement_value=requirement_value,
-            requirement_operator=_operator(requirement_operator),
+            requirement_operator=requirement_op,
             requirement_unit=requirement_unit,
             requirement_text_value=requirement_value,
-            requirement_range=None,
+            requirement_range=_range_for(requirement_op, requirement_value),
             capability_value=fact.value,
             capability_unit=fact.unit,
             capability_text_value=fact.value,
-            capability_range=None,
+            capability_range=_range_for(capability_op, fact.value),
             attribute=_canonical_term(fact.attribute),
             capability_is_family_level=report.applicability is Applicability.FAMILY_LEVEL,
         ),
@@ -461,15 +465,24 @@ def _match_candidate(
     return result
 
 
-def _operator(value: Optional[str]):
-    from app.schemas.enums import Operator
-
+def _operator(value: Optional[str]) -> Operator:
     if not value:
         return Operator.UNKNOWN
     try:
         return Operator(value)
     except ValueError:
         return Operator.UNKNOWN
+
+
+def _range_for(operator: Operator, value: Optional[str]) -> Optional[tuple[float, float]]:
+    """The pair of numbers a `between` value states, or None.
+
+    The value is kept as the text it was written in ("10-20"), and the range
+    evaluator compares pairs. Read back with the grammar that parsed the clause,
+    so a pair the comparison cannot see is not silently turned into a single
+    number (D-121).
+    """
+    return parse_range(value) if operator is Operator.BETWEEN else None
 
 
 def _cached_fact(
@@ -529,17 +542,21 @@ def _from_cached_fact(
 
     value_type = _value_type(cached["attribute"])
     family_level = cached["is_family_level"]
+    requirement_op = _operator(requirement_operator)
     evaluation = evaluate(
         ComparisonRequest(
             requirement_value=requirement_value,
-            requirement_operator=_operator(requirement_operator),
+            requirement_operator=requirement_op,
             requirement_unit=requirement_unit,
             requirement_text_value=requirement_value,
-            requirement_range=None,
+            requirement_range=_range_for(requirement_op, requirement_value),
             capability_value=cached["value"],
             capability_unit=cached["unit"],
             capability_text_value=cached["value"],
-            capability_range=None,
+            # The cached fact does not keep the operator the model used, so a
+            # stored value that reads as a pair is taken as one: the pair is the
+            # only thing a numeric value of that shape can mean.
+            capability_range=parse_range(cached["value"]),
             attribute=_canonical_term(cached["attribute"]),
             capability_is_family_level=family_level,
         ),

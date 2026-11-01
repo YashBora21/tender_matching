@@ -522,7 +522,7 @@ def embed(texts: list[str]) -> list[list[float]]:
         # assumes. The batch size keeps a large corpus within memory.
         vectors = model.encode(
             texts,
-            batch_size=32,
+            batch_size=settings.embedding_batch_size,
             normalize_embeddings=True,
             show_progress_bar=False,
         )

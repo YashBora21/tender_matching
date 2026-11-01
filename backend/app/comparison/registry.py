@@ -194,9 +194,10 @@ def _compare_numeric(
             f"{offered:g} is not close to {required:g}",
         )
 
-    if operator is Operator.BETWEEN:
-        return RequirementStatus.MISSING_CAPABILITY, 0.0, "range comparison needs a range capability"
-
+    # Anything else - including a `between` clause with no pair to compare
+    # against - is a comparison this registry cannot make. That is a gap in what
+    # we read, not a failing value in a document, so it is not a missing
+    # capability: `evaluate_numeric` turns it into *no evidence found*.
     return (
         RequirementStatus.UNSUPPORTED_REQUIREMENT,
         0.0,
@@ -215,9 +216,16 @@ def evaluate_numeric(request: ComparisonRequest) -> Evaluation:
     if request.capability_range is not None:
         return evaluate_range(request)
 
+    # A `between` requirement states two numbers, not one, so it has no single
+    # `required` value by design; the pair is read from `requirement_range`.
+    between = (
+        request.requirement_operator is Operator.BETWEEN
+        and request.requirement_range is not None
+    )
+
     required = _numeric_value(request.requirement_value)
     offered = _numeric_value(request.capability_value)
-    if required is None or offered is None:
+    if offered is None or (required is None and not between):
         return Evaluation(
             RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
@@ -254,7 +262,7 @@ def evaluate_numeric(request: ComparisonRequest) -> Evaluation:
             code=ReasonCode.VALUE_MISSING,
         )
 
-    if request.requirement_operator is Operator.BETWEEN and request.requirement_range:
+    if between:
         low, high = request.requirement_range
         span = max(high - low, abs(high) * _EPSILON)
         if low - abs(low) * _EPSILON <= offered <= high + abs(high) * _EPSILON:
@@ -679,6 +687,22 @@ def get_evaluator(
     return REGISTRY.get(value_type)
 
 
+def _apply_declared_scores(evaluation: Evaluation) -> None:
+    """Put the score the deployment declares on the verdict the evaluator reached.
+
+    Each evaluator decides its own verdict; what a verdict is worth is one
+    question, answered once in `ScoringPolicy` (PRD 8). Without this, a full
+    match carried a `1.0` written in the evaluator and `SCORING_FULL_SCORE`
+    changed nothing a report published. A partial match keeps the graded score
+    the comparison band gave it.
+    """
+    scoring = get_settings().scoring
+    if evaluation.status is RequirementStatus.FULL_MATCH:
+        evaluation.score = scoring.full_score
+    elif evaluation.status is RequirementStatus.MISSING_CAPABILITY:
+        evaluation.score = scoring.missing_score
+
+
 def evaluate(request: ComparisonRequest, value_type: Optional[ValueType]) -> Evaluation:
     """Run the registered evaluator. Unknown type means review, never a guess."""
     evaluator = get_evaluator(value_type, request.attribute)
@@ -691,6 +715,7 @@ def evaluate(request: ComparisonRequest, value_type: Optional[ValueType]) -> Eva
             code=ReasonCode.ATTRIBUTE_NOT_MAPPED,
         )
     evaluation = evaluator(request)
+    _apply_declared_scores(evaluation)
     if request.capability_is_family_level:
         # Evidence that covers a family, not the model under test: uncertain
         # applicability. The score is capped and the claim goes to review

@@ -31,7 +31,8 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-USER_AGENT = "tender-corpus-collector/1.0"
+# The agent name a site sees is `FETCH_USER_AGENT`; it is not a constant here,
+# because the collector asks the same sites and has to say the same thing.
 
 
 class FetchRefused(Exception):
@@ -182,7 +183,7 @@ def fetch(
 
     check_url(url, from_document=from_document)
 
-    request_headers = {"User-Agent": USER_AGENT}
+    request_headers = {"User-Agent": settings.fetch_user_agent}
     request_headers.update(headers or {})
     request = urllib.request.Request(url, headers=request_headers)
 
@@ -231,11 +232,12 @@ def robots_allows(url: str) -> tuple[bool, Optional[str]]:
     parser, because a manufacturer's `Disallow: *.pdf` is a rule about its
     catalogues and the parser reads it as nothing (D-117).
     """
+    settings = get_settings()
     parts = urllib.parse.urlsplit(url)
     robots_url = urllib.parse.urlunsplit((parts.scheme, parts.netloc, "/robots.txt", "", ""))
-    request = urllib.request.Request(robots_url, headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(robots_url, headers={"User-Agent": settings.fetch_user_agent})
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
+        with urllib.request.urlopen(request, timeout=settings.fetch_timeout_seconds) as response:
             text = response.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as exc:
         if exc.code in (401, 403):
@@ -246,4 +248,4 @@ def robots_allows(url: str) -> tuple[bool, Optional[str]]:
     except Exception as exc:  # noqa: BLE001
         return True, f"robots.txt could not be fetched ({type(exc).__name__}); no restriction applied"
 
-    return robots.allows(url, text, USER_AGENT)
+    return robots.allows(url, text, settings.fetch_user_agent)

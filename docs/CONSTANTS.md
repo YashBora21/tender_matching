@@ -9,6 +9,11 @@ A test (`backend/tests/test_no_hardcoding.py`) reads the collected corpus and
 checks that no tender id, file name or attachment URL appears in
 `backend/app/`. The corpus is data; the code is code.
 
+A second test (`backend/tests/test_config.py`) reads `.env.example` and the
+`Settings` model and requires them to be the same list, apart from the names
+compose and the scripts own. A setting nobody documented is a knob nobody can
+find; a documented knob with no setting does nothing.
+
 ## The vocabulary of the system
 
 | What | Where | Why there |
@@ -59,15 +64,14 @@ Policy is the rules a deployment may want to change, so it is in config
 
 | Setting | What it decides |
 | --- | --- |
-| `scoring_*` | The score of each status, the weights, the family-level cap (PRD §8). |
+| `scoring_*` | The score of each status, the weights, the family-level cap (PRD §8). `full_score` and `missing_score` are applied once, at the comparison's entry point, so an evaluator states its verdict and not what the verdict is worth. |
 | `comparison_*` | The tolerances and the score bands. A test changes one and the verdict changes with no code edit. |
 | `evidence_priority` | Which document class wins when two disagree. |
 | `alias_confidence_threshold` | How confident an alias has to be before it resolves a name. Below it, the requirement goes to review. |
 | `ingest_*` | The OCR language and resolution, the chunk length, the header band. |
 | `llm_*` | The model, the base URL, the token budget, the retry limit, the timeout. |
-| `embedding_*` | The embedding backend, model, base URL and dimension. The default backend is `sentence-transformers`, local and account-free; `http` speaks the OpenAI shape (Ollama). |
-| `fetch_*` | The hosts a document may be fetched from, the size and time limits, the cache, and the hosts allowed to be private. |
-| `pipeline_concurrency` | How many tenders are processed at once. The provider's rate limit is shared, so this is the knob that keeps a run inside it. |
+| `embedding_*` | The embedding backend, model, base URL, dimension and batch size. The default backend is `sentence-transformers`, local and account-free; `http` speaks the OpenAI shape (Ollama). |
+| `fetch_*` | The hosts a document may be fetched from, the agent name asked of them, the size and time limits, the cache, and the hosts allowed to be private. |
 | `schema_version` | The shape of the stored records. A change to it invalidates the records written with the old one. |
 
 ## What is deliberately still in the code
@@ -75,9 +79,10 @@ Policy is the rules a deployment may want to change, so it is in config
 | Constant | Why it stays |
 | --- | --- |
 | The stage names (`attachments`, `items`, `requirements`, `extraction`, `resolution`) | The pipeline's own structure. The order is the invalidation chain, and it is the same in the code, the checkpoints and the report. |
-| `PROMPT_VERSION` | The version of the extraction prompt. It is part of the cache key, so it must change when the prompt does. |
+| `PROMPT_VERSION` | The version of the requirement-extraction prompt, in `extractor.py`. It is part of the cache key, so it must change when the prompt does. The capability prompt in `facts.py` has no version: its cache is the verified fact, found by product and attribute. |
 | The operator grammar (`<=`, `at least`, `not exceeding`, …) | The words a requirement is written in. They are English and the same for every category, so they are a universal grammar. They live in the vocabulary file, next to the other grammars. |
 | The number-with-unit grammar | How a number and its unit are written. Universal. |
+| The pair grammar (`10-20`, `10 to 20`, `between 10 and 20`) | How a range is written down. One list of patterns in `normalizer.py`, and `parse_range()` is the only way the comparison gets a pair - a second copy is how the range rule came to sit unreachable under its own gate. |
 | The identifier grammar (a token that ends in a number is an identifier) | How `DN50` and `IP67` are written. Universal. |
 | The markdown table grammar | How a table is written down. Universal. |
 | The unit dimensions and aliases (`psi`, `psig`, `rpm`, `m3/h`, …) | Engineering facts about units, not about a product. A pump and a valve are measured the same way. |

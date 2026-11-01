@@ -44,3 +44,19 @@ def test_health_does_not_leak_secrets(client: TestClient, monkeypatch: pytest.Mo
     monkeypatch.setattr("app.api.routes.ping", lambda *a, **k: None)
     body = client.get("/api/health").json()
     assert "super-secret-value" not in str(body)
+
+
+def test_health_reports_the_configured_environment(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Which deployment this is comes from the environment.
+
+    The route used to print "local" from a string of its own, so a container
+    answered the question wrongly and the answer looked like a fact.
+    """
+    from app.core.config import get_settings
+
+    monkeypatch.setattr("app.api.routes.ping", lambda *a, **k: None)
+    monkeypatch.setattr(get_settings(), "app_environment", "staging")
+    body = client.get("/api/health").json()
+    assert body["environment"] == "staging"

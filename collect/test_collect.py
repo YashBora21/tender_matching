@@ -230,6 +230,20 @@ def test_an_empty_response_is_not_recorded_as_a_document(server, tmp_path):
     assert record.sha256 is None
 
 
+def test_a_document_over_the_cap_is_refused_and_not_written(server, tmp_path, monkeypatch):
+    """The collector and the fence on the way back share one cap. Storing what
+    the collector read would write a manifest a fresh clone cannot restore."""
+    monkeypatch.setattr(collect, "MAX_BYTES", 8)
+    entry = _entry(f"{server}/a/datasheet.pdf")
+    record = collect.collect_entry(entry, "cat", tmp_path, None, {}, False)
+
+    assert record.status == "failed"
+    assert record.sha256 is None
+    assert "cap" in (record.notes or "")
+    raw = tmp_path / "manufacturers" / "acme-valves" / "raw"
+    assert not list(raw.glob("*"))
+
+
 def test_the_manifest_keeps_the_slug_as_the_stable_manufacturer_key(tmp_path):
     entry = _entry("https://example.com/a.pdf")
     collect.write_manifests(collect.collect_category(

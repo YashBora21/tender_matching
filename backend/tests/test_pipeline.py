@@ -676,6 +676,24 @@ def test_a_prompt_change_does_not_move_the_stages_before_the_extraction():
     assert before[STAGE_RESOLUTION] != after[STAGE_RESOLUTION]
 
 
+def test_a_stored_row_is_stamped_with_the_versions_the_run_uses():
+    """The cache key and the row have to say the same thing.
+
+    `to_stored` used to default both versions to a literal written beside its
+    signature while the stage keys were built from `settings.schema_version`,
+    so a deployment that changed the setting kept reading rows it had already
+    invalidated.
+    """
+    from app.schemas.models import EXTRACTION_VERSION
+    from app.services.pipeline import to_stored
+    from app.services.tenderingest import RequirementRecord
+
+    stored = to_stored(RequirementRecord(text="Head >= 20 m", item_id="1"), "tender-1")
+
+    assert stored.schema_version == get_settings().schema_version
+    assert stored.extraction_version == EXTRACTION_VERSION
+
+
 def test_a_vocabulary_change_does_not_move_the_stages_before_the_resolution():
     attachments = [
         {"kind": "boq-csv", "sha256": "a" * 64, "status": "new"},

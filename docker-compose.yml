@@ -29,9 +29,12 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
       LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-}
+      # Passed through, never defaulted to empty: an empty LLM_MODEL in the
+      # container wins over the configured model name and leaves the run with no
+      # model to ask. Unset here means the backend keeps its own default.
+      LLM_MODEL:
       EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-sentence-transformers}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}
+      EMBEDDING_MODEL:
       EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-http://localhost:11434}
       EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-384}
     ports:

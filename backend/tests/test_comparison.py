@@ -395,6 +395,70 @@ def test_a_range_capability_covering_the_requirement_is_a_full_match() -> None:
     assert result.status is RequirementStatus.FULL_MATCH
 
 
+def test_a_single_value_is_compared_against_a_range_requirement() -> None:
+    """A `between` clause has no single required number, and that is not a gap.
+
+    The comparison asked for a number on both sides, so a requirement written as
+    a pair and a document that states one number inside it - both of which the
+    registry can decide - came out as *no evidence found* instead (D-121).
+    """
+    request = ComparisonRequest(
+        requirement_value="10-20",
+        requirement_operator=Operator.BETWEEN,
+        requirement_unit="m**3/hour",
+        requirement_text_value=None,
+        requirement_range=(10.0, 20.0),
+        capability_value="15",
+        capability_unit="m**3/hour",
+        capability_text_value=None,
+        capability_range=None,
+    )
+    assert evaluate(request, ValueType.NUMERIC).status is RequirementStatus.FULL_MATCH
+
+    outside = ComparisonRequest(
+        requirement_value="10-20",
+        requirement_operator=Operator.BETWEEN,
+        requirement_unit="m**3/hour",
+        requirement_text_value=None,
+        requirement_range=(10.0, 20.0),
+        capability_value="25",
+        capability_unit="m**3/hour",
+        capability_text_value=None,
+        capability_range=None,
+    )
+    assert evaluate(outside, ValueType.NUMERIC).status is RequirementStatus.MISSING_CAPABILITY
+
+
+def test_a_between_clause_with_no_pair_is_not_called_a_capability_failure() -> None:
+    """Nothing was read, so nothing is known about the product (AGENTS #4)."""
+    result = evaluate(numeric("15", Operator.BETWEEN, "1200"), ValueType.NUMERIC)
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.code is ReasonCode.OPERATOR_NOT_COMPARABLE
+
+
+def test_the_declared_score_of_a_verdict_lands_on_the_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PRD 8 puts what a verdict is worth in config; the comparison publishes it.
+
+    The evaluators each wrote their own `1.0` and `0.0`, so `SCORING_FULL_SCORE`
+    and `SCORING_MISSING_SCORE` were knobs that changed nothing a report showed
+    (D-121).
+    """
+    from app.core.config import get_settings
+
+    monkeypatch.setenv("SCORING_FULL_SCORE", "0.9")
+    monkeypatch.setenv("SCORING_MISSING_SCORE", "0.1")
+    get_settings.cache_clear()
+    try:
+        assert evaluate(numeric("1500", Operator.GTE, "1800"), ValueType.NUMERIC).score == 0.9
+        assert (
+            evaluate(numeric("1500", Operator.GTE, "1200"), ValueType.NUMERIC).score == 0.1
+        )
+    finally:
+        get_settings.cache_clear()
+
+
 def test_the_partial_tolerance_comes_from_config_not_from_the_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -59,7 +59,7 @@ def health(response: Response) -> HealthResponse:
         status=overall,
         app_name=settings.app_name,
         version=settings.app_version,
-        environment="local",
+        environment=settings.app_environment,
         dependencies=dependencies,
         config=settings.public_summary(),
     )

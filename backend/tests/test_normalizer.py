@@ -39,6 +39,29 @@ def test_a_range_becomes_a_range_not_a_single_number() -> None:
     assert result.operator is Operator.BETWEEN
 
 
+def test_a_range_below_zero_keeps_its_sign() -> None:
+    """Splitting the joined text "−10-20" on "-" lost the low end.
+
+    The pair is read from the clause, so a range that starts below zero arrives
+    at the comparison as the two numbers it states.
+    """
+    result = normalize("Ambient temperature between -10 and 20 degC")
+    assert result.operator is Operator.BETWEEN
+    assert result.range == (-10.0, 20.0)
+
+
+def test_the_pair_is_read_back_from_a_value_written_as_a_range() -> None:
+    """The comparison is handed the clause's value text, so the pair is read
+    with the same grammar that parsed it."""
+    from app.services.normalizer import parse_range
+
+    assert parse_range("10-20") == (10.0, 20.0)
+    assert parse_range("10 to 20") == (10.0, 20.0)
+    assert parse_range("between -10 and 20") == (-10.0, 20.0)
+    assert parse_range("1500") is None
+    assert parse_range(None) is None
+
+
 def test_mandatory_and_optional_wording_is_read() -> None:
     assert normalize("Speed shall be 1500 RPM").mandatory is True
     assert normalize("Speed shall be 1500 RPM").mandatory is True

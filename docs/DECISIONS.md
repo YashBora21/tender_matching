@@ -2557,6 +2557,47 @@ rejected: they are written by two different collectors and both layouts are in
 use. Reporting the collapsed listings as a separate counter - rejected: it is
 the number nobody acts on, and it doubles the ways to be confused.
 
+## D-119 - A number that changes how a run behaves has one home, in config
+
+A sweep for literals that should have been settings closed six of them. The
+collector's user agent and the fetch timeout now come from `fetch_user_agent`
+and `fetch_timeout_seconds`, which both `app/core/fetching.py` and
+`collect/collect.py` read; the document-type vocabulary got `doc_types_path`
+like the two vocabularies beside it; the embedding batch size got
+`embedding_batch_size`, read by the corpus walk and the encoder; the health
+payload's environment got `app_environment`; `to_stored` defaults its
+`schema_version` to the setting and its `extraction_version` to
+`schemas.models.EXTRACTION_VERSION`; and `StoredRequirement` no longer carries
+defaults for them. The collector also gained the size cap it never had, so a
+document `make collect` stores is one `make corpus-restore` can bring back.
+
+*Why:* each of these had two answers. The robots.txt fetch used `timeout=30`
+while the configured fetch timeout is 60, so "how long do we wait for a site"
+depended on which code path asked. The agent string existed in two files, so a
+deployment collecting under a different name could set one and be refused by
+the other. The stored row's version came from a literal while the cache key
+came from the setting, which is the combination that writes rows no resume
+path reads.
+
+*Alternatives:* leaving the geometry constants inside the page parsers -
+rejected deliberately, not by omission: a table's column tolerance is not a
+deployment's choice, and a setting for it is a value nobody would tune.
+Putting the batch size in `Settings` but keeping `embed_corpus(batch_size=...)`
+- rejected: no caller ever passed it, so it was a second answer with the
+appearance of a preference.
+
+The sweep ended with `.env.example` diffed against `Settings.model_fields`, so
+"every knob the stack reads is in `.env.example`" is checkable rather than
+claimed. One setting went the other way: `pipeline_concurrency` was removed.
+`docs/CONSTANTS.md` listed it as "the knob that keeps a run inside the rate
+limit", and no line of code read it - a run processes one tender at a time, so
+the documented knob was a promise, and a documented promise nobody can turn off
+is worse than no knob.
+
+*Switch back when:* a run dispatches more than one tender at once, at which
+point the ceiling has to be honoured where the calls are made, not declared
+here.
+
 ---
 
 ## D-120 - A read that no process will finish is reconciled at startup, and a reason belongs to the attempt that wrote it
@@ -2613,3 +2654,62 @@ to run in another, and `failed` would be a verdict nobody reached.
 because nothing distinguishes "the task was lost" from "the task is about to
 start". It stays visible as `queued`; the honest fix for that case is a
 heartbeat, not a guess.
+
+## D-121 - A rule nothing can reach is not a rule, and a knob nothing reads is not policy
+
+A laziness pass over the repo (the whole tree, not the last diff) found four
+things in the same shape: an answer written twice, with one copy unreachable.
+
+1. **The range comparison could never run.** A `between` clause keeps its value
+   as the text it was written in ("10-20"), and `matching.py` handed the
+   comparison `requirement_range=None, capability_range=None` at both call
+   sites. `evaluate_numeric` then failed its own "a number on both sides" gate
+   before reaching the range branch sitting below it, so every range requirement
+   published *no evidence found* against a document that answered it. The pair is
+   now read back with the grammar that parsed the clause -
+   `normalizer.parse_range()`, one pattern list, not a second one in the
+   comparison - and threaded at both sites. The gate accepts a requirement that
+   states a pair instead of a number, and a `between` clause whose pair could
+   not be read stays *no evidence found* with `operator_not_comparable`: it is no
+   longer answered as `missing capability`, which would have been a verdict about
+   the product drawn from a gap in our reading (AGENTS #4).
+2. **What a verdict is worth was written twice.** `SCORING_FULL_SCORE` and
+   `SCORING_MISSING_SCORE` are in `ScoringPolicy`, in `.env.example` and in the
+   policy a run snapshots - and no code read either one, because each evaluator
+   returned its own `1.0` and `0.0`. The declared score is now applied once, in
+   `registry.evaluate()`, for the two verdicts that carry no graded decision;
+   a partial match keeps the score the comparison band gave it.
+3. **The container blanked its own model.** `docker-compose.yml` passed
+   `LLM_MODEL: ${LLM_MODEL:-}` and `EMBEDDING_MODEL: ${EMBEDDING_MODEL:-}`, so on
+   a machine where those are unset the container got an empty string, which beat
+   the configured default and left the run with no model to ask. Both are
+   pass-through now: unset means the backend keeps its own answer.
+4. **Two copies of a name, one of them dead.** `services/facts.py` kept a second
+   `PROMPT_VERSION` that no cache key and no caller read - only the one in
+   `extractor.py` is used - so an edit to the prompt beside it would have looked
+   versioned and been nothing. `collect/collect.py` re-derived the doc-type
+   vocabulary path (`configured or shipped default`) instead of calling the
+   `doc_types_path()` the app side added in D-119; it imports that now.
+
+*Also:* `.env.example` is checked against `Settings.model_fields` in both
+directions by `test_config.py`, with the seven names compose and the scripts own
+listed beside it. A setting with no line is a knob nobody can find; a line with
+no setting is a knob that does nothing - and `PIPELINE_CONCURRENCY` (D-119) is
+the case the test would have caught.
+
+*Why:* each of these cost a reader to find and no reader to notice. The cheapest
+way to keep them out is to make the two lists agree by test rather than by
+memory, and to prefer the code path that already exists over a second copy of
+its answer.
+
+*Alternatives:* delete the two scoring settings instead of wiring them -
+rejected, PRD 8 names them as the deployment's policy, and the run snapshots
+them into every report. Store the pair on the requirement row, or the fact's
+operator on the cached read - rejected: a migration and a re-ingest of the whole
+corpus for a number the stored text already carries, and the fact column is not
+written by this path today. Apply the policy inside each evaluator - rejected:
+twenty literals, and the next evaluator forgets it.
+
+*Left:* `scoring_partial_default` is still read by nobody - a partial match's
+score comes from the comparison band. It is listed under Open rather than
+quietly kept.

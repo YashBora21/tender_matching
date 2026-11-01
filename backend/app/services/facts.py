@@ -24,9 +24,6 @@ from app.services.llm import LLMClient, LLMError, LLMRateLimited
 
 logger = get_logger(__name__)
 
-# The version of the prompt below. It is part of the cache key.
-PROMPT_VERSION = "1"
-
 SYSTEM_PROMPT = """You read a manufacturer's document and state what capability it documents.
 
 The passage is often a table row or a fragment of one. A row states the
