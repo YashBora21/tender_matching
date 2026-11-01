@@ -2441,3 +2441,55 @@ this step: the budget is set, the run is not.
   did not change. Exposing `--force` and re-running is what turns those 10 into
   `ocr` pages - no model call, 79 image-only pages.
 - `eval/audit/` is still the pre-fix sample; re-exporting it is LLM-costed.
+
+### Step 13 - a read no process will finish is reconciled at startup (D-120)
+
+Written while step 12 (single-sourced settings) was uncommitted work by another
+agent; this step does not depend on it, and the numbers below are in commit
+order rather than step order.
+
+The database held one dead row: tender `9d62cf12` (a 2-page GeM specification)
+sitting at `processing` since 2026-10-28, carrying the rate-limit message of the
+attempt before it. Its stages told the whole story - attachments, items,
+requirements and resolution `done`, extraction `rate_limited` - and nothing read
+them. The requirements stream stayed open because `processing` means "still
+being read", and the UI spun because `phaseOf()` maps every other state to
+`reading` and shows `tender.error` only in the failed and rate-limited panels.
+
+- `services/tenderrecovery.py` (new): `final_state(stages, requirements)` is the
+  decision, a pure function of the stage rows - `rate_limited` if a stage
+  stopped at the limit, `failed` if one failed, `done` if every stage settled
+  and requirements were stored, and `None` otherwise. `reconcile(session)` finds
+  the `queued`/`processing` rows and records that answer, with the offending
+  stage's own `detail` as the reason. It does not commit: the caller owns the
+  transaction.
+- `main.py`: a lifespan that calls `reconcile` once at startup, and logs rather
+  than raises if the database is unreachable, because refusing to start turns a
+  degraded service into no service.
+- `repositories/tender.py`: `set_status` writes `error` together with the
+  status, so starting a read clears the previous attempt's message; new
+  `tenders_in_states()`; `count_requirements` returns an int (it returned the
+  empty result list when a tender had none, so a comparison to zero raised).
+- `repositories/runs.py`: the same `set_status` fix, which had the same hole.
+
+*Measured:*
+
+- `test_tenderrecovery.py` 11 passed - six on the decision without a database,
+  five against a real one (the rate-limited repair, an in-flight read left
+  alone, a finished read marked done, and both `set_status` cases). The file is
+  80 tests with `test_health`, `test_tenderupload`, `test_audit`, `test_runs`
+  and `test_ledger_db`: 80 passed, 0 skipped with `TEST_DATABASE_URL` set.
+- The dead row itself, repaired by running `reconcile` against `tender_test`:
+  `{'was': processing, 'now': 'rate_limited'}`, and
+  `tenders_in_states(queued, processing)` is now empty. The error is kept,
+  because it is the true cause.
+
+**Open:**
+
+- A tender left `queued` with no stage at all is not repaired: nothing
+  distinguishes a lost task from one about to start. It needs a heartbeat, and
+  a guess would be worse than the wait.
+- `UploadPage` still hides `tender.error` while `phase === 'reading'`. The
+  repair fixes the row, not the silence: a read that is genuinely still running
+  has no reason to show, and one that stopped now lands in a state the UI
+  already renders.

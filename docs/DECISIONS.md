@@ -2556,3 +2556,60 @@ same file was parsed and re-written twice. Merging the manifests into one file -
 rejected: they are written by two different collectors and both layouts are in
 use. Reporting the collapsed listings as a separate counter - rejected: it is
 the number nobody acts on, and it doubles the ways to be confused.
+
+---
+
+## D-120 - A read that no process will finish is reconciled at startup, and a reason belongs to the attempt that wrote it
+
+The background read lives inside the API process. The pipeline commits each
+stage as it goes, so a process that stops mid-read leaves the stage rows behind
+and the tender's own row still saying `processing`. Nothing then ever writes a
+terminal state: the requirements stream stays open because `processing` means
+"still being read", the UI spins, and the reason - sitting in `tender.error` and
+in the stage's own `detail` - is never shown.
+
+Three separate things made that one dead row:
+
+1. **No reconciliation.** `app/services/tenderrecovery.py` now reads the stage
+   rows of every tender left `queued` or `processing` and records what they
+   already prove: a stage that stopped at the provider's limit is
+   `rate_limited` (a resumable state, D8), a failed stage is `failed`, and a
+   read whose stages all settled and which stored requirements is `done`. It
+   runs once from the FastAPI lifespan, before this process schedules a read of
+   its own, and a failure there is logged rather than raised - a database that
+   is down is what `/api/health` reports, and refusing to start turns a
+   degraded service into no service.
+2. **The decision is not a timer.** A slow read is not a dead one. The rule is
+   read from the stage rows, so a read that is genuinely in flight (a stage in
+   a non-terminal state) is left alone even when another worker shares the
+   database. A tender whose stages all settled but which stored no requirement
+   is left alone too: the stages cannot tell `done` from `incomplete`, and PRD 4
+   forbids merging them (D-91).
+3. **The reason outlived the attempt.** `TenderRepo.set_status` wrote `error`
+   only when one was given, so `set_status(PROCESSING)` left the previous
+   attempt's message on the row - which is exactly how the dead row carried a
+   rate-limit error it had not produced. The status and the reason are now
+   written together, and the same fix went to `RunRepo.set_status`, which had
+   it too.
+
+*Also fixed:* `TenderRepo.count_requirements` returned the empty result list
+when a tender had none, so any caller comparing it to zero raised instead of
+answering. It returns a count.
+
+*Why:* the row was not a wrong verdict, it was an unfinished one, and the
+product had no way to say so. The stages already carried the answer; nothing
+read them. Repairing from them costs no model call and cannot invent a state the
+read did not reach.
+
+*Alternatives:* a staleness cutoff ("no progress for N minutes") - rejected: it
+guesses at liveness from wall-clock time and would eventually finalise a slow
+read that is still working. Sweeping inside the requirements endpoint -
+rejected: that request may be served while another worker owns the read, and a
+read path must not write. Marking every `queued` row `failed` at startup -
+rejected: with more than one process, a row queued by one worker can be about
+to run in another, and `failed` would be a verdict nobody reached.
+
+*Boundary:* a tender left `queued` with no stage at all is **not** repaired,
+because nothing distinguishes "the task was lost" from "the task is about to
+start". It stays visible as `queued`; the honest fix for that case is a
+heartbeat, not a guess.

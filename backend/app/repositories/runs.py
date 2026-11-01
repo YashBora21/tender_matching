@@ -78,13 +78,16 @@ class RunRepo:
     def set_status(self, run_id: str, status: RunStatus, *, error: Optional[str] = None) -> None:
         """Move the run to a state, and record why when it failed.
 
-        The status and the reason are written together: a failed run without
-        its reason is a run someone has to guess about.
+        The status and the reason are written together, including when there is
+        no reason: a run that resumes keeps the message of the attempt that
+        stopped, and a resumed run that reports a rate limit it is no longer at
+        is a run someone has to disbelieve (D-120).
         """
-        values: dict = {"status": status.value}
-        if error is not None:
-            values["error"] = error
-        self.session.execute(update(run).where(run.c.id == run_id).values(**values))
+        self.session.execute(
+            update(run)
+            .where(run.c.id == run_id)
+            .values(status=status.value, error=error)
+        )
 
     def results(self, run_id: str) -> list[dict]:
         """Every result of a run, with the evidence that backs it.

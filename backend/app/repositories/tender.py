@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.orm import Session
 
 from app.schemas.enums import TenderStatus
@@ -48,6 +48,11 @@ class StoredRequirement:
     source_text: str
     page: int
     requirement_type: str
+    # No default: these are the versions the deployment is running, and a row
+    # stamped with a literal written here would say nothing about the shape it
+    # was written in.
+    extraction_version: str
+    schema_version: str
     attribute: Optional[str] = None
     operator: Optional[str] = None
     value: Optional[str] = None
@@ -61,8 +66,6 @@ class StoredRequirement:
     model: Optional[str] = None
     prompt_version: Optional[str] = None
     input_hash: Optional[str] = None
-    extraction_version: str = "1"
-    schema_version: str = "1"
 
 
 class TenderRepo:
@@ -96,6 +99,26 @@ class TenderRepo:
             "error": row[5],
         }
 
+    def tenders_in_states(self, statuses: tuple[TenderStatus, ...]) -> list[dict]:
+        """Every tender left in one of these states, oldest first.
+
+        Used at startup to find a read that no process is going to finish
+        (D-120): the state is written by the background task, so a task that
+        died leaves it behind.
+        """
+        rows = self.session.execute(
+            select(tender.c.id, tender.c.filename, tender.c.status)
+            .where(
+                tender.c.status.in_(
+                    [getattr(status, "value", status) for status in statuses]
+                )
+            )
+            .order_by(tender.c.uploaded_at)
+        ).all()
+        return [
+            {"id": str(row[0]), "filename": row[1], "status": row[2]} for row in rows
+        ]
+
     def set_status(
         self,
         tender_id: str,
@@ -103,12 +126,17 @@ class TenderRepo:
         *,
         error: Optional[str] = None,
     ) -> None:
-        """Move a tender's ingestion to a state, recording why when it failed."""
-        values: dict = {"status": status.value}
-        if error is not None:
-            values["error"] = error
+        """Move a tender's ingestion to a state, recording why when it failed.
+
+        The reason is written together with the state, including when there is
+        none: the column describes *this* attempt, and a read that starts while
+        the previous attempt's message is still on the row reports a cause it
+        never had (D-120).
+        """
         self.session.execute(
-            update(tender).where(tender.c.id == tender_id).values(**values)
+            update(tender)
+            .where(tender.c.id == tender_id)
+            .values(status=status.value, error=error)
         )
 
     def upsert_tender(
@@ -355,16 +383,17 @@ class TenderRepo:
         return len(requirements)
 
     def count_requirements(self, tender_id: str) -> int:
-        return (
-            self.session.execute(
-                select(requirement.c.id).where(requirement.c.tender_id == tender_id)
-            ).all()
-            and len(
-                self.session.execute(
-                    select(requirement.c.id).where(requirement.c.tender_id == tender_id)
-                ).all()
-            )
-        )
+        """How many requirements this tender has stored.
+
+        A count, always an int: the previous version returned the empty result
+        list when there were none, so a caller comparing it to zero raised
+        instead of answering (D-120).
+        """
+        return self.session.execute(
+            select(func.count())
+            .select_from(requirement)
+            .where(requirement.c.tender_id == tender_id)
+        ).scalar_one()
 
     def list_requirements(self, tender_id: str) -> list[dict]:
         rows = self.session.execute(

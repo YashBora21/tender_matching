@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+from typing import AsyncIterator
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -13,6 +16,29 @@ from app.core.logging import configure_logging, get_logger
 logger = get_logger(__name__)
 
 
+def _reconcile_on_startup() -> None:
+    """Finish the reads a previous process left mid-flight (D-120).
+
+    A failure here must not stop the API: a database that is down is what
+    `/api/health` reports, and refusing to start would turn a degraded service
+    into no service at all.
+    """
+    try:
+        from app.repositories.db import session_scope
+        from app.services.tenderrecovery import reconcile
+
+        with session_scope() as session:
+            reconcile(session)
+    except Exception as exc:  # noqa: BLE001 - the API starts either way
+        logger.warning("could not reconcile tenders left mid-read: %s", exc)
+
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    _reconcile_on_startup()
+    yield
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
@@ -21,6 +47,7 @@ def create_app() -> FastAPI:
         title="Tender Requirement Matching API",
         version=settings.app_version,
         description="Evidence-backed tender requirement matching (PRD: docs/PRD.md).",
+        lifespan=_lifespan,
     )
 
     app.add_middleware(
