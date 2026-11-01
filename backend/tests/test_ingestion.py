@@ -303,6 +303,73 @@ def test_a_csv_catalogue_is_ingested(tmp_path, monkeypatch):
     assert calls[0]["doc_type"] == "specification"
 
 
+def test_one_file_named_by_two_manifests_is_ingested_once(tmp_path, monkeypatch):
+    """The collector's manifest and the catalogue's name the same bytes, and
+    the corpus holds one document per content hash - so one parse, one row, and
+    a report whose count is a count of documents rather than of listings."""
+    import csv
+
+    raw = tmp_path / "manufacturers" / "acme" / "raw"
+    raw.mkdir(parents=True)
+    _pdf(raw / "spec.pdf", "Body of body shall be SS316")
+    _manifest(
+        tmp_path,
+        "acme",
+        [
+            {
+                "url": "https://acme.example/s.pdf",
+                "sha256": "b" * 64,
+                "doc_type": "datasheet",
+                "path": "raw/spec.pdf",
+                "category": "gate_valves",
+            }
+        ],
+    )
+    catalogue = tmp_path / "catalogue" / "acme"
+    catalogue.mkdir(parents=True)
+    _pdf(catalogue / "spec-copy.pdf", "Body of body shall be SS316")
+    with (tmp_path / "catalogue" / "manifest.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=["manufacturer", "filename", "source_url", "sha256", "doc_type"],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "manufacturer": "acme",
+                "filename": "spec-copy.pdf",
+                "source_url": "https://acme.example/s.pdf",
+                "sha256": "b" * 64,
+                "doc_type": "datasheet",
+            }
+        )
+
+    calls: list[dict] = []
+
+    class FakeRepo:
+        def __init__(self, session):
+            pass
+
+        def exists_by_sha256(self, sha256):
+            return False
+
+        def upsert_document(self, record):
+            calls.append(record)
+            return "doc-1"
+
+        def insert_chunks(self, document_id, chunks):
+            return len(chunks)
+
+    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+
+    report = ingest_corpus(tmp_path, FakeSession())
+
+    assert report.documents == 1
+    assert len(calls) == 1
+
+
 def test_a_document_on_disk_that_no_manifest_lists_is_still_ingested(tmp_path, monkeypatch):
     """The corpus is the set of files that exist. Leaving the unlisted ones
     out would make the corpus quietly incomplete."""

@@ -118,9 +118,10 @@ to point a monitor at.
 Two settings bound what one process may ask: `LLM_CALL_BUDGET` and
 `LLM_TOKEN_BUDGET` (0 is no ceiling). A run that reaches one keeps every answer
 it already wrote and ends `rate_limited`, not `failed` and not `done`, with the
-message naming what was spent — and a run started against the same tender pays
-only for the pairs still missing, so a small quota is spent forward rather than
-twice over. The provider is read from the response, not assumed: the wait is
+message naming what was spent — `make e2e` prints that stop as its own line,
+with how many results it kept and the same command to continue from. A run
+started against the same tender pays only for the pairs still missing, so a
+small quota is spent forward rather than twice over. The provider is read from the response, not assumed: the wait is
 taken from `Retry-After`, from a field of the JSON error body, or from the prose
 the provider said it in, which is what lets a hosted model, a self-hosted one
 and a local one all be the same code. `LLM_BASE_URL` is recorded in every run's
@@ -450,13 +451,16 @@ behind the verifier, deterministic comparison and scoring, runs and their
 reports (JSON, HTML, CSV), the React frontend, the offline evaluation harness,
 `make corpus-restore`, `make e2e` and `GET /api/preflight`.
 
-The corpus on this machine is ~720 MB across 121 documents on record - 51 in
-the manufacturer manifests and 70 in the catalogue - and all 121 are present and
-hashed. 117 of them come back on a fresh clone from the address their manifest
-records; four KSB catalogues do not, because `www.ksb.com` disallows `*.pdf` and
-the restore honours that (D-117) — they were collected before the rule was read
-correctly, and are named rather than hidden. It covers valves, pumps, motors and
-actuators from ABB, AVK, Bharat Bijlee, Bray, Crompton, Circor/Flowserve,
+The corpus on this machine is ~660 MB across 121 documents on record - 51 in
+the manufacturer manifests and 70 in the catalogue. 117 of those files are on
+disk and hashed; the four KSB catalogues are not, because `www.ksb.com`
+disallows `*.pdf`, the restore reads that rule (D-117), and the files were
+withdrawn with their manifest rows marked `restricted`. Of the 117, 97 carry an
+address on record and come back on a fresh clone; the other 20 have none and
+are reported as gaps rather than guessed. The 117 files dedup to 101 distinct
+documents by content hash, and that is what the database holds. It covers
+valves, pumps, motors and actuators from ABB, AVK, Bharat Bijlee, Bray,
+Crompton, Circor/Flowserve,
 Duncan Engineering, Ebara, Emerson Fisher, Godwin/Goulds, Intervalve Poonawalla,
 KSB, Delval, Sulzer, Val-Matic and Wilo.
 

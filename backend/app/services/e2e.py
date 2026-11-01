@@ -61,6 +61,9 @@ class Facts:
     manufacturers: int = 0
     files_on_disk: int = 0
     model_reason: Optional[str] = None
+    # Which model, at which host, a run would call. Named because a key for
+    # one provider and a base URL for another is a refusal, not a match.
+    model_label: str = ""
     ocr_reason: Optional[str] = None
     tender_status: Optional[str] = None
     requirements: int = 0
@@ -105,7 +108,10 @@ class E2EResult:
                 f"  corpus  {facts.documents} document(s), {facts.chunks} chunk(s) "
                 f"from {facts.manufacturers} maker(s); {facts.files_on_disk} file(s) on disk"
             )
-            lines.append(f"   model  {facts.model_reason or 'configured'}")
+            model_line = facts.model_reason or "configured"
+            if not facts.model_reason and facts.model_label:
+                model_line = f"configured: {facts.model_label}"
+            lines.append(f"   model  {model_line}")
             if facts.ocr_reason:
                 lines.append("     ocr  not available here; see the reason below")
         lines += [
@@ -178,17 +184,26 @@ def measure(session: Session, *, tender_id: Optional[str] = None) -> Facts:
     from app.services.docparser import iter_csv_corpus, iter_manifest_documents, tesseract_missing
 
     makers = list_manufacturers(session)
+    settings = get_settings()
     facts = Facts(
         documents=sum(m["documents"] for m in makers),
         chunks=sum(m["chunks"] for m in makers),
         manufacturers=len(makers),
         model_reason=config_error(),
+        model_label=f"{settings.llm_model} at {settings.llm_base_url}",
         ocr_reason=tesseract_missing(),
     )
 
-    data_dir = Path(get_settings().data_dir)
-    facts.files_on_disk = len(list(iter_manifest_documents(data_dir / "manufacturers"))) + len(
-        list(iter_csv_corpus(data_dir / "catalogue"))
+    data_dir = Path(settings.data_dir)
+    # Distinct files: more than one manifest lists the same bytes, and a
+    # preflight that counted listings would promise work that is already done
+    # (D-118).
+    facts.files_on_disk = len(
+        {
+            path
+            for path, _entry in list(iter_manifest_documents(data_dir / "manufacturers"))
+            + list(iter_csv_corpus(data_dir / "catalogue"))
+        }
     )
 
     if tender_id:
@@ -306,6 +321,16 @@ def _matching(session: Session, tender_id: str) -> tuple[Step, str]:
         f"{progress.results} result(s) for {len(progress.manufacturers)} maker(s), "
         f"{progress.llm_calls} model call(s)"
     )
+    if progress.status == "rate_limited":
+        # A stopped run is not a failed one: what it found is committed, and
+        # the same command picks up the pairs still missing (D-110). The step
+        # still fails, because a half-read tender is not a report.
+        return Step(
+            STEP_MATCHING,
+            "failed",
+            f"stopped: {progress.error}; {progress.results} result(s) kept. "
+            "Run the same command again to continue where it stopped.",
+        ), run_id
     if progress.status != "done":
         return Step(STEP_MATCHING, "failed", f"{progress.status}: {progress.error or detail}"), run_id
     return Step(STEP_MATCHING, "done", detail), run_id
@@ -435,7 +460,11 @@ def preflight(session: Session, *, tender_ref: Optional[str] = None) -> dict:
             "manufacturers": facts.manufacturers,
             "files_on_disk": facts.files_on_disk,
         },
-        "model": {"configured": facts.model_reason is None, "reason": facts.model_reason},
+        "model": {
+            "configured": facts.model_reason is None,
+            "reason": facts.model_reason,
+            "target": facts.model_label,
+        },
         "ocr": {"available": facts.ocr_reason is None, "reason": facts.ocr_reason},
         "tender": {
             "reference": tender_ref,

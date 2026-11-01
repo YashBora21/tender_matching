@@ -2319,7 +2319,9 @@ the `LLMRateLimited` D-105 propagates: the results already written stay
 committed, the run is labelled `rate_limited` - neither `done` nor `failed` -
 and the message names what was already spent. `RunRepo.answered(run_id)` gives
 the requirement x manufacturer pairs the run stores, and a resumed run skips
-them. Both budgets go into the config snapshot.
+them. Both budgets go into the config snapshot. `make e2e` reads that status as
+its own line - how many results are kept, and that the same command continues -
+so a stop at a budget does not look like a match that failed.
 
 *Why:* the assignment's model access is a limited corporate quota and the
 advice is to spend it carefully, so the ceiling has to be the account's own
@@ -2375,7 +2377,10 @@ first it cannot meet, with the reason and the command that fixes it; a step
 already done reports `skipped`, which is not `blocked`. `ARGS=--check` answers
 without running anything. `GET /api/preflight` is the same question over HTTP,
 with `can_run`, `why_not` and `next_steps`. It downloads nothing and calls no
-model: it reads the database and the configuration.
+model: it reads the database and the configuration. Both answers name the model
+and the endpoint a run would call, because a key from one provider and a base
+URL left pointing at another is a refusal discovered mid-run - the most
+expensive way to find out.
 
 *Why:* the assignment is satisfied by an end-to-end flow, and a reviewer with
 a fresh clone cannot reach a report by reading the code to work out the order.
@@ -2527,3 +2532,27 @@ readings: `Disallow: /a.pdf` also refuses `/a.pdf.old`. A document on a
 distributor's own host is judged by that host's robots.txt, not the
 manufacturer's - which is why the KSB booklets held as secondary sources stand
 and the four fetched from ksb.com do not.
+
+---
+
+## D-118 - Ingestion counts the documents it read, not the listings it walked
+
+A corpus file is often named by more than one manifest - the collector's own,
+`catalogue/manifest.csv`, and the `catalogue/<maker>/manifest.json` written
+beside it. `ingest_corpus` now keeps the set of hashes it has already walked in
+the run and skips a listing of bytes it has seen, so the report's count is a
+count of documents. The first listing of a file is the one whose metadata
+reaches the row, which is the order the manifests were already read in.
+
+*Why:* three numbers described one corpus - `make ingest` said 128, the restore
+said 117, the database said 101 - and the difference was listings, not files,
+not documents. A reviewer who cannot line the numbers up against the corpus
+cannot tell a clean run from a corpus with something missing in it, and this
+project's own rule is to dedup by hash.
+
+*Alternatives:* documenting the three counts and leaving the walk as it was -
+rejected: the counts then need an explanation every time they are read, and the
+same file was parsed and re-written twice. Merging the manifests into one file -
+rejected: they are written by two different collectors and both layouts are in
+use. Reporting the collapsed listings as a separate counter - rejected: it is
+the number nobody acts on, and it doubles the ways to be confused.

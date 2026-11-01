@@ -305,3 +305,45 @@ def test_the_command_reports_through_the_standard_output(monkeypatch, calls, tmp
     printed = capsys.readouterr().out
     assert "corpus" in printed
     assert "report" in printed
+
+
+def test_the_model_line_names_the_endpoint_a_run_would_call():
+    """A key issued by one provider and a base URL set for another is a
+    refusal mid-run, so the preflight says which model and host it means."""
+    facts = Facts(documents=10, chunks=200, model_label="some-model at https://api.example/v1")
+
+    text = E2EResult(facts=facts, check_only=True).as_text()
+
+    assert "configured: some-model at https://api.example/v1" in text
+
+
+def test_a_run_stopped_by_the_budget_names_what_it_kept(monkeypatch):
+    """A stopped match is not a lost one: the results stay and the same
+    command continues from the pairs still missing (D-110)."""
+    from types import SimpleNamespace
+
+    from app.services import runs
+
+    class _Session:
+        def commit(self) -> None:
+            pass
+
+    monkeypatch.setattr(runs, "create_run", lambda session, tender_id: "run-1")
+    monkeypatch.setattr(
+        runs,
+        "execute_run",
+        lambda run_id, session=None: SimpleNamespace(
+            status="rate_limited",
+            results=7,
+            manufacturers=["abb"],
+            llm_calls=300,
+            error="the call budget of 300 is spent (300 calls, 512000 tokens)",
+        ),
+    )
+
+    step, run_id = e2e._matching(_Session(), "tender-1")
+
+    assert run_id == "run-1"
+    assert step.state == "failed"
+    assert "7 result(s) kept" in step.detail
+    assert "Run the same command again" in step.detail

@@ -2322,8 +2322,70 @@ and no file claimed. A manifest row is the record of an attempt, not a promise
 that the bytes are here. Deleting them cannot be undone by re-fetching, because
 the fence now refuses them, which is the point.
 
+### Step 11 - the corpus counts reconcile, and the key is bounded before it is used
+
+Three counts from the same corpus looked like three corpora: `make ingest` said
+128, `corpus-restore --dry-run` said 117, the database said 101. They are one
+corpus seen three ways, and the difference is now written down where each number
+is printed:
+
+- **117** is the files on disk: 47 under `manufacturers/*/raw/`, 70 under
+  `catalogue/`. The four `restricted` KSB rows are not files, so they are not
+  counted here.
+- **128** was the manifest *entries* naming those files: 16 of the 101 documents
+  are named more than once - 5 under both `manufacturers/bharat-bijlee/raw/` and
+  `catalogue/bharat_bijlee/`, and 11 under `manufacturers/<m>/raw/` *and* twice
+  in the catalogue, once from `catalogue/manifest.csv` and once from the
+  `catalogue/<m>/manifest.json` written beside it. That is 27 entries over the
+  101 files they name. `ingest_corpus` walked all of them and reported the walk,
+  not the corpus - now fixed (D-118): it keeps the hashes it has already seen in
+  the run and reads each file once, so the command prints 101.
+- **101** is the distinct content hashes among the 117, which is what
+  ingestion dedups on and what `document` holds - 101 rows, 101 hashes, none
+  with a null path.
+- Of the 117, **97 carry an address** a fresh clone could re-fetch, over 81
+  distinct addresses; the remaining 20 (`bharat_bijlee` 4, `sulzer` 8,
+  `valmatic` 3, `wilo` 5) are blanks in `catalogue/manifest.csv` and stay
+  blanks, because the hosts now serve different revisions (step 9).
+
+`make e2e TENDER=<id> --check` was re-run after the withdrawal and answers
+`corpus 101 document(s), 29688 chunk(s) from 20 maker(s); 117 file(s) on disk`,
+`model configured`, `ocr not available here`. The file count counts distinct
+paths for the same reason (D-118): it read 128 while it counted listings, and a
+preflight that over-counts the work on disk is a preflight that tells a reviewer
+to ingest what is already ingested.
+
+*Later the same day:* the `ocr not available here` line was an install that was
+not on `PATH`, not a missing program. Tesseract 5.4.0 was already at
+`C:\Program Files\Tesseract-OCR` with `eng.traineddata`, and `.env` already set
+`TESSDATA_PREFIX`; `shutil.which` simply could not see it. Adding the directory
+to the user `PATH` makes `tesseract_missing()` answer `None` and the line
+disappear from `--check`. No code changed. What this does **not** do is re-read
+the 10 documents already stored as *incomplete*: they are unchanged by hash, so
+`make ingest` skips them, and the CLI exposes no `--force` - see the open items.
+
+The first ingest after the change reported `metadata refreshed: 11` - those are
+the thrice-listed documents, whose stored path and url moved from the last
+listing's values to the first one's - and the run after it reported 0, so the
+corpus settles rather than oscillating.
+
+The key side: `LLM_CALL_BUDGET=300` is set in `.env` (the knob was documented in
+`.env.example` and unread here until now), so the first real run is bounded
+before it starts. `.env` now carries the note that `LLM_API_KEY` and
+`LLM_BASE_URL` are a pair, and `--check` / `/api/preflight` name the model and
+host they would call - `configured: openai/gpt-oss-20b at
+https://api.groq.com/openai/v1` - so a key swapped without the URL is seen
+before a call is paid for. `_matching` in `make e2e` reported a `rate_limited`
+run as a plain failure; it now names the results the run kept and says the same
+command continues, and `test_e2e.py` pins both wordings. No call was made in
+this step: the budget is set, the run is not.
+
 *Measured:*
 
+- Step 11: `test_ingestion.py` 10 passed (the new dedup test among them) and
+  `test_e2e.py` 21 passed, 1 skipped (the stopped-run and endpoint-name tests
+  among them); the whole corpus was re-ingested twice and the second pass wrote
+  nothing, and no model call was made.
 - Targeted backend unit tests (the eight files this phase touched -
   `test_llm`, `test_runs`, `test_e2e`, `test_corpusrestore`, `test_fetching`,
   `test_docparser`, `test_pipeline`, `test_tenderingest`): **178 passed,
@@ -2343,14 +2405,15 @@ the fence now refuses them, which is the point.
   `make embed` added the 9821 vectors the ingest wrote and failed on none, so
   every chunk in the corpus has one.
 - After the withdrawal: **101 documents and 29,688 chunks**, `make ingest`
-  reads the tree clean (0 new, 128 unchanged, 0 failed) and
+  reads the tree clean (0 new, 101 unchanged, 0 failed) and
   `make corpus-restore --dry-run` counts 117 documents in place with none
-  failing. The two counts are different sets, and the difference is open below.
+  failing. Nothing was missing from the corpus; the numbers answered different
+  questions, and step 11 reconciles them.
 - `make e2e TENDER=<id> ARGS=--check` on the stored GeM-Bidding-9713870 tender
-  answers, without a call or a download: `corpus 105 document(s), 30713
-  chunk(s) from 20 maker(s); 132 file(s) on disk`, `model configured`, `ocr not
-  available here`. The one thing between this machine and a report is Tesseract
-  for the image-only pages, and the run itself.
+  answers, without a call or a download: `corpus 101 document(s), 29688
+  chunk(s) from 20 maker(s); 117 file(s) on disk`, `model configured`, and no
+  `ocr` line since Tesseract became reachable on `PATH`. The one thing between
+  this machine and a report is the run itself.
 
 **Open:**
 
@@ -2361,15 +2424,20 @@ the fence now refuses them, which is the point.
 - The stored tender's `tender_page` rows exist only after the pipeline is run
   on it again; the backfill is unit-tested and the writer is proven against the
   database, but the stored tender has not been re-run in this phase.
-- The 20 catalogue rows with no recorded address are documents a fresh clone
-  cannot restore. They need a person to record an address, not a guess.
+- Of the 117 documents on disk, **97 have an address a fresh clone can restore
+  and 20 do not** - 4 under `bharat_bijlee`, 8 under `sulzer`, 3 under
+  `valmatic`, 5 under `wilo`. They need a person to record an address, not a
+  guess, and `corpus-restore` names them as gaps when it finds them.
 - The corpus has no KSB document fetched from `www.ksb.com` at all, and the two
   that remain are distributor copies (Lenntech, Puffer) marked secondary. If
   KSB coverage matters for a tender, the way to get it is a source the host
   allows - a distributor, or a `manual` entry a person supplies - not a fetch
   the fence refuses.
-- **Tesseract is not installed on this machine**, so a page with no text layer
-  is recorded as `failed` with the reason rather than read. 10 corpus documents
-  are *incomplete* for that cause. Install the UB-Mannheim build or run the
-  stack, whose image carries it.
+- **Tesseract is on this machine and now on `PATH`**, so a page with no text
+  layer can be read rather than recorded as `failed`. The 10 corpus documents
+  ingested as *incomplete* are still incomplete, because they are unchanged by
+  hash and `make ingest` skips them: `ingest_corpus` takes `force=True` but the
+  CLI never passes it, so there is no supported way to re-parse a document that
+  did not change. Exposing `--force` and re-running is what turns those 10 into
+  `ocr` pages - no model call, 79 image-only pages.
 - `eval/audit/` is still the pre-fix sample; re-exporting it is LLM-costed.

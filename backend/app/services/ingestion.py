@@ -70,12 +70,21 @@ def ingest_corpus(
         )
         return report
 
+    # The same file is often named by more than one manifest - the collector's
+    # own, the catalogue CSV, and the catalogue directory's copy of it. One row
+    # is written per content hash either way, so the file is read once and the
+    # report counts documents rather than listings.
+    walked: set[str] = set()
+
     for file_path, entry in documents:
         sha256 = entry.get("sha256")
         if not sha256:
             report.failed += 1
             report.errors.append(f"no hash for {file_path}")
             continue
+        if sha256 in walked:
+            continue
+        walked.add(sha256)
 
         already_there = repo.exists_by_sha256(sha256)
         # The transaction is closed before the parse. A big document takes
