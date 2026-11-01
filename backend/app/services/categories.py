@@ -134,9 +134,17 @@ def _term_pattern(term: str) -> re.Pattern[str]:
     valve". The trailing plural is the same word, so it is matched here rather
     than written twice in the vocabulary: a category is added by naming it
     once.
+
+    The term is normalised the same way the text is, so a family written with
+    punctuation still matches: "Series 7/8" finds "SERIES-7-8-R1" and
+    "D-Series" finds "Fisher D series". Matching the raw term would make every
+    hyphenated family in the vocabulary dead.
     """
+    normalised = _normalise(term)
+    if not normalised:
+        return re.compile(r"(?!x)x")
     return re.compile(
-        r"(?<![a-z0-9])" + re.escape(term) + r"(?:e?s)?(?![a-z0-9])"
+        r"(?<![a-z0-9])" + re.escape(normalised) + r"(?:e?s)?(?![a-z0-9])"
     )
 
 
@@ -197,6 +205,43 @@ def category_names(categories: Optional[Iterable[Category]] = None) -> frozenset
     """The names the vocabulary knows. Used to tell a real category from a
     bucket that is not one (a document tagged with its manufacturer's slug)."""
     return frozenset(c.name for c in (categories if categories is not None else load_categories()))
+
+
+def mentioned_categories(
+    *parts: Optional[str],
+    categories: Optional[Iterable[Category]] = None,
+) -> frozenset[str]:
+    """Every product category the text positively names.
+
+    The document-level counterpart of `mentioned_types`: a pump catalogue says
+    "pump", so it is not evidence for a valve item even when its manifest never
+    filled the category column. Silence is not a different category - a
+    datasheet that never names its product is kept (PRD 4).
+
+    A file name often runs its words together ("submersibledewateringpumps"),
+    so a term also matches the text with the separators removed. That is a
+    property of file names, not of prose: only the document's own name and
+    declared model are searched this way, never a passage.
+    """
+    vocabulary = categories if categories is not None else load_categories()
+    text = " " + _normalise(" ".join(part or "" for part in parts)) + " "
+    if not text.strip():
+        return frozenset()
+    squashed = text.replace(" ", "")
+    return frozenset(
+        category.name
+        for category in vocabulary
+        if any(
+            _mentions(text, term) or _squashed_mentions(squashed, term)
+            for term in category.terms
+        )
+    )
+
+
+def _squashed_mentions(squashed_text: str, term: str) -> bool:
+    """A whole term found in text whose separators were removed."""
+    squashed_term = _normalise(term).replace(" ", "")
+    return bool(squashed_term) and squashed_term in squashed_text
 
 
 def infer_category(

@@ -24,6 +24,7 @@ from app.services.categories import (
     infer_category,
     infer_type,
     load_categories,
+    mentioned_categories,
     mentioned_types,
 )
 
@@ -227,7 +228,40 @@ def test_a_document_that_names_no_type_has_an_unknown_type():
     guess = document_type("valves", "WCENBR0001_EN_AQ.pdf")
     assert guess.product_type is None
     assert not guess.known
-    assert guess.reason
+
+
+def test_a_family_matches_however_the_title_punctuates_it():
+    """A family in the vocabulary is matched after normalisation, so the
+    hyphen in "Series 7/8" does not make it dead against "SERIES-7-8-R1"
+    (D-107)."""
+    assert (
+        document_type(
+            "valves",
+            "1692719045-Technical-Bulletin---118-PRODUCT-SPECIFICATION-SERIES-7-8-R1",
+        ).product_type
+        == "ball"
+    )
+    assert document_type("valves", "Fisher D series").product_type == "control"
+    assert document_type("valves", "Fisher large ED/EWD ET/EWT").product_type == "control"
+    assert document_type("valves", "Fisher globe valves").product_type == "globe"
+
+
+def test_mentioned_categories_tells_silent_from_different():
+    """A pump catalogue is not evidence for a valve item, even when its
+    manifest never filled the category column (D-107)."""
+    assert mentioned_categories("Goulds wastewater pumps") == frozenset({"pumps"})
+    assert mentioned_categories("Godwin dewatering pumps") == frozenset({"pumps"})
+    assert mentioned_categories("lv-motors-hazardous-area-application") == frozenset(
+        {"motors"}
+    )
+    assert mentioned_categories("Control valves") == frozenset({"valves"})
+    # A file name that runs its words together still says what it is.
+    assert mentioned_categories("submersibledewateringpumps_e10361") == frozenset(
+        {"pumps"}
+    )
+    # Silence is not a different category.
+    assert mentioned_categories("salesprogram_e00543-2") == frozenset()
+    assert mentioned_categories("Body shall be SS316") == frozenset()
 
 
 def test_every_item_is_classified_from_its_own_words():

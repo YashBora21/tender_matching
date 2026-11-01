@@ -2088,3 +2088,71 @@ pipeline that reads three candidates still cannot see the Delval listing.
 accuracy, the false-confident rate and citation correctness are still
 unmeasured on confirmed rows. The Delval cap-3 gap and the unrelated-corpus
 rows are the two things the sample points at; neither is fixed here.
+
+### Step 14 - read a short document whole, and stop a different product answering (D-107)
+
+Two findings from the step-13 audit sheet, fixed at retrieval.
+
+- `services/retrieval.py`: `_merge_siblings` no longer trims away the pages of
+  a short document it just expanded. The cap removes the lowest ranked
+  candidates outside the document; a document of three pages or fewer is one
+  unit. `_category_scope_filter` drops a document whose own name or declared
+  model positively names another product category, with the same silence rule
+  as the type filter. `_type_filter` now lets the document's declared type
+  decide for the whole document, instead of keeping a page that happens to
+  name the wanted type.
+- `services/categories.py`: `_term_pattern` normalises the term as well as the
+  text, so a hyphenated family ("Series 7/8", "VM-4700-S", "D-Series") matches
+  a title that writes it another way - before this, every such family in the
+  data file was dead. `mentioned_categories` names the categories a document
+  declares, including a file name that runs its words together.
+- `data/categories.json`: the Fisher control-valve families `ED/EWD` and
+  `ET/EWT` are declared under `control`, so those documents say what they are.
+- Tests: a family matches however it is punctuated; `mentioned_categories`
+  tells silent from different and reads a run-together file name; a page in a
+  document of another type is dropped; a document that names another category
+  is dropped; a document that names none is kept; a short document is not
+  split by a small cap.
+
+*Measured (retrieval, cap 3, items 10 and 11, six confirmed pairs):*
+
+| cut-off | document recall | page recall |
+| --- | --- | --- |
+| @3 | 66.7% -> **100%** | 33.3% -> 66.7% |
+| @20 | 100% -> 100% | 100% -> 100% |
+
+The two Delval rows that were `no_evidence_found` at cap 3 now retrieve the
+whole bulletin (pages 1, 2 and 3), and the whole Val-Matic specification.
+`Emerson Fisher` returns no candidates for either item: its four documents are
+control and globe valve bulletins, and the item is a ball valve. The pump and
+motor corpora (Xylem Godwin, Xylem Goulds, sulzer's submersible pumps,
+bharat_bijlee's motors) are no longer searched for a valve item.
+
+*Measured (the two false positives, item 10, cap 3):*
+
+- `Emerson Fisher`: 0 candidates, 0 model calls, `no_evidence_found`, flagged
+  for review. The false `missing_capability` from the step-13 sheet is gone.
+- `delval_flow`: 11 candidates (the whole bulletin, pages 1-3), 11 model calls.
+  The status is still `no_evidence_found`, but no longer because the page was
+  missed: the comparison stopped at `attribute_not_mapped`.
+
+*Open, and now diagnosed:*
+
+- **Delval's status is still not the gold status.** The clause is a run-on
+  ("Three piece ball valves 2" Screwed end ASME class 150 Cast carbon steel
+  Face to face distance 122mm") that the atomizer does not split, so the
+  normalizer has no comparable attribute or value and the comparison cannot
+  run. Reading the page was necessary but not sufficient.
+- **The deterministic listed-set fallback is not safe on a dense page.** The
+  Delval page 2 is one chunk carrying the whole specification. Run directly,
+  `listed_set_exclusion` reads that chunk as a list of `pressure_class` values
+  and returns a `missing_capability` with the entire page as its quote. It did
+  not fire in the run because the model returned a fact for that chunk, so the
+  fallback was not reached - which is luck, not a guard. It needs line-level
+  text (the page is chunked as one line) before it can be trusted there.
+- The remaining page recall@3 gap is the Flowserve Worcester bulletin, which is
+  16 pages and so is not read whole; its page 4 quote is found at @20 but not
+  at @3. That is the candidate cap, not a page-ordering bug, and the product
+  default cap is 20.
+- The audit sheet in `eval/audit/` is the pre-fix sample; re-exporting it at
+  the same seed is a separate, LLM-costed step.

@@ -2199,3 +2199,58 @@ rare statuses and is no longer a sample of what the system published. A fixed
 list of pairs - rejected: it is not random and cannot be reproduced from the
 seed. Filling `correct_status` from the gold file - rejected: the reviewer
 would be agreeing with the system's own labels, not checking them.
+
+---
+
+## D-107 - A short document is one unit, and a document that names another product is not evidence
+
+Two things the audit sheet showed are fixed at the retrieval layer, not by
+changing what a status means.
+
+**A short document is read whole, cap or no cap.** D-102 reads a document of
+three pages or fewer whole when one of its pages is retrieved, but the merged
+list was then trimmed to the candidate cap, which could cut off the very pages
+that had just been added. With a cap of 3, the Delval Series 7/8 bulletin
+returned nine chunks of page 1 and dropped page 2 - the page that lists the
+value - and the requirement was published as `no_evidence_found` while the
+documents say `missing_capability`. The trim now removes the lowest ranked
+candidates outside the expanded document and never a page of it: the cap
+counts documents, and a short document is one unit. A page that was read and
+then thrown away is the page-level version of the confusion AGENTS #4 forbids.
+
+**The document's declared type decides for the whole document.** A chunk that
+names the wanted type was kept even when the document declared another one, so
+the 355-page Fisher control-valve handbook answered a ball-valve item because
+one page mentions ball-valve trim. The document now decides: if it declares a
+type and that type is not the item's, the document goes. Silence is still kept
+and flagged family-level.
+
+**A document that names another product category is dropped.** The stored
+`document.category` column is the first check, and it is empty for a corpus
+whose manifest never filled it - sulzer, wilo and bharat_bijlee - so a pump
+catalogue answered a valve item. The document's own name and declared model
+are now read with the same vocabulary, one level up: a document that names the
+item's category is kept, one that names none is kept (silence is not a
+different category), and only one that positively names another category and
+not this one is dropped. A file name that runs its words together
+("submersibledewateringpumps") is matched with the separators removed, because
+that is how file names are written.
+
+**A family in the vocabulary now matches however it is punctuated.** Terms were
+matched raw against normalised text, so every hyphenated family - "Series 7/8",
+"VM-4700-S", "D-Series" - was dead, and the Delval and Val-Matic bulletins fell
+through to family-level. Terms are normalised like the text, so the family that
+was already in the data file does its job.
+
+*Why:* the audit sheet's two findings were both about evidence that was never
+read or should never have been read. Neither is fixed by a new status or a
+threshold: the retrieval layer was dropping pages it had already fetched and
+keeping documents about something else.
+
+*Alternatives:* raising the candidate cap - rejected: it pays for every
+requirement to cover a page-ordering bug, and the cap is a cost control, not a
+filter. Dropping every document that does not name the wanted category -
+rejected: silence is not a different category (PRD 4) and it would empty the
+corpus for manufacturers whose manifests are thin. Matching category terms
+against the passage - rejected: a valve datasheet mentions pumps in passing;
+the document's own name and declared model are what place it.

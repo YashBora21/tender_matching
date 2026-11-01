@@ -209,6 +209,65 @@ def test_a_document_with_no_declared_type_is_kept_but_flagged(monkeypatch):
     assert kept[0].type_unconfirmed is True
 
 
+def test_a_page_in_a_document_of_another_type_is_dropped(monkeypatch):
+    """A control-valve handbook that mentions ball valves on one page is not a
+    ball-valve datasheet: the document's declared type decides for the whole
+    document (D-107)."""
+    from app.services import retrieval
+
+    handbook = Candidate(
+        chunk_id="handbook",
+        document_id="d1",
+        text="Ball valve trim and ball valve seats are also covered",
+        model_or_family="Control valve handbook",
+    )
+
+    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [handbook])
+    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+
+    assert search(None, "ball valve", category="valves", product_type="ball") == []
+
+
+def test_a_document_that_names_another_category_is_dropped(monkeypatch):
+    """A pump catalogue is not evidence for a valve item, even when its
+    manifest never filled the category column (D-107)."""
+    from app.services import retrieval
+
+    pump = Candidate(
+        chunk_id="pump",
+        document_id="d1",
+        text="The pump delivers 50 m3/hr at 30 m head",
+        model_or_family="Goulds wastewater pumps",
+    )
+
+    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [pump])
+    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+
+    assert search(None, "ball valve", category="valves", product_type="ball") == []
+
+
+def test_a_document_that_names_no_category_is_kept(monkeypatch):
+    """Silence is not a different category: a document whose name says nothing
+    is kept, because dropping it would report a corpus gap as a missing
+    capability (PRD 4)."""
+    from app.services import retrieval
+
+    silent = Candidate(
+        chunk_id="silent",
+        document_id="d1",
+        text="Body shall be SS316",
+        document_title="salesprogram_e00543-2.pdf",
+    )
+
+    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [silent])
+    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+
+    kept = search(None, "ball valve", category="valves", product_type="ball")
+
+    assert [candidate.chunk_id for candidate in kept] == ["silent"]
+
+
+
 def test_without_a_type_nothing_is_filtered(monkeypatch):
     from app.services import retrieval
 
@@ -310,3 +369,26 @@ def test_sibling_expansion_keeps_the_candidate_budget():
     merged = _merge_siblings([first, tail], siblings, limit=2)
 
     assert [c.chunk_id for c in merged] == ["d1p1", "d1p2"]
+
+
+def test_a_short_document_is_read_whole_even_when_the_cap_is_small():
+    """The cap trims the candidates around a short document, never the pages
+    it was expanded into: cutting page 2 off and reporting the page as silent
+    is the page-level version of "no evidence found" (D-107)."""
+    from app.services.retrieval import _merge_siblings
+
+    hit = Candidate(chunk_id="d1p1a", document_id="d1", text="", page=1)
+    other = Candidate(chunk_id="d2p1", document_id="d2", text="", page=1)
+    siblings = {
+        "d1": [
+            hit,
+            Candidate(chunk_id="d1p1b", document_id="d1", text="", page=1),
+            Candidate(chunk_id="d1p1c", document_id="d1", text="", page=1),
+            Candidate(chunk_id="d1p2", document_id="d1", text="", page=2),
+        ]
+    }
+
+    merged = _merge_siblings([hit, other], siblings, limit=3)
+
+    assert [c.chunk_id for c in merged] == ["d1p1a", "d1p1b", "d1p1c", "d1p2"]
+

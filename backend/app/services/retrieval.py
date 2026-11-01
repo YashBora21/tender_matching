@@ -190,18 +190,18 @@ def _type_filter(
     """Drop the chunks that belong to a different product type (D-97, D-100).
 
     A gate-valve requirement is not answered by a ball-valve datasheet, even
-    though both are `valves`. The filter is deliberately one-sided: a chunk
-    that names the wanted type is kept (a full catalogue may cover several),
-    and a chunk that names no type at all is kept, because silence is not a
-    different type and dropping it would turn a corpus gap into a missing
-    capability (PRD 4).
+    though both are `valves`. A chunk that names no type at all is kept,
+    because silence is not a different type and dropping it would turn a
+    corpus gap into a missing capability (PRD 4).
 
     Silence is resolved one level up. A page that never says "ball valve" is
     still in a ball-valve catalogue, and the cover says so; the document's own
-    declared model or family decides the type (D-100). Only when neither the
-    chunk nor the document names a type is the answer left open: the chunk is
-    kept, and the evidence is marked family-level so a reviewer sees that the
-    type was never confirmed.
+    declared model or family decides the type (D-100), and when it names a
+    different type the whole document goes, even if the page happens to
+    mention the wanted one (D-107). Only when neither the chunk nor the
+    document names a type is the answer left open: the chunk is kept, and the
+    evidence is marked family-level so a reviewer sees that the type was never
+    confirmed.
     """
     if not category or not product_type:
         return candidates
@@ -217,14 +217,54 @@ def _type_filter(
             candidate.document_title,
         )
         candidate.document_type = declared.product_type
-        if not named and declared.product_type:
-            named = frozenset({declared.product_type})
+        if declared.product_type:
+            # The document says what it is about, and that decides for the
+            # whole document. A page in a control-valve handbook that happens
+            # to mention ball valves is not a ball-valve datasheet (D-107).
+            if declared.product_type != product_type:
+                continue
+            kept.append(candidate)
+            continue
         if named and product_type not in named:
             continue
         if not named:
             # Neither the page nor the document says what it is. That is not
             # a different type, and it is not a confirmed one either.
             candidate.type_unconfirmed = True
+        kept.append(candidate)
+    return kept
+
+
+def _category_scope_filter(
+    candidates: list[Candidate],
+    category: Optional[str],
+) -> list[Candidate]:
+    """Drop a document that declares a different product category (D-107).
+
+    The stored `document.category` column is the first check, in SQL, and it is
+    empty for a corpus whose manifest never filled it. The document's own name
+    and declared model still say what it is - "Goulds wastewater pumps",
+    "lv-motors-hazardous-area-application" - and a pump catalogue is not
+    evidence for a valve item.
+
+    The rule is the one the type filter already uses: a document that names the
+    wanted category is kept, a document that names none is kept (silence is not
+    a different category), and only a document that positively names another
+    category and not this one is dropped.
+    """
+    if not category or not candidates:
+        return candidates
+    from app.services.categories import mentioned_categories
+
+    kept: list[Candidate] = []
+    for candidate in candidates:
+        named = mentioned_categories(
+            candidate.model_or_family,
+            candidate.family,
+            candidate.document_title,
+        )
+        if named and category not in named:
+            continue
         kept.append(candidate)
     return kept
 
@@ -335,6 +375,10 @@ def _merge_siblings(
     merged: list[Candidate] = []
     seen: set[str] = set()
     expanded: set[str] = set()
+    # The chunks of a document that was expanded because it is short. They are
+    # one unit: the cap trims the candidates around them, never the pages the
+    # document was expanded into.
+    whole: set[str] = set()
     for candidate in candidates:
         if candidate.chunk_id not in seen:
             merged.append(candidate)
@@ -343,12 +387,25 @@ def _merge_siblings(
         if document_id in expanded or document_id not in siblings:
             continue
         expanded.add(document_id)
+        whole.add(candidate.chunk_id)
         for sibling in siblings[document_id]:
             if sibling.chunk_id in seen:
                 continue
             merged.append(sibling)
             seen.add(sibling.chunk_id)
-    return merged[:limit]
+            whole.add(sibling.chunk_id)
+    if len(merged) <= limit:
+        return merged
+    # Dropping a sibling to make the budget would read a short document only
+    # halfway and report the page that was cut as silent (D-107). The lowest
+    # ranked candidates outside the document are the ones the cap removes.
+    trimmed = list(merged)
+    index = len(trimmed) - 1
+    while len(trimmed) > limit and index >= 0:
+        if trimmed[index].chunk_id not in whole:
+            del trimmed[index]
+        index -= 1
+    return trimmed
 
 
 def expand_siblings(
@@ -661,31 +718,38 @@ def search(
 
     Both searches run and their results are merged. A deployment that has no
     embedding model still gets the keyword half. The query is widened with the
-    alias table's other names for an attribute it names, and a short document
-    is read whole when one of its pages is retrieved (D-102).
+    alias table's other names for an attribute it names, a document that names
+    another product category is dropped (D-107), and a short document is read
+    whole when one of its pages is retrieved (D-102).
     """
     text = expand_query(session, text)
-    keyword = _type_filter(
-        keyword_search(
-            session,
-            text,
-            manufacturer_name=manufacturer_name,
-            category=category,
-            model=model,
+    keyword = _category_scope_filter(
+        _type_filter(
+            keyword_search(
+                session,
+                text,
+                manufacturer_name=manufacturer_name,
+                category=category,
+                model=model,
+            ),
+            category,
+            product_type,
         ),
         category,
-        product_type,
     )
-    semantic = _type_filter(
-        semantic_search(
-            session,
-            text,
-            manufacturer_name=manufacturer_name,
-            category=category,
-            model=model,
+    semantic = _category_scope_filter(
+        _type_filter(
+            semantic_search(
+                session,
+                text,
+                manufacturer_name=manufacturer_name,
+                category=category,
+                model=model,
+            ),
+            category,
+            product_type,
         ),
         category,
-        product_type,
     )
     if not semantic:
         # No embedding model, or no embedded corpus: the keyword search is
