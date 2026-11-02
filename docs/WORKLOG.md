@@ -2898,3 +2898,37 @@ model or cap.
 and token counts are the client's counters for the process, not per run, so a
 report cannot state what a resumed run spent in total. Both need a column; a
 number reconstructed from logs would be a guess.
+
+### Step 23 - the run says where its seconds went (D-131)
+
+*Date: 2026-11-02. The first step of the speed-up plan, and the instrument the
+rest of it is measured with.*
+
+`run.metrics` (JSONB, migration `0012`) holds `stage_seconds` and the four spend
+figures. The matcher times `cached_fact`, `retrieve`, `extract`, `page_read`,
+`verify` and `compare` per pair through one `stage()` context manager; the loop
+times `store`, `summarise` and its own wall clock. A resumed run adds to the row
+instead of replacing it, and the clock starts where the last attempt stopped.
+
+Deliberately **not** in `config_snapshot`: that dictionary is what D-130 compares
+to decide whether a stopped run may be continued, and a measurement in it would
+make every second attempt look like a new configuration and pay for the pairs
+again.
+
+Closed the second half of Step 22's **Left** - the counts are per run and stored,
+so a report states what a run that stopped twice actually spent. The first half
+(`started_at` of the first attempt) is still open and unchanged.
+
+**Files:** `repositories/schema.py`, `alembic/versions/0012_run_metrics.py`,
+`repositories/runs.py` (`get`, `set_metrics`), `services/match/match.py`
+(`stage`, `merge_stages`, `MatchResult.stage_seconds`), `services/output/runs.py`
+(`RunProgress.stage_seconds`, `_record_costs`, `_apply_costs`, `progress`),
+`services/output/report.py` (`metrics`, `_cost_table`).
+
+**Verified:** 7 tests added across `test_runs.py`, `test_matching.py`,
+`test_report.py`; 103 pass in those files plus the run API. No verdict, score or
+flag reads a timing, so no expected-status test moved.
+
+**Left:** `make migrate` has to be applied before the next run writes metrics.
+The frontend does not show the timings yet, and the `e2e` command prints the
+counts it is handed rather than the stored ones.

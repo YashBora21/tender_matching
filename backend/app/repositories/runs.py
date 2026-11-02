@@ -108,6 +108,7 @@ class RunRepo:
                 run.c.config_snapshot,
                 run.c.corpus_hash,
                 run.c.error,
+                run.c.metrics,
             ).where(run.c.id == run_id)
         ).first()
         if row is None:
@@ -121,6 +122,7 @@ class RunRepo:
             "config_snapshot": snapshot,
             "corpus_hash": row[5],
             "error": row[6],
+            "metrics": row[7] or {},
             "manufacturers": list(snapshot.get("manufacturers") or []),
         }
 
@@ -136,6 +138,12 @@ class RunRepo:
             update(run)
             .where(run.c.id == run_id)
             .values(status=status.value, error=error)
+        )
+
+    def set_metrics(self, run_id: str, metrics: dict) -> None:
+        """What the run cost, written with the state it ended in (D-131)."""
+        self.session.execute(
+            update(run).where(run.c.id == run_id).values(metrics=metrics)
         )
 
     def results(self, run_id: str) -> list[dict]:

@@ -169,6 +169,7 @@ def _report(
     stage=None,
     attachments=None,
     requirements_stage=None,
+    metrics=None,
 ):
     results = (
         results
@@ -192,10 +193,13 @@ def _report(
             {"page": 1, "ledger_status": "parsed", "skip_reason": None},
             {"page": 2, "ledger_status": "ocr", "skip_reason": None},
         ]
+    run = dict(RUN)
+    if metrics is not None:
+        run["metrics"] = metrics
     return build_report(
         object(),
         RUN_ID,
-        runs=FakeRunRepo(RUN, results),
+        runs=FakeRunRepo(run, results),
         tenders=FakeTenderRepo(
             requirements if requirements is not None else REQUIREMENTS,
             ITEMS,
@@ -561,3 +565,41 @@ def test_a_report_with_no_unknown_clause_has_no_unknown_banner():
     page = render_html(report)
     assert "Requirements typed unknown:" not in page
     assert "<h2>Not assessed</h2><p class=\"muted\">None.</p>" in page
+
+
+METRICS = {
+    "stage_seconds": {
+        "retrieve": 1.5,
+        "extract": 120.25,
+        "verify": 0.4,
+        "compare": 0.1,
+        "store": 0.3,
+        "summarise": 0.05,
+        "total": 130.0,
+    },
+    "llm_calls": 42,
+    "prompt_tokens": 9000,
+    "completion_tokens": 1200,
+    "llm_retries": 3,
+}
+
+
+def test_the_report_carries_what_the_run_measured():
+    """The run's own figures, stored as it ran, not an estimate afterwards (D-131)."""
+    report = _report(metrics=METRICS)
+
+    assert report["metrics"] == METRICS
+    page = render_html(report)
+    assert "What the run cost" in page
+    assert "120.250 s" in page
+    assert "Model calls" in page
+    assert "42" in page
+
+
+def test_a_run_that_was_never_timed_says_so():
+    """A run made before the stages were timed has nothing. Zeros would read as
+    a fast run (D-131)."""
+    report = _report()
+
+    assert report["metrics"] == {}
+    assert "Not recorded" in render_html(report)

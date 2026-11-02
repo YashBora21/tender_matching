@@ -25,7 +25,8 @@ mid-way is visibly interrupted rather than silently queued.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import time
+from dataclasses import dataclass, field
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -121,6 +122,9 @@ class RunProgress:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     llm_retries: int = 0
+    # Seconds the run spent in each stage, including the stages of the
+    # attempts that a resumed run did not repeat (D-131).
+    stage_seconds: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return {
@@ -138,8 +142,18 @@ class RunProgress:
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
             "llm_retries": self.llm_retries,
+            "stage_seconds": self.stage_seconds,
             "error": self.error,
         }
+
+
+# The run's spend, and the client attribute each figure is read from.
+_SPEND = (
+    ("llm_calls", "calls"),
+    ("prompt_tokens", "prompt_tokens"),
+    ("completion_tokens", "completion_tokens"),
+    ("llm_retries", "retries"),
+)
 
 
 def config_snapshot() -> dict:
@@ -299,7 +313,8 @@ def execute_run(
                 client=client,
             )
 
-    from app.services.match.match import match_requirement, store_match
+    from app.services.match.match import match_requirement, merge_stages, stage
+    from app.services.match.match import store_match
 
     run_repo = repo or RunRepo(session)
     tenders = tender_repo or TenderRepo(session)
@@ -334,7 +349,17 @@ def execute_run(
         RunStatus.DONE.value,
         RunStatus.FAILED.value,
     ):
+        _apply_costs(progress, run.get("metrics") or {})
         return progress
+
+    # What the attempts before this pass cost, if any: a resumed run is the
+    # same row, so its report states the whole run and not only the last pass.
+    prior = run.get("metrics") or {}
+    spent = prior.get("stage_seconds") or {}
+    timings = {key: value for key, value in spent.items() if key != "total"}
+    # The clock starts where the last attempt stopped, so `total` is the run's
+    # wall clock rather than this pass's (D-130 keeps one row for both).
+    started = time.monotonic() - float(spent.get("total", 0.0) or 0.0)
 
     try:
         if matcher is None and client is None and needs_model(requirements):
@@ -369,13 +394,15 @@ def execute_run(
                     matcher=match,
                     client=client,
                 )
-                written = write(
-                    session,
-                    outcome,
-                    run_id=run_id,
-                    requirement_id=requirement["id"],
-                    manufacturer_id=identifier,
-                )
+                merge_stages(timings, outcome.stage_seconds)
+                with stage(timings, "store"):
+                    written = write(
+                        session,
+                        outcome,
+                        run_id=run_id,
+                        requirement_id=requirement["id"],
+                        manufacturer_id=identifier,
+                    )
                 progress.results += 1
                 # The result is committed as it is found: a run that dies
                 # halfway leaves the answers it already has, and the count
@@ -392,7 +419,10 @@ def execute_run(
 
         run_repo.set_status(run_id, RunStatus.SCORING)
         session.commit()
-        summary = summarise(run_repo.results(run_id), requirements, get_settings().scoring)
+        with stage(timings, "summarise"):
+            summary = summarise(
+                run_repo.results(run_id), requirements, get_settings().scoring
+            )
         logger.info(
             "run %s done: %d results, %d manufacturers",
             run_id,
@@ -401,7 +431,7 @@ def execute_run(
         )
         run_repo.set_status(run_id, RunStatus.DONE)
         progress.status = RunStatus.DONE.value
-        _record_usage(progress, client)
+        _record_costs(progress, run_repo, run_id, client, prior, timings, started)
         session.commit()
         return progress
     except (LLMRateLimited, LLMBudgetExceeded) as exc:
@@ -415,10 +445,10 @@ def execute_run(
         message = str(exc)
         logger.warning("run %s stopped: %s", run_id, message)
         run_repo.set_status(run_id, RunStatus.RATE_LIMITED, error=message)
-        session.commit()
         progress.status = RunStatus.RATE_LIMITED.value
         progress.error = message
-        _record_usage(progress, client)
+        _record_costs(progress, run_repo, run_id, client, prior, timings, started)
+        session.commit()
         return progress
     except Exception as exc:  # noqa: BLE001 - the state is the report
         # A run that stops says so, with the reason. It is never left
@@ -427,21 +457,39 @@ def execute_run(
         message = f"{type(exc).__name__}: {exc}"
         logger.exception("run %s failed: %s", run_id, exc)
         run_repo.set_status(run_id, RunStatus.FAILED, error=message)
-        session.commit()
         progress.status = RunStatus.FAILED.value
         progress.error = message
-        _record_usage(progress, client)
+        _record_costs(progress, run_repo, run_id, client, prior, timings, started)
+        session.commit()
         return progress
 
 
-def _record_usage(progress: RunProgress, client) -> None:
-    """What the run's client cost, when it can say."""
-    if client is None:
-        return
-    progress.llm_calls = int(getattr(client, "calls", 0) or 0)
-    progress.prompt_tokens = int(getattr(client, "prompt_tokens", 0) or 0)
-    progress.completion_tokens = int(getattr(client, "completion_tokens", 0) or 0)
-    progress.llm_retries = int(getattr(client, "retries", 0) or 0)
+def _record_costs(progress: RunProgress, run_repo, run_id: str, client, prior, timings, started):
+    """Write what the run cost. The caller commits: it is one state change."""
+    _apply_costs(progress, prior, client)
+    progress.stage_seconds = {**timings, "total": round(time.monotonic() - started, 3)}
+    run_repo.set_metrics(run_id, _costs_of(progress))
+
+
+def _apply_costs(progress: RunProgress, metrics: dict, client=None) -> None:
+    """What the run cost, added to the attempts that came before it.
+
+    A resumed run keeps its row (D-130), so its figures are the sum of its
+    attempts: naming only the last pass would understate a run the provider
+    stopped twice. With no client the stored figures are the whole answer.
+    """
+    progress.stage_seconds = metrics.get("stage_seconds") or {}
+    for name, attribute in _SPEND:
+        live = int(getattr(client, attribute, 0) or 0) if client is not None else 0
+        setattr(progress, name, int(metrics.get(name, 0) or 0) + live)
+
+
+def _costs_of(progress: RunProgress) -> dict:
+    """The run row's `metrics`: the same figures the caller is given."""
+    return {
+        "stage_seconds": progress.stage_seconds,
+        **{name: getattr(progress, name) for name, _ in _SPEND},
+    }
 
 
 def _assess(
@@ -602,7 +650,7 @@ def progress(session: Session, run_id: str, *, repo: Optional[RunRepo] = None) -
         raise NotFoundError(f"no run with id {run_id}")
 
     requirements = TenderRepo(session).list_requirements(run["tender_id"])
-    return RunProgress(
+    state = RunProgress(
         run_id=run_id,
         status=run["status"],
         tender_id=run["tender_id"],
@@ -612,3 +660,8 @@ def progress(session: Session, run_id: str, *, repo: Optional[RunRepo] = None) -
         results=run_repo.count_results(run_id),
         error=run["error"],
     )
+    # The spend and the stage times are what the run stored, so a caller that
+    # polls after it finishes is told the same figures the attempt reported
+    # (D-131). While it works they are not written yet, and read zero.
+    _apply_costs(state, run.get("metrics") or {})
+    return state

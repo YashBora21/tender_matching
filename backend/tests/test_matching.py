@@ -841,3 +841,56 @@ def test_a_document_that_is_not_on_disk_has_no_page_text(tmp_path, monkeypatch):
     )
 
     assert match._page_text(_DocumentSession("gone.pdf"), _candidate()) is None
+
+
+def test_a_matched_pair_records_the_time_of_each_stage(monkeypatch):
+    """The seconds are measured where they are spent, not guessed afterwards (D-131)."""
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
+
+    passage = "Rated flow 15 m3/h at 8 bar."
+    candidate = Candidate(
+        chunk_id="c1", document_id="d1", text=passage, page=1, model="SYNTHETIC-1"
+    )
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "_page_text", lambda s, c: passage)
+
+    result = match_requirement(
+        FakeSession(),
+        "Flow rate 15 m3/h",
+        requirement_value="15",
+        requirement_unit="m**3/hour",
+        requirement_operator="eq",
+        client=FakeClient(
+            {
+                "requirements": [
+                    {
+                        "found": True,
+                        "attribute": "flow rate",
+                        "value": "15",
+                        "unit": "m**3/hour",
+                        "operator": "eq",
+                        "model": None,
+                        "quote": "Rated flow 15 m3/h at 8 bar.",
+                    }
+                ]
+            }
+        ),
+    )
+
+    assert result.status is RequirementStatus.FULL_MATCH
+    assert {"retrieve", "extract", "page_read", "verify", "compare"} <= set(
+        result.stage_seconds
+    )
+    assert all(seconds >= 0.0 for seconds in result.stage_seconds.values())
+
+
+def test_a_requirement_nothing_retrieves_costs_only_the_search(monkeypatch):
+    """A pair that never reaches the model has no `extract` to report (D-131)."""
+    from app.services.match import match
+
+    monkeypatch.setattr(match, "search", lambda *a, **k: [])
+
+    result = match_requirement(FakeSession(), "Body shall be SS316", client=FakeClient({}))
+
+    assert set(result.stage_seconds) == {"cached_fact", "retrieve"}

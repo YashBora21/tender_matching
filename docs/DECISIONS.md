@@ -3140,3 +3140,47 @@ stored and passes that to both the comparison and the insert; a test asserts
 `repo.compared == repo.created["config_snapshot"]`, which is the invariant whose
 absence hid this.
 
+## D-131 - A run records where its time and calls went
+
+Every proposed speed-up is a claim about where the seconds go, and until now the
+only evidence was a log line per retry. The run reported `llm_calls`,
+`prompt_tokens` and `llm_retries` on the response that finished it - and nowhere
+else: they were the counters of one process, so a polled run, a stored report and
+a resumed attempt all said nothing, or said the last attempt and called it the
+run (D-130's *Left*).
+
+A `metrics` JSONB column on `run` now holds what the run measured itself:
+
+- `stage_seconds`, per stage. The matcher times `cached_fact`, `retrieve`,
+  `extract`, `page_read`, `verify` and `compare` for each pair (`stage()` and
+  `merge_stages()` in `services/match/match.py`); the run loop times `store`,
+  `summarise` and its own wall clock. A pair that never reaches the model has no
+  `extract` to report, which is the number the next step is judged on.
+- the four spend figures, so `GET /api/runs/{id}` and the report state what the
+  run cost after the process that ran it is gone.
+
+*Why not in `config_snapshot`:* that dictionary is compared to decide whether a
+stopped run may be continued (D-130). A measurement inside it would make every
+second attempt look like a different configuration, and the pairs already paid
+for would be paid for again.
+
+*Why the figures add rather than replace:* a resumed run is the same row, so its
+cost is the sum of its attempts. The stage times are added to what the row already
+held and the clock starts where the last attempt stopped, otherwise a run that
+spent six seconds in its first pass reports the two seconds of its second.
+
+*What it does not do:* nothing about a verdict changes - no status, score or flag
+reads a timing. A run made before this column has nothing, and the HTML says *Not
+recorded: this run was made before the stages were timed* rather than a column of
+zeros, which would read as a fast run. A pair whose call raised contributes no
+stage times, because the exception unwinds past the merge; its cost still shows in
+the wall clock and the call count. The frontend does not display the timings yet.
+
+*Verified:* `alembic/versions/0012_run_metrics.py`, applied with `make migrate`.
+Seven tests added - a run stores its pair's stages plus `store`, `summarise` and a
+total; a resumed run adds to the attempt before it (6 s of extract, not 2 s);
+polling a finished run returns what was stored; a matched pair records each stage
+and a pair nothing retrieved records only the search; the report carries the
+figures, and says *Not recorded* when there are none. 103 tests pass across the
+run, matching, report and run-API files, and the full unit suite passes.
+

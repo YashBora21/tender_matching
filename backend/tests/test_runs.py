@@ -52,6 +52,7 @@ class FakeRunRepo:
             "config_snapshot": {},
             "corpus_hash": "abc",
             "error": None,
+            "metrics": {},
             "manufacturers": list(manufacturers),
         }
         self.stored: list[dict] = []
@@ -59,6 +60,7 @@ class FakeRunRepo:
         self.created: dict = {}
         self.resume_id = None
         self.compared = None
+        self.metrics_writes: list[dict] = []
 
     def create(self, tender_id, *, manufacturers, config_snapshot, corpus_hash=""):
         self.created = {
@@ -82,6 +84,10 @@ class FakeRunRepo:
         self.run["status"] = status.value
         if error is not None:
             self.run["error"] = error
+
+    def set_metrics(self, run_id, metrics):
+        self.metrics_writes.append(dict(metrics))
+        self.run["metrics"] = dict(metrics)
 
     def results(self, run_id):
         return list(self.stored)
@@ -545,6 +551,107 @@ def test_the_run_reports_what_its_client_spent():
     assert outcome.llm_retries == 1
     assert outcome.as_dict()["llm_calls"] == 3
     assert outcome.as_dict()["prompt_tokens"] == 1200
+
+
+def test_the_run_stores_what_its_stages_cost():
+    """Where the wall clock went is stored with the run, not only logged (D-131)."""
+    repo = FakeRunRepo()
+    matcher = _recording_matcher(
+        [],
+        result=_match(stage_seconds={"retrieve": 0.5, "extract": 2.0, "compare": 0.1}),
+    )
+
+    outcome = _execute(
+        repo,
+        FakeTenderRepo([dict(REQUIREMENTS[0])], ITEMS),
+        matcher,
+        _recording_store(repo, {}),
+    )
+
+    stored = repo.run["metrics"]["stage_seconds"]
+    # One requirement against one manufacturer: the pair's stages are the run's.
+    assert stored["retrieve"] == pytest.approx(0.5)
+    assert stored["extract"] == pytest.approx(2.0)
+    assert stored["compare"] == pytest.approx(0.1)
+    # The stages of the loop itself are measured there, not in the matcher.
+    assert stored["store"] >= 0.0
+    assert stored["summarise"] >= 0.0
+    # `total` is the run's own wall clock, measured in the loop.
+    assert stored["total"] > 0.0
+    # The figures a caller polls are the ones that were written.
+    assert outcome.as_dict()["stage_seconds"] == stored
+    assert repo.run["metrics"]["llm_calls"] == 0
+
+
+def test_a_resumed_run_adds_its_cost_to_the_attempt_before_it():
+    """One run row holds the sum of its attempts, not the last pass (D-130)."""
+
+    class OneMore:
+        calls = 1
+        prompt_tokens = 100
+        completion_tokens = 20
+        retries = 0
+
+    repo = FakeRunRepo(status="rate_limited")
+    repo.run["metrics"] = {
+        "stage_seconds": {"retrieve": 1.0, "extract": 4.0, "total": 6.0},
+        "llm_calls": 2,
+        "prompt_tokens": 500,
+        "completion_tokens": 100,
+        "llm_retries": 1,
+    }
+    # The pair the first attempt answered is stored, so only the other is asked.
+    repo.stored = [_stored("r1", "mfr-Acme", "full_match", 1.0)]
+    matcher = _recording_matcher(
+        [],
+        result=_match(stage_seconds={"retrieve": 0.5, "extract": 2.0}),
+    )
+
+    outcome = execute_run(
+        RUN_ID,
+        session=FakeSession(),
+        repo=repo,
+        tender_repo=FakeTenderRepo(
+            [dict(REQUIREMENTS[0]), dict(REQUIREMENTS[0], id="r3", text="Seal shall be PTFE")],
+            ITEMS,
+        ),
+        matcher=matcher,
+        store=_recording_store(repo, {}),
+        client=OneMore(),
+    )
+
+    assert outcome.results == 2
+
+    stored = repo.run["metrics"]["stage_seconds"]
+    assert stored["extract"] == pytest.approx(6.0)  # 4.0 from the first attempt
+    assert stored["retrieve"] == pytest.approx(1.5)
+    # The clock starts where the last attempt stopped, so a resumed run does
+    # not report six seconds as one.
+    assert stored["total"] >= 6.0
+    assert outcome.llm_calls == 3
+    assert repo.run["metrics"]["prompt_tokens"] == 600
+
+
+def test_polling_a_finished_run_reports_what_it_cost(monkeypatch):
+    """The attempt's figures stay readable after it is gone (D-131)."""
+    repo = FakeRunRepo(status="done")
+    repo.stored = [_stored("r1", "mfr-Acme", "full_match", 1.0)]
+    repo.run["metrics"] = {
+        "stage_seconds": {"extract": 3.5},
+        "llm_calls": 4,
+        "prompt_tokens": 900,
+        "completion_tokens": 200,
+        "llm_retries": 2,
+    }
+    monkeypatch.setattr(
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo(REQUIREMENTS)
+    )
+
+    state = progress(object(), RUN_ID, repo=repo)
+
+    assert state.llm_calls == 4
+    assert state.llm_retries == 2
+    assert state.as_dict()["stage_seconds"] == {"extract": 3.5}
 
 
 def test_a_finished_run_is_not_run_again():

@@ -393,6 +393,11 @@ run = Table(
     Column("started_at", DateTime(timezone=True), server_default=func.now()),
     Column("status", _enum(RunStatus, "run_status"), nullable=False),
     Column("config_snapshot", JSONB),
+    # What the run cost: seconds per stage and the counts its LLM client
+    # reported. Kept out of `config_snapshot`, which is compared to decide
+    # whether a stopped run may be continued (D-130) - a measurement in there
+    # would make every second attempt look like a different configuration.
+    Column("metrics", JSONB),
     Column("corpus_hash", String(64)),
     # Why the run failed, in the caller's words. A run that stopped has to be
     # able to say what stopped it without the caller reading the server log.

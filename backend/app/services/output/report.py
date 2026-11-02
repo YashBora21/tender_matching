@@ -369,6 +369,10 @@ def build_report(
         # The config is the run's own snapshot: what it was scored with, not
         # what the settings say now (FR-34).
         "config": run["config_snapshot"],
+        # What the run cost, measured: seconds per stage and the counts its
+        # client reported. A run made before stages were timed has nothing
+        # (D-131).
+        "metrics": run.get("metrics") or {},
         "results": {
             "stored": len(results),
             "expected": expected,
@@ -611,6 +615,50 @@ def _not_assessed_table(report: dict) -> str:
     )
 
 
+# The stages a run times, in the order a reader meets them. `extract` is the
+# one that costs money; `total` is the wall clock the others fit inside.
+_STAGE_ORDER = (
+    "cached_fact",
+    "retrieve",
+    "extract",
+    "page_read",
+    "verify",
+    "compare",
+    "store",
+    "summarise",
+    "total",
+)
+
+
+def _cost_table(report: dict) -> str:
+    """Where the run's time and calls went, as it measured them (D-131)."""
+    metrics = report.get("metrics") or {}
+    stages = metrics.get("stage_seconds") or {}
+    if not stages:
+        # A run made before the stages were timed. It says so instead of
+        # showing a column of zeros, which would read as a fast run.
+        return (
+            '<h2>What the run cost</h2>\n<p class="muted">Not recorded: this run '
+            "was made before the stages were timed.</p>"
+        )
+    names = [name for name in _STAGE_ORDER if name in stages] + sorted(
+        set(stages) - set(_STAGE_ORDER)
+    )
+    rows = "".join(
+        f"<tr><th>{name}</th><td>{float(stages[name]):.3f} s</td></tr>" for name in names
+    )
+    spend = "".join(
+        f"<tr><th>{label}</th><td>{_escape(metrics.get(key, 0))}</td></tr>"
+        for key, label in (
+            ("llm_calls", "Model calls"),
+            ("prompt_tokens", "Prompt tokens"),
+            ("completion_tokens", "Completion tokens"),
+            ("llm_retries", "Retries"),
+        )
+    )
+    return f"<h2>What the run cost</h2>\n<table><tbody>{rows}{spend}</tbody></table>"
+
+
 def _banner(report: dict) -> str:
     parts: list[str] = []
     pages = report["tender"]["pages"]
@@ -760,6 +808,7 @@ def render_html(report: dict) -> str:
     <tr><th>Assessments</th><td>{_escape(report["results"]["stored"])} of {_escape(report["results"]["expected"])}</td></tr>
   </tbody>
 </table>
+{_cost_table(report)}
 <h2>Configuration</h2>
 <p class="muted">What this report was produced with. Two reports with different
 values here are not directly comparable (FR-34).</p>

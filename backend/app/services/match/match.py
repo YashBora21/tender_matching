@@ -20,6 +20,8 @@ coverage and not towards the score. It is never a missing capability
 
 from __future__ import annotations
 
+import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -82,6 +84,26 @@ class MatchResult:
     # The candidates that were read.
     candidates: int = 0
     llm_calls: int = 0
+    # Seconds this requirement spent in each stage (D-131). `extract` is the
+    # one that costs money; a pair answered from the cache has no `extract`.
+    stage_seconds: dict = field(default_factory=dict)
+
+
+@contextmanager
+def stage(sink: dict, name: str):
+    """Add the time one stage took to a run's totals, whatever the stage does."""
+    started = time.monotonic()
+    try:
+        yield
+    finally:
+        sink[name] = round(sink.get(name, 0.0) + (time.monotonic() - started), 3)
+
+
+def merge_stages(sink: dict, source: dict) -> dict:
+    """Fold one result's stage times into the totals above it."""
+    for name, seconds in (source or {}).items():
+        sink[name] = round(sink.get(name, 0.0) + seconds, 3)
+    return sink
 
 
 def _confidence(
@@ -174,7 +196,8 @@ def match_requirement(
 
     # The fact cache is checked first: a fact that was verified once is the
     # answer, and the passage it came from has not changed (FR-21).
-    cached = _cached_fact(session, requirement_text, manufacturer_name, model)
+    with stage(result.stage_seconds, "cached_fact"):
+        cached = _cached_fact(session, requirement_text, manufacturer_name, model)
     if cached is not None:
         return _from_cached_fact(
             cached,
@@ -204,15 +227,16 @@ def match_requirement(
         value=requirement_value,
         unit=requirement_unit,
     )
-    candidates = search(
-        session,
-        query,
-        limit=limit,
-        manufacturer_name=manufacturer_name,
-        category=category,
-        product_type=product_type,
-        model=model,
-    )
+    with stage(result.stage_seconds, "retrieve"):
+        candidates = search(
+            session,
+            query,
+            limit=limit,
+            manufacturer_name=manufacturer_name,
+            category=category,
+            product_type=product_type,
+            model=model,
+        )
     result.candidates = len(candidates)
     if not candidates:
         result.reason = "the corpus holds nothing that answers this requirement"
@@ -234,6 +258,7 @@ def match_requirement(
             client=client,
         )
         result.llm_calls += outcome.llm_calls
+        merge_stages(result.stage_seconds, outcome.stage_seconds)
         if best is None or _is_better(outcome, best):
             best = outcome
         if best.status is RequirementStatus.FULL_MATCH:
@@ -254,6 +279,7 @@ def match_requirement(
     # one candidate's.
     best.candidates = result.candidates
     best.llm_calls = result.llm_calls
+    best.stage_seconds = result.stage_seconds
     return best
 
 
@@ -300,7 +326,8 @@ def _match_candidate(
         document_id=candidate.document_id,
     )
 
-    extracted = extract_fact(requirement_text, candidate.text, client=client)
+    with stage(result.stage_seconds, "extract"):
+        extracted = extract_fact(requirement_text, candidate.text, client=client)
     result.llm_calls = 1
     if extracted.error:
         result.reason = extracted.error or "the passage could not be read"
@@ -312,15 +339,20 @@ def _match_candidate(
     # requirement is the one the comparison runs on; the rest are not this
     # requirement's business.
     fact = next((item for item in extracted.facts if item.found), None)
-    page_text = _page_text(session, candidate)
+    with stage(result.stage_seconds, "page_read"):
+        page_text = _page_text(session, candidate)
     if fact is None:
         # The extractor found no claim. That is not automatically silence: a
         # datasheet may list the values an attribute is available in, and the
         # required one may be absent from that list. The list is evidence of a
         # failing value, not an absence of evidence (PRD 4). The quote is
         # still gated by the citation layer.
-        finding = listed_set_exclusion(candidate.text, requirement_text)
-        if finding is not None and check_citation(finding.quote, page_text).passed:
+        with stage(result.stage_seconds, "verify"):
+            finding = listed_set_exclusion(candidate.text, requirement_text)
+            cited = finding is not None and check_citation(
+                finding.quote, page_text
+            ).passed
+        if cited:
             result.status = finding.status
             result.score = 0.0
             result.quote = finding.quote
@@ -343,31 +375,32 @@ def _match_candidate(
         result.reason = "the passage does not state this capability"
         return result
 
-    report = verify(
-        quote=fact.quote,
-        page_text=page_text,
-        passage=candidate.text,
-        # Entity validity is decided from the document row, never from the
-        # passage: a datasheet page that does not repeat its own manufacturer
-        # is still the manufacturer's document (D-94).
-        document_manufacturer=candidate.manufacturer,
-        document_model=candidate.model,
-        document_family=candidate.family,
-        document_model_or_family=candidate.model_or_family,
-        expected_manufacturer=manufacturer_name,
-        expected_model=model,
-        is_family_level=candidate.is_family_level,
-        attribute=fact.attribute,
-        value=fact.value,
-        requirement_unit=requirement_unit,
-        capability_unit=fact.unit,
-        operator_is_known=bool(fact.operator),
-        convertible=(
-            None
-            if not (requirement_unit and fact.unit)
-            else _convertible(requirement_unit, fact.unit)
-        ),
-    )
+    with stage(result.stage_seconds, "verify"):
+        report = verify(
+            quote=fact.quote,
+            page_text=page_text,
+            passage=candidate.text,
+            # Entity validity is decided from the document row, never from the
+            # passage: a datasheet page that does not repeat its own manufacturer
+            # is still the manufacturer's document (D-94).
+            document_manufacturer=candidate.manufacturer,
+            document_model=candidate.model,
+            document_family=candidate.family,
+            document_model_or_family=candidate.model_or_family,
+            expected_manufacturer=manufacturer_name,
+            expected_model=model,
+            is_family_level=candidate.is_family_level,
+            attribute=fact.attribute,
+            value=fact.value,
+            requirement_unit=requirement_unit,
+            capability_unit=fact.unit,
+            operator_is_known=bool(fact.operator),
+            convertible=(
+                None
+                if not (requirement_unit and fact.unit)
+                else _convertible(requirement_unit, fact.unit)
+            ),
+        )
     if candidate.is_family_level or candidate.type_unconfirmed:
         # The document is about a family of products, or it never declares
         # which product type it covers. Either way the evidence is not
@@ -416,22 +449,23 @@ def _match_candidate(
     result.value_type = value_type
     requirement_op = _operator(requirement_operator)
     capability_op = _operator(fact.operator)
-    evaluation = evaluate(
-        ComparisonRequest(
-            requirement_value=requirement_value,
-            requirement_operator=requirement_op,
-            requirement_unit=requirement_unit,
-            requirement_text_value=requirement_value,
-            requirement_range=_range_for(requirement_op, requirement_value),
-            capability_value=fact.value,
-            capability_unit=fact.unit,
-            capability_text_value=fact.value,
-            capability_range=_range_for(capability_op, fact.value),
-            attribute=_canonical_term(fact.attribute),
-            capability_is_family_level=report.applicability is Applicability.FAMILY_LEVEL,
-        ),
-        value_type,
-    )
+    with stage(result.stage_seconds, "compare"):
+        evaluation = evaluate(
+            ComparisonRequest(
+                requirement_value=requirement_value,
+                requirement_operator=requirement_op,
+                requirement_unit=requirement_unit,
+                requirement_text_value=requirement_value,
+                requirement_range=_range_for(requirement_op, requirement_value),
+                capability_value=fact.value,
+                capability_unit=fact.unit,
+                capability_text_value=fact.value,
+                capability_range=_range_for(capability_op, fact.value),
+                attribute=_canonical_term(fact.attribute),
+                capability_is_family_level=report.applicability is Applicability.FAMILY_LEVEL,
+            ),
+            value_type,
+        )
 
     result.status = evaluation.status
     result.score = evaluation.score
