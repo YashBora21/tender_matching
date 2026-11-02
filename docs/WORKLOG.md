@@ -3079,3 +3079,52 @@ the code is only set when the corpus itself declared the other category.
 the recreated CHECK has no integration coverage without `TEST_DATABASE_URL`. The
 frontend has no `reason_code` column, so the reviewer reads the sentence rather
 than counting the codes; the CSV and the report JSON carry the code either way.
+
+### Step 28 - the corpus is findable: attributes, categories, manufacturer names (D-136, D-137, D-138)
+
+*Date: 2026-11-02. Parts 1a, 1b and 2 of the performance brief, the three whose
+fix is a lookup rather than a new mechanism.*
+
+The brief's premise was that `document.category` holds manufacturer slugs and that
+this is what makes a run slow. It is not: the retrieval filter has read a
+non-category as silence since D-96, so a slug-valued document is still searched.
+Reading the corpus and the code found three smaller things, each of which makes
+the system pay for work it has already done or throw away work it should not:
+
+- **the fact cache misses a fact it holds** (D-136). The cache is keyed by
+  canonical term, and a run that verified a fact whose attribute name came out of
+  a document with a space in it - "Material Grade" for `material_grade` - stored
+  it with a null attribute, where no later lookup can find it. Four of the twelve
+  verified facts in the local database are in that state. One candidate form is
+  added to the shared resolver, so all twenty-four attributes gain it at once,
+  plus one synonym that the CIRCOR documents themselves attest (`class rating`
+  for `pressure_class`). `pressure rating` was left out: it reads as easily of
+  `operating_pressure`, and FR-29 says do not guess.
+- **the hand-gathered corpus declares no category at all** (D-137).
+  `iter_csv_corpus` wrote `None` for every one of its 59 rows, so that half of
+  the corpus can never be filtered by category (FR-17) - a valve clause retrieves
+  pump and motor documents and pays to read them, and D-135's new reason code can
+  never fire for them. The row now carries what the manifest says.
+- **one manufacturer can be two rows** (D-138). `delval_flow` in a directory and
+  "Delval Flow" in a manifest are matched by spelling, so the second became a new
+  manufacturer and split the corpus. The lookup is folded now - through the
+  comparison engine's own `normalise_token`, exact name first, and a fold that
+  lands on two rows resolves neither.
+
+**Files:** `repositories/aliases.py`, `data/attribute_vocabulary.json`,
+`services/tender/parse.py`, `repositories/corpus.py`, `repositories/postgres.py`,
+`tests/test_resolution.py`, `tests/test_ingestion.py`.
+
+**Verified:** 5 tests added (2 resolution, 1 category column, 2 identity fold);
+67 pass across `test_ingestion.py`, `test_resolution.py` and `test_runs.py`. No
+model call anywhere in this step, no migration, no status, score or denominator
+moved. The rest of the suite was not run, on instruction.
+
+**Left:** the 27 category labels are staged and not applied - Excel has
+`data/catalogue/manifest.csv` open and will not release it, so the code reads the
+column and is tested against a synthetic manifest until the write lands. The four
+facts already filed with a null attribute stay there until someone writes the
+database. The duplicate manufacturer rows are not merged: that is a data change
+across `manufacturer`, `document` and every `result` pointing at them, and it
+needs an approval. Nothing here is measurable as a speed-up without a real run,
+and none has been made.

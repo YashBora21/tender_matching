@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Insert
 
 from app.services.corpus.ingest import ingest_corpus
 
@@ -303,6 +304,55 @@ def test_a_csv_catalogue_is_ingested(tmp_path, monkeypatch):
     assert calls[0]["doc_type"] == "specification"
 
 
+def test_a_csv_row_can_declare_its_category(tmp_path, monkeypatch):
+    """A CSV corpus is category-filterable only if the manifest says what the
+    document is about. A row that says nothing keeps no category, which the
+    retrieval filter reads as silence and not as a different product (D-137)."""
+    import csv
+
+    catalogue = tmp_path / "catalogue" / "acme"
+    catalogue.mkdir(parents=True)
+    _pdf(catalogue / "valve.pdf", "Body of body shall be SS316")
+    _pdf(catalogue / "other.pdf", "Head of head shall be 30 m")
+    with (tmp_path / "catalogue" / "manifest.csv").open(
+        "w", newline="", encoding="utf-8"
+    ) as handle:
+        writer = csv.DictWriter(
+            handle, fieldnames=["manufacturer", "filename", "sha256", "category"]
+        )
+        writer.writeheader()
+        writer.writerow(
+            {"manufacturer": "acme", "filename": "valve.pdf", "sha256": "c" * 64, "category": " Valves "}
+        )
+        writer.writerow(
+            {"manufacturer": "acme", "filename": "other.pdf", "sha256": "d" * 64, "category": ""}
+        )
+
+    calls: list[dict] = []
+
+    class FakeRepo:
+        def __init__(self, session):
+            pass
+
+        def exists_by_sha256(self, sha256):
+            return False
+
+        def upsert_document(self, record):
+            calls.append(record)
+            return "doc-1"
+
+        def insert_chunks(self, document_id, chunks):
+            return len(chunks)
+
+    monkeypatch.setattr("app.services.corpus.ingest.PostgresDocumentRepo", FakeRepo)
+
+    ingest_corpus(tmp_path, FakeSession())
+
+    by_name = {Path(call["path"]).name: call for call in calls}
+    assert by_name["valve.pdf"]["category"] == "valves"
+    assert by_name["other.pdf"]["category"] is None
+
+
 def test_one_file_named_by_two_manifests_is_ingested_once(tmp_path, monkeypatch):
     """The collector's manifest and the catalogue's name the same bytes, and
     the corpus holds one document per content hash - so one parse, one row, and
@@ -478,3 +528,60 @@ def test_ingesting_a_corpus_seeds_the_products_its_documents_are_about(monkeypat
 
     assert ingest.main() == 0
     assert calls == ["attributes", "aliases", "ingest", "seed", "stale"]
+
+
+class _Manufacturers:
+    """The corpus table, without a database.
+
+    Answers the reads `manufacturer_id` makes - one name exactly, then every
+    name - and records an insert, so a test can tell a join from a new row.
+    """
+
+    def __init__(self, rows: list[tuple[str, str]]):
+        self.rows = list(rows)
+        self.inserted: list[dict] = []
+
+    def execute(self, statement):
+        if isinstance(statement, Insert):
+            self.inserted.append(dict(statement.compile().params))
+            return _Rows([])
+        params = statement.compile().params
+        rows = self.rows
+        if params:
+            rows = [row for row in rows if row[1] == params["name_1"]]
+        return _Rows(rows)
+
+
+class _Rows:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def first(self):
+        return self.rows[0] if self.rows else None
+
+    def all(self):
+        return self.rows
+
+
+def test_a_directory_named_by_its_slug_joins_the_manufacturer_it_means():
+    """A catalogue keeps its files under `delval_flow` while the corpus knows
+    "Delval Flow". Two manufacturers for one company split its documents, so
+    half of the corpus is out of every run that names the other half (D-138)."""
+    from app.repositories.postgres import PostgresDocumentRepo
+
+    session = _Manufacturers([("m-1", "Delval Flow")])
+    repo = PostgresDocumentRepo(session)
+
+    assert repo.get_manufacturer_id("delval_flow") == "m-1"
+    assert session.inserted == []
+
+
+def test_a_fold_that_lands_on_two_rows_resolves_neither():
+    """`Acme Pumps` and `acme_pumps` are two rows the corpus has not been
+    joined on. Picking one would score a run against half the corpus and call
+    it the whole of it, so the name stays unresolved (FR-16)."""
+    from app.repositories import corpus
+
+    session = _Manufacturers([("m-1", "Acme Pumps"), ("m-2", "acme_pumps")])
+
+    assert corpus.manufacturer_id(session, "Acme pumps") is None

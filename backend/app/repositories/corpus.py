@@ -13,15 +13,39 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.comparison.vocabulary import normalise_token
 from app.repositories.schema import chunk, document, manufacturer, product
 
 
 def manufacturer_id(session: Session, name: str) -> Optional[str]:
-    """The id of a manufacturer, by name. None when the corpus has no such one."""
+    """The id of a manufacturer, by name. None when the corpus has no such one.
+
+    An exact name is the answer. A name that is not there is read back through
+    the identity fold: the same company is `delval_flow` in a catalogue
+    directory and "Delval Flow" in a manifest, and a corpus that spells one
+    manufacturer two ways hides half of it from every lookup (D-138). A fold
+    that lands on more than one row is two names the corpus has not been
+    joined on, so it is left unresolved rather than guessed.
+
+    shortcut: compares every manufacturer row in Python; move the fold into
+    SQL if the table outgrows a few hundred.
+    """
     row = session.execute(
         select(manufacturer.c.id).where(manufacturer.c.name == name)
     ).first()
-    return str(row[0]) if row else None
+    if row:
+        return str(row[0])
+    token = normalise_token(name)
+    if not token:
+        return None
+    matches = [
+        str(row[0])
+        for row in session.execute(
+            select(manufacturer.c.id, manufacturer.c.name)
+        ).all()
+        if normalise_token(str(row[1])) == token
+    ]
+    return matches[0] if len(matches) == 1 else None
 
 
 def list_manufacturers(session: Session) -> list[dict]:

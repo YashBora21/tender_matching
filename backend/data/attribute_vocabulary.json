@@ -363,6 +363,10 @@
         {
           "term": "rating class",
           "approved": true
+        },
+        {
+          "term": "class rating",
+          "approved": true
         }
       ],
       "approved": true

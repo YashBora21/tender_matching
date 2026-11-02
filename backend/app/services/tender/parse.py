@@ -623,7 +623,10 @@ def iter_csv_corpus(catalogue_dir: Path) -> Iterable[tuple[Path, dict]]:
                     "is_secondary": False,
                     "restriction_note": None,
                     "model_or_family": (row.get("model_or_family") or "").strip() or None,
-                    "category": None,
+                    # A blank is left blank: no category is not a wrong one,
+                    # and the filter keeps a document that declares nothing
+                    # (D-137).
+                    "category": (row.get("category") or "").strip().casefold() or None,
                     "notes": (row.get("notes") or "").strip(),
                 }
 

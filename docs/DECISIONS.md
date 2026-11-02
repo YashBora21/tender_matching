@@ -3353,3 +3353,98 @@ comes before the next run; the new constraint has no integration coverage (it ne
 `TEST_DATABASE_URL`); and the frontend still shows no `reason_code` column, so a
 reader gets the sentence and not the code.
 
+
+## D-136 - A canonical term written with a space is the same term
+
+The structured fact cache is checked before retrieval and extraction run (FR-21),
+and it is keyed by canonical term. A run that verified a fact and could not name
+its attribute filed the answer with `attribute_id` null - so the next run missed
+the cache and paid for a retrieval, an extraction and a verification it already
+had. Four of the twelve verified facts in the local database were in that state,
+both of them CIRCOR's, and the reason was a separator: a document writes
+"Material Grade" and the vocabulary names the attribute `material_grade`.
+
+`AliasRepo.resolve` already tried the name as written and as a token with every
+space stripped; neither is the canonical form of a term that *contains* a space.
+One candidate is added - the name lower-cased with its separators turned into
+underscores - so a canonical term is recognised in the spelling the vocabulary
+writes it in. It is the shared resolver, so all twenty-four attributes gain this
+at once rather than twenty-four synonym edits.
+
+One synonym is added alongside it, because it is attested rather than inferred:
+`class rating` on `pressure_class`, from the CIRCOR documents that used it.
+`pressure rating` is deliberately *not* added: it reads as easily of
+`operating_pressure`, and FR-29 forbids guessing which one a clause meant.
+
+*What it will not claim:* nothing here re-files the four facts already stored with
+a null attribute. That is a write to the corpus database, which is a data change
+to be approved, not a code change; the resolver only stops the next one from
+landing in the same place. A term that resolves to no canonical name still goes
+to review rather than being invented.
+
+*Verified:* 2 tests (a spaced canonical term resolves to its attribute and needs
+no review, and a near-miss plural does not; `class rating` resolves to
+`pressure_class`). 11 pass in `test_resolution.py`, 67 across
+`test_ingestion.py`/`test_resolution.py`/`test_runs.py`. No model call, no
+migration - the alias table is re-seeded from the vocabulary file on the next
+ingest.
+
+## D-137 - The catalogue CSV declares a category
+
+`iter_csv_corpus` wrote `"category": None` for every row of the hand-gathered
+catalogue, so those documents could never be filtered by category (FR-17): a
+valve requirement retrieved pump and motor documents and paid to read them, and
+the D-135 probe could not say what the category rule had excluded, because a
+whole half of the corpus declared nothing.
+
+The row now carries what the manifest says, casefolded, and an empty field stays
+`None`. A blank is not a wrong category: the retrieval filter keeps a document
+that declares nothing (D-96), so labelling half the corpus is an improvement and
+not a risk to the other half.
+
+*What it will not claim:* the labels themselves. `data/catalogue/manifest.csv`
+is open in another program on this machine and will not accept a write, so the
+column is read and tested - against a synthetic manifest in a temporary
+directory - while the 27 labels prepared for it are still staged. They come from
+`collect/sources/backfill_notes.txt`, the collector's own notes, which state a
+category per manufacturer block: nine Valmatic drawings and check-valve
+whitepapers, six Sulzer pump-program and submersible-pump files, five Wilo data
+sheets, seven Bharat Bijlee motor catalogues. The other 32 rows stay blank
+because the notes do not say: Delval Flow's 25 are named by neither, and the
+ISO certificate, the privacy policy, the DC brochure (their notes put it under
+/drives) and the transformer brochure are not product documents of a stated
+category. A category that would have to be inferred from a file name is not
+recorded here; that is retrieval's job (D-100).
+
+*Verified:* 1 test (a CSV row that declares `Valves` is stored as `valves`; a row
+that declares nothing is stored as no category). 12 pass in
+`test_ingestion.py`.
+
+## D-138 - A manufacturer is looked up by identity, not by spelling
+
+One company reaches the corpus under two spellings: a catalogue directory is
+`delval_flow`, its manifest says "Delval Flow". `get_manufacturer_id` matched on
+the name alone, so the second spelling became a second row, and a corpus split
+across two manufacturers reports half of its documents as if they were the
+whole of it - the run that names one never retrieves the other's.
+
+The fold is one shared read, in `corpus.manufacturer_id`: an exact name is the
+answer, and a name that is absent is tried again with its separators ignored,
+using `normalise_token` - the comparison engine's own normaliser, so the corpus
+does not grow a second idea of what "the same word" means. `PostgresDocumentRepo`
+now delegates instead of repeating that query.
+
+*What it will not claim:* a merge. Two rows that already differ only by spelling
+stay two rows: joining them is a write to `manufacturer`, `document` and every
+`result` that points at them, which is a data change to approve, not a default.
+While both spellings exist, each is found by its exact name and the fold lands on
+two rows, so it resolves neither - which is the same rule the rest of the project
+uses for ambiguity (FR-16), and the reason this change never silently picks the
+half a run should be scored against. What it does change is the next ingest: a
+differently-spelled directory joins the manufacturer it means instead of starting
+a rival.
+
+*Verified:* 2 tests (a `delval_flow` ingest returns the id of the row stored as
+"Delval Flow" and writes no new row; a fold that lands on two rows returns None).
+67 pass across the three ingestion, resolution and run files. The database-backed
+`test_ingestion_db.py` is not run here - it needs `TEST_DATABASE_URL`.

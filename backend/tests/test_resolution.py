@@ -89,6 +89,31 @@ def test_an_unknown_attribute_goes_to_review():
     assert resolved.value_type is None
 
 
+def test_a_canonical_term_written_with_a_space_resolves():
+    """A document says "Material Grade" and the vocabulary calls the same thing
+    `material_grade`; only the separator differs (FR-21, D-136)."""
+    resolved = _resolve(_session(), "material grade")
+    assert resolved.canonical_term == "material_grade"
+    assert resolved.value_type is ValueType.MATERIAL
+    assert resolved.needs_review is False
+
+    # The reading is a term with its separators normalised, not a prefix of
+    # one: a name the vocabulary does not hold still goes to review.
+    assert _resolve(_session(), "material grades").canonical_term is None
+
+
+def test_a_class_rating_names_the_pressure_class():
+    """The wording is not invented: a real corpus reading stored `class rating`
+    against the value `Class 150`, and with no alias for it the verified fact
+    it produced was filed where the cache cannot find it (FR-21, D-136)."""
+    from app.comparison.vocabulary import load_vocabulary
+
+    spec = next(
+        item for item in load_vocabulary().attributes if item.canonical_term == "pressure_class"
+    )
+    assert "class rating" in spec.approved_synonyms
+
+
 def test_a_low_confidence_alias_goes_to_review(monkeypatch):
     monkeypatch.setenv("ALIAS_CONFIDENCE_THRESHOLD", "0.95")
     monkeypatch.setattr(

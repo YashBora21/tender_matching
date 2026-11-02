@@ -13,6 +13,7 @@ from typing import Optional
 from sqlalchemy import delete, insert, select, update
 from sqlalchemy.orm import Session
 
+from app.repositories import corpus
 from app.repositories.schema import chunk, document, manufacturer
 
 
@@ -34,13 +35,13 @@ class PostgresDocumentRepo:
         """The manufacturer's id, created on first sight.
 
         The name is unique, so a manifest written twice does not create two
-        manufacturers.
+        manufacturers - and a catalogue directory that spells the same company
+        another way is read through the same fold, so its documents join the
+        manufacturer they belong to instead of starting a second one (D-138).
         """
-        found = self.session.execute(
-            select(manufacturer.c.id).where(manufacturer.c.name == name)
-        ).first()
+        found = corpus.manufacturer_id(self.session, name)
         if found:
-            return str(found[0])
+            return found
         new_id = uuid.uuid4()
         self.session.execute(
             insert(manufacturer).values(id=new_id, name=name)

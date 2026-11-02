@@ -67,7 +67,15 @@ class AliasRepo:
         if not token:
             return AliasResolution(needs_review=True, reason="no attribute name")
 
-        spec = attribute_by_term(name) or attribute_by_term(token)
+        # A canonical term written with a space is still that term: a document
+        # says "Material Grade" and the vocabulary calls it `material_grade`.
+        # Only the separators differ, so reading it as a name nobody knows
+        # would send a known attribute to review and file its fact where the
+        # cache cannot find it (FR-21, D-136).
+        underscored = name.strip().casefold().replace("-", "_").replace(" ", "_")
+        spec = attribute_by_term(name) or attribute_by_term(token) or attribute_by_term(
+            underscored
+        )
         if spec is not None:
             return AliasResolution(
                 canonical_term=spec.canonical_term,
