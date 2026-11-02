@@ -117,6 +117,34 @@ The candidate cap is written on every row and in the `--provenance` file. A
 rate limit stops the export and keeps the answered pairs in `--checkpoint`;
 rerun with the same checkpoint to ask only the missing pairs.
 
+### Grading a filled sheet
+
+Once a person has filled `audit_ok`, `correct_status` and `notes`:
+
+```bash
+make eval-audit SHEET=eval/audit/sheet.csv
+```
+
+`eval/audit_score.py` reads the sheet and writes the summary to
+`eval/results/audit-<sheet>.json` (override with `--out`). It never writes to
+the sheet: the reviewer's file is the record of what a human decided.
+
+| Metric | Definition |
+| --- | --- |
+| Audited | Rows in the sheet, joined on their `pair` id |
+| Accuracy among audited | `audit_ok = yes` ÷ audited |
+| False-confident rate | Row the reviewer said wrong **and** that carried no review flag ÷ audited |
+| Flagged but correct | Rows the system flagged and the reviewer found nothing wrong in — the cost of the flag |
+| Citation correctness | Quotes that verify on the cited page ÷ claims in the sample, checked by the same `check_citation` the pipeline gates with |
+
+Three refusals: a row with no `audit_ok` (a partial sample is not the sample),
+a repeated or missing `pair` id (the join would be a guess), and a
+`correct_status` or `status` outside the five PRD statuses.
+
+What the sheet cannot say is what the system missed: it holds only pairs the run
+already answered, so every number above is a precision over the output, never a
+recall over the tender.
+
 ## Not built
 
 - The 50–100 hand-labelled pairs (PRD 15) — they need a live model to produce

@@ -9,7 +9,7 @@ COMPOSE := docker compose
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev migrate downgrade run test test-unit test-integration \
         test-collect collect corpus-restore ingest embed match report tenders tenders-audit e2e eval eval-check \
-        recall \
+        eval-audit recall \
         docker-build docker-up docker-down \
         docker-logs clean
 
@@ -80,6 +80,9 @@ eval: ## Score a report against gold labels: make eval REPORT=r.json GOLD=eval/g
 
 eval-check: ## Validate a gold file without a report: make eval-check GOLD=eval/gold/x.jsonl
 	$(VENV)/Scripts/python.exe eval/harness.py check --gold "$(GOLD)"
+
+eval-audit: ## Grade a filled audit sheet: make eval-audit SHEET=eval/audit/x.csv
+	$(VENV)/Scripts/python.exe eval/audit_score.py --sheet "$(SHEET)" $(ARGS)
 
 recall: ## Measure retrieval recall@k: make recall GOLD=eval/gold/x.csv ARGS="--k 3 20"
 	$(VENV)/Scripts/python.exe eval/recall.py --gold "$(GOLD)" $(ARGS)

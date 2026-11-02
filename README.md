@@ -33,6 +33,24 @@ verification is never shown as a confirmed match. "No evidence found" is not
 fields**. Uncertainty is recorded in the last two, never forced into one
 status.
 
+## Human review
+
+`review_required` marks the rows a person should read. It breaks a ranking tie
+(more open questions ranks lower), fills the report's review queue, is the other
+half of the false-confident metric - a wrong answer that was *not* flagged is the
+one a reader would believe - and travels onto the audit sheet with its reason.
+
+It does not decide anything and it does not remember a decision. Nothing stores a
+human verdict: there is no column, no route, no control for one, and re-running a
+tender recomputes every flag from the documents. A flag says where to look, for
+one run. `make eval-audit SHEET=eval/audit/sheet.csv` grades a sheet a person has
+filled and writes the summary to `eval/results/`; the sheet itself is never
+edited (D-128).
+
+A next step, not built: record a human decision per (run, requirement,
+manufacturer) *beside* the machine verdict - never rewriting the status or the
+score, which the verifier gates.
+
 ## Layout
 
 ```

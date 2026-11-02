@@ -188,3 +188,8 @@ def test_family_level_evidence_is_reported_as_family_level_not_as_a_pass() -> No
     assert report.applicability is Applicability.FAMILY_LEVEL
     assert report.outcome is VerificationOutcome.FAMILY_LEVEL
     assert report.review_required is True
+    # A borderline layer *passes*, so `reasons` alone is empty and the reviewer
+    # would be flagged with nothing to look at.
+    assert report.review_reasons == [
+        "the document covers the GV family, not the model GV-100"
+    ]

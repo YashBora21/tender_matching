@@ -149,6 +149,11 @@ export function EvidenceDrawer({
               </dd>
             </div>
           </dl>
+          {result.review_required && (
+            <p className="muted">
+              A flag says where to look, not what to decide. This tool does not record the decision.
+            </p>
+          )}
         </section>
       </aside>
     </div>

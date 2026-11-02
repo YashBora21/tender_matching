@@ -69,6 +69,11 @@ class VerificationReport:
         return [result.reason for result in self.layers if not result.passed]
 
     @property
+    def review_reasons(self) -> list[str]:
+        """Why a human should look: a layer that failed and one that was unsure."""
+        return [result.reason for result in self.layers if not result.passed or result.borderline]
+
+    @property
     def borderline(self) -> bool:
         return any(result.borderline for result in self.layers)
 

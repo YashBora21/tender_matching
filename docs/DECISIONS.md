@@ -2985,6 +2985,72 @@ for the new parameter; the full suite is 651 passing.
 
 ---
 
+## D-128 - A review flag is a pointer, not a workflow
+
+`review_required` is set wherever a claim, a comparison or a read did not settle
+the question (`services/match/match.py`, `services/output/runs.py`,
+`services/tender/pipeline.py`), and four things read it:
+
+- the ranking: `ranking_score = (compatibility, coverage, -review_count)`
+  (`services/match/score.py`), so an equally scored manufacturer with more open
+  questions ranks lower;
+- the report's review queue and the CSV's and HTML's review columns
+  (`services/output/report.py`), which is where a person starts reading;
+- the false-confident rate (`eval/harness.py`): a wrong pair that was *not*
+  flagged is the metric the PRD calls the key one, because it is a wrong answer a
+  reader would believe;
+- the audit sheet, which carries the flag and its reason on every row so the
+  reviewer sees what the system was unsure of (`eval/audit_sheet.py`).
+
+What it does not do: decide anything, or remember a decision. There is no column
+for a human verdict, no route that accepts one - the API has three POSTs and the
+rest are GETs (`backend/app/api/`) - and no control that records one. Re-running
+a tender recomputes every flag from the documents, so a flag is a pointer to
+where to look, valid for one run, and nothing more. That is a limit, not a gap in
+the rules: PRD 12.5 lists the queue itself as stretch, and every required status
+is decided by deterministic code and the verifier, not by a reviewer.
+
+Three things now say so instead of leaving it to be inferred:
+
+- The review queue and the evidence drawer each carry one line - "A flag says
+  where to look, not what to decide. This tool does not record the decision." -
+  in the two places a reader would otherwise expect to answer.
+- `eval/audit_score.py` grades a sheet a person *has* filled: accuracy among the
+  audited rows, the false-confident rate, the flagged-but-correct count, and
+  citation correctness, joined on the `pair` id and refused outright while any
+  row lacks `audit_ok`. It writes its summary to `eval/results/` and never to the
+  sheet, and it states that a sample of published rows measures the precision of
+  the output, never what the tender asked and the run missed.
+- A flag now always carries its reason. `match_requirement` built the reason from
+  the verifier's *failed* layers only, but `review_required` is also true when a
+  layer passes while unsure - family-level evidence, a document that names a
+  family rather than the model. That case reached the queue with no reason, which
+  the UI printed as "No reason recorded". `VerificationReport.review_reasons`
+  collects the failed and the unsure layers, and the flag is built from it.
+  Every other reason in the codebase names its cause; none says "needs review".
+
+*Why now:* the corpus is close enough to full that a reviewer will read a real
+report, and a queue that looks like a workflow but saves nothing is worse than a
+queue that says it does not.
+
+*Next step, deliberately not built:* a record-decisions workflow - one row per
+(run, requirement, manufacturer) holding a human verdict, stored *beside* the
+machine verdict. It must not rewrite the status or the score: the verifier gates
+publication, and the false-confident rate is measured against the machine's own
+flag. The stored decision is then a second column a report can show and a
+re-run can compare itself against, not a correction.
+
+*Verified:* one new assertion in `test_verifier.py` (a borderline layer passes,
+so `reasons` alone leaves the reviewer nothing); the family-level path now carries
+"the document covers the GV family, not the model GV-100". `eval/tests/test_audit_score.py`
+adds seven tests over a synthetic sheet written by the real exporter: the
+arithmetic, the citation outcomes, the refusal of an unfilled row, a duplicate
+`pair` id, an unknown status and a file that is not a sheet, and that the sheet's
+bytes are unchanged after a graded run. 8 frontend tests and the 24 eval tests in
+the touched files pass.
+
+---
+
 ## D-129 - A re-read replaces the answers along with the rows they answered
 
 Re-uploading `9d62cf12` - a `rate_limited` tender with one run holding 7 results

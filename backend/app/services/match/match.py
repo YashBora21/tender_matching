@@ -380,7 +380,7 @@ def _match_candidate(
     result.quote = fact.quote
     result.capability_text = fact.value
     result.review_required = report.review_required
-    result.review_reason = "; ".join(report.reasons) or None
+    result.review_reason = "; ".join(report.review_reasons) or None
     if candidate.type_unconfirmed:
         # The search could not place the document in a product type, so the
         # passage may answer a different product. The claim is kept but its

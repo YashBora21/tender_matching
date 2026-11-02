@@ -2822,6 +2822,31 @@ hit inside a run (`_assess` passes no `model`), so every re-run pays full price.
 tender. Run `5a9d4ecc` has been `retrieving` since 27 Oct; `reconcile` covers
 tenders, not runs.
 
+### Step 20 - the review flag says what it is, and a filled sheet gets graded (D-128)
+
+- Every `review_reason` was read. One path could flag a row with no reason: the
+  verifier's `reasons` holds only failed layers, while `review_required` is also
+  true when a layer passes unsure - family-level evidence. Added
+  `VerificationReport.review_reasons` (failed and unsure) and built the flag from
+  it, so the queue never prints "No reason recorded". The rest of the reasons
+  name their cause; none is a bare "needs review".
+- The review queue and the evidence drawer each carry one line: a flag says where
+  to look, not what to decide, and this tool records no decision.
+- `eval/audit_score.py` grades a filled sheet - `audit_ok`, `correct_status`,
+  `notes` - joined on `pair`, refusing a row nobody graded, a repeated id and an
+  unknown status. Reports n audited, accuracy among audited, false-confident rate,
+  flagged-but-correct, citation correctness, and that a sample of published rows
+  measures precision, not what was missed. Writes `eval/results/`, never the
+  sheet. `make eval-audit SHEET=...`; `eval/README.md` and `README.md` describe it.
+
+*Verified:* targeted files only - `tests/test_verifier.py`, `test_matching.py`,
+`test_evidence.py` (59 passed), `eval/tests/test_audit_score.py` with
+`test_harness.py` (24 passed, 7 of them new, over a synthetic sheet written by the
+real exporter), and the 8 `ReportPage` frontend tests. The real
+`eval/audit/GEM_9671792-items-10-11-audit.csv` is refused with its 15 unfilled
+pair ids and no file written, which is the intended answer while nobody has
+filled it.
+
 ### Step 21 - a re-read of an already-matched tender crashed (D-129)
 
 The report was concrete: re-uploading `9d62cf12` raised

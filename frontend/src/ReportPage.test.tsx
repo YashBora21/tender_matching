@@ -58,6 +58,8 @@ describe('ReportPage', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Review queue/ }))
     expect(screen.getByText('The corpus says nothing about the end connection')).toBeTruthy()
+    // The queue points at what to look at; it is not a place to record a decision.
+    expect(screen.getByText(/does not record the decision/)).toBeTruthy()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Show in table' })[0])
 

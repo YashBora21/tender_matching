@@ -286,16 +286,19 @@ def _page_text(path: str, page: int) -> Optional[str]:
         raise EvalError(f"could not read {Path(path).name}: {exc}") from exc
 
 
-def _citation(index: dict[tuple[str, str], Path], result: dict) -> dict:
-    evidence = result.get("evidence")
-    if not evidence:
-        return {"outcome": "uncited", "reason": "the claim carries no evidence row"}
+def citation(index: dict[tuple[str, str], Path], evidence: dict) -> dict:
+    """Check one quoted claim against the page it cites.
+
+    Public and taking the evidence row itself, because the audit sheet grades
+    the same quotes from a CSV rather than from a report JSON.
+    """
+    evidence = evidence or {}
     quote = evidence.get("quote")
     page = evidence.get("page")
     if not quote or not str(quote).strip():
-        return {"outcome": "uncited", "reason": "the evidence row has no quote"}
+        return {"outcome": "uncited", "reason": "the claim carries no quote"}
     if not isinstance(page, int) or isinstance(page, bool) or page < 1:
-        return {"outcome": "uncited", "reason": "the evidence row has no page"}
+        return {"outcome": "uncited", "reason": "the claim cites no page"}
 
     path = source_for(index, evidence)
     if path is None:
@@ -386,7 +389,7 @@ def score(report: dict, labels: list[GoldLabel], data_dir: Path) -> dict:
 
     index = corpus_index(data_dir)
     checks = [
-        (label, result, _citation(index, result))
+        (label, result, citation(index, result.get("evidence") or {}))
         for label, result in labelled
         if result["status"] in CLAIMS
     ]
