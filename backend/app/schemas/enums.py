@@ -58,6 +58,11 @@ class ReasonCode(StrEnum):
     UNIT_NOT_COMPARABLE = "unit_not_comparable"
     # The stored operator is not one the registry can apply.
     OPERATOR_NOT_COMPARABLE = "operator_not_comparable"
+    # The rule that keeps a clause inside its own BOQ item's category (FR-17)
+    # removed the only documents this manufacturer has. The pair was never
+    # compared, and the corpus's own labels are why - which is not the same
+    # statement as "the catalogue is silent about this capability" (D-135).
+    CATEGORY_MISMATCH = "category_mismatch"
 
 
 class LedgerStatus(StrEnum):

@@ -3307,3 +3307,49 @@ count; an unmeasured run prints the sentence, not zeros). 44 pass in
 `test_runs.py`, 31 frontend tests pass, `tsc --noEmit` is clean, and the full unit
 suite passes.
 
+## D-135 - A pair the category rule dropped is reported as one
+
+A requirement is compared only against documents in its own BOQ item's category
+(FR-17, non-negotiable 5), and when that leaves nothing to read the run said *the
+corpus holds nothing that answers this requirement* - the same words a genuine gap
+produces. The status was right: `no_evidence_found` counts as coverage and never as
+a failing capability (PRD 4). What was missing is that a reviewer could not tell
+"this manufacturer's catalogue is silent about the end connection" apart from "this
+manufacturer sells pumps and the item is a valve", which is not a finding about the
+manufacturer at all but the shape of the corpus.
+
+It follows D-101's pattern exactly: the status stays, and a code says why the
+comparison never ran. `ReasonCode.CATEGORY_MISMATCH` is the sixth value;
+`result.reason_code` is a VARCHAR with a CHECK list rather than a native type, so
+migration `0013` drops and recreates the constraint instead of altering an enum, and
+a freshly created database gets the same list from `_enum(ReasonCode, ...)` in
+`repositories/schema.py`.
+
+*What it will not claim:* the code is set only when the corpus's own
+`document.category` column says so, and only on the path that retrieved nothing. A
+document that declares no category is kept by the rule - silence is not a different
+category - so a corpus whose manifest never filled the column keeps reporting an
+ordinary gap, and the category is never inferred here from a file name, which is
+retrieval's job. The question is asked in the scope the search was asked in: the
+manufacturer, and the model when the clause names one, so a clause about one model
+is not called excluded by what that maker's other products declare. It costs one
+`SELECT DISTINCT` on the empty path, no model call, and no new timed stage: a
+microsecond read is not a column a reader needs.
+
+*What a report contains now:* the review reason reads *not compared: this item is
+valves, and the corpus for X declares pumps*. `reason_code` was already a column in
+the CSV and a field on every stored result, so a report of a run made after this
+change counts the category-excluded pairs apart from the silent ones; the sentence
+reaches the HTML review flag and the frontend's flag tooltip and evidence drawer
+without either of them changing. No status, score, coverage or flag moved: a pair
+that was coverage is coverage still.
+
+*Verified:* 2 tests (a pair the rule dropped earns the code and names both
+categories; the probe joins the product when the clause names a model). 34 pass in
+`test_matching.py` and the full unit suite passes.
+
+*Left:* a database that has not applied `0013` rejects the write, so `make migrate`
+comes before the next run; the new constraint has no integration coverage (it needs
+`TEST_DATABASE_URL`); and the frontend still shows no `reason_code` column, so a
+reader gets the sentence and not the code.
+

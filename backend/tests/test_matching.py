@@ -36,6 +36,37 @@ class FakeSession:
         return _NoRows()
 
 
+class _DeclaresCategory:
+    """A session whose corpus holds documents, and they declare a category.
+
+    `first()` answers nothing, so the product lookup and the fact cache both
+    miss; `all()` is only ever asked by the category probe. The statements are
+    kept so a test can say what the probe asked for.
+
+    These are synthetic rows: the corpus this test reads is a list, not PDFs.
+    """
+
+    def __init__(self, rows: list[tuple]) -> None:
+        self.rows = rows
+        self.statements: list = []
+
+    def commit(self) -> None:
+        pass
+
+    def execute(self, statement):
+        self.statements.append(statement)
+        rows = self.rows
+
+        class _Answer:
+            def first(self):
+                return None
+
+            def all(self):
+                return rows
+
+        return _Answer()
+
+
 class FakeClient:
     """A client that answers with what it is given."""
 
@@ -651,6 +682,55 @@ def test_a_silent_corpus_has_no_reason_code(monkeypatch):
 
     assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
     assert result.reason_code is None
+
+
+def test_a_pair_the_category_rule_dropped_is_reported_as_one(monkeypatch):
+    """The corpus is not silent: its documents declare a product this clause is
+    not about, and the item's category is what kept them out of the pair. That
+    is our exclusion, so it is named apart from a gap (FR-17, D-135)."""
+    from app.schemas.enums import ReasonCode
+    from app.services.match import match
+
+    monkeypatch.setattr(match, "search", lambda *a, **k: [])
+
+    result = match_requirement(
+        _DeclaresCategory([("pumps",)]),
+        "Duty shall be 1500 RPM",
+        category="valves",
+        manufacturer_name="Synthetic Manufacturer",
+        client=FakeClient({}),
+    )
+
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.reason_code is ReasonCode.CATEGORY_MISMATCH
+    assert result.review_required is True
+    assert "valves" in result.review_reason
+    assert "pumps" in result.review_reason
+    assert result.llm_calls == 0
+
+
+def test_the_category_probe_asks_for_the_model_the_clause_names(monkeypatch):
+    """A clause about one model is not excluded by what the manufacturer's
+    other products declare, so the probe is scoped the same way the search is."""
+    from app.schemas.enums import ReasonCode
+    from app.services.match import match
+
+    monkeypatch.setattr(match, "search", lambda *a, **k: [])
+    session = _DeclaresCategory([("pumps",)])
+
+    result = match_requirement(
+        session,
+        "Duty shall be 1500 RPM",
+        category="valves",
+        manufacturer_name="Synthetic Manufacturer",
+        model="SYNTHETIC-1",
+        client=FakeClient({}),
+    )
+
+    probes = [str(s) for s in session.statements if "DISTINCT" in str(s)]
+    assert probes, "the category probe never ran"
+    assert "JOIN product" in probes[0]
+    assert result.reason_code is ReasonCode.CATEGORY_MISMATCH
 
 
 def test_a_verified_fact_is_answered_without_retrieving_again(monkeypatch):

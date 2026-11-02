@@ -241,7 +241,21 @@ def match_requirement(
         )
     result.candidates = len(candidates)
     if not candidates:
-        result.reason = "the corpus holds nothing that answers this requirement"
+        excluded = _categories_excluded_here(
+            session, manufacturer_name, category, model
+        )
+        if excluded:
+            # The corpus is not silent about this manufacturer: it holds
+            # documents, and they declare a product this clause is not about.
+            # That is our exclusion, not a finding about the capability, so it
+            # is named apart from an ordinary gap (FR-17, D-135).
+            result.reason_code = ReasonCode.CATEGORY_MISMATCH
+            result.reason = (
+                f"not compared: this item is {category}, and the corpus for "
+                f"{manufacturer_name} declares {', '.join(excluded)}"
+            )
+        else:
+            result.reason = "the corpus holds nothing that answers this requirement"
         result.review_required = True
         result.review_reason = result.reason
         return result
@@ -547,6 +561,46 @@ def _range_for(operator: Operator, value: Optional[str]) -> Optional[tuple[float
     number (D-121).
     """
     return parse_range(value) if operator is Operator.BETWEEN else None
+
+
+def _categories_excluded_here(
+    session: Session,
+    manufacturer_name: Optional[str],
+    category: Optional[str],
+    model: Optional[str],
+) -> list[str]:
+    """What this manufacturer's documents declare, when it is not this item's category.
+
+    Retrieval keeps a clause inside its own BOQ item's category (FR-17) by
+    dropping every document that declares a different one, so a pair can come
+    back with nothing to read while the corpus is full of that manufacturer's
+    catalogues. The stored category is the only thing asked here: a document
+    that declares none is kept by the rule, so it is not an exclusion, and
+    naming one would be a guess about what the corpus means.
+    """
+    if not manufacturer_name or not category:
+        return []
+    from app.repositories.schema import document, manufacturer, product
+    from app.services.match.category import category_names
+
+    others = sorted(category_names() - {category})
+    if not others:
+        return []
+    statement = (
+        select(document.c.category)
+        .select_from(document)
+        .join(manufacturer, manufacturer.c.id == document.c.manufacturer_id)
+        .where(manufacturer.c.name == manufacturer_name)
+        .where(document.c.category.in_(others))
+    )
+    if model:
+        # The same scope the search was asked in: a clause about one model is
+        # not excluded by what the manufacturer's other products declare.
+        statement = statement.join(
+            product, product.c.id == document.c.product_id
+        ).where(product.c.model == model)
+    rows = session.execute(statement.distinct()).all()
+    return sorted({str(row[0]) for row in rows})
 
 
 def _cached_fact(

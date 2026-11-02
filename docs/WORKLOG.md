@@ -3044,3 +3044,38 @@ which clause it is inside, and guessing one from the counts would fabricate the
 state this step exists to report honestly. P3 (the candidate-cap experiment) and
 P5 (higher API limits) stay with the user, and `make migrate` is still owed
 before a run writes metrics at all.
+
+### Step 27 - a pair the category rule dropped says so (D-135)
+
+*Date: 2026-11-02. Step 5 of the speed-up plan: manufacturer relevance as an
+explicit, reported exclusion.*
+
+Retrieval keeps a clause inside its own BOQ item's category (FR-17), and when that
+empties the candidate list the run said *the corpus holds nothing that answers this
+requirement* - the sentence a genuine gap also produces. The status was already the
+right one (`no_evidence_found`, coverage, never a fail), so this changes only the
+*why*: a sixth `ReasonCode`, `category_mismatch`, set on the same pair, following
+D-101's rule that a limit of the system is recorded as a code and not as a verdict.
+
+The code is set from the corpus's own `document.category` column, on the path that
+retrieved nothing, in the scope the search was asked in (manufacturer, and model
+when the clause names one). A document that declares no category is kept by the
+rule, so a manifest that never filled the column keeps its plain gap sentence and
+the category is never inferred from a file name here. `result.reason_code` is a
+VARCHAR plus CHECK, so migration `0013` recreates the constraint list; nothing was
+renamed, no status or score moved, and no report section was added - the reason
+arrives in the columns the report already has.
+
+**Files:** `schemas/enums.py` (`ReasonCode`), `services/match/match.py`
+(`_categories_excluded_here`, and the empty-candidate branch), `alembic/versions/
+0013_reason_code_category.py`, `tests/test_matching.py`.
+
+**Verified:** 2 tests added; 34 pass in `test_matching.py` and the full unit suite
+passes (674 collected). `alembic heads` shows one head. The existing
+*silent corpus has no reason code* test still passes unchanged, which is what shows
+the code is only set when the corpus itself declared the other category.
+
+**Left:** `make migrate` before the next run writes a pair with the new code, and
+the recreated CHECK has no integration coverage without `TEST_DATABASE_URL`. The
+frontend has no `reason_code` column, so the reviewer reads the sentence rather
+than counting the codes; the CSV and the report JSON carry the code either way.
