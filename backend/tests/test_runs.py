@@ -58,6 +58,7 @@ class FakeRunRepo:
         self.history: list[tuple[str, str | None]] = []
         self.created: dict = {}
         self.resume_id = None
+        self.compared = None
 
     def create(self, tender_id, *, manufacturers, config_snapshot, corpus_hash=""):
         self.created = {
@@ -70,6 +71,7 @@ class FakeRunRepo:
         return RUN_ID
 
     def resumable(self, tender_id, manufacturers, snapshot=None):
+        self.compared = snapshot
         return self.resume_id
 
     def get(self, run_id):
@@ -733,6 +735,30 @@ def test_a_run_is_continued_only_when_it_would_ask_the_same_questions():
     assert _answers_alike(base, {**base, "llm_call_budget": 2000})
     assert not _answers_alike(base, {**base, "llm_model": "openai/gpt-oss-120b"})
     assert not _answers_alike(base, {**base, "match_max_candidates": 20})
+
+
+def test_the_snapshot_an_attempt_is_compared_with_is_the_one_a_run_stores(monkeypatch):
+    """Both sides of the comparison must be the same shape.
+
+    The stored snapshot carries `manufacturers`; building the current one
+    without them made every attempt look different, so a stopped run was never
+    continued and each segment of the paid pass opened a new run instead
+    (D-130).
+    """
+    monkeypatch.setattr(
+        "app.services.output.runs.list_manufacturers",
+        lambda session: [{"name": "Acme"}],
+    )
+    monkeypatch.setattr(
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([])
+    )
+    monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
+    repo = FakeRunRepo()
+
+    create_run(FakeSession(), TENDER_ID, repo=repo)
+
+    assert repo.compared == repo.created["config_snapshot"]
+    assert repo.compared["manufacturers"] == ["Acme"]
 
 
 def test_a_new_run_is_created_when_nothing_can_be_continued(monkeypatch):

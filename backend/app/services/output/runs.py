@@ -251,7 +251,10 @@ def create_run(
 
     names = _manufacturer_names(session, manufacturers)
     run_repo = repo or RunRepo(session)
-    snapshot = config_snapshot()
+    # The snapshot this attempt would store, exactly as `create` stores it:
+    # comparing it against one that lacks `manufacturers` would find the two
+    # different on every tender and so never continue anything (D-130).
+    snapshot = {**config_snapshot(), "manufacturers": names}
     # A run that a limit stopped is continued, not duplicated: it already paid
     # for the pairs it stored, and the command the caller runs again is the
     # same command - as long as it would ask the same questions (D-130).

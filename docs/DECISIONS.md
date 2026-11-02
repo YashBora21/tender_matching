@@ -3128,3 +3128,15 @@ missing one is, and the run ends `done`. Plus a test that a stopped run is
 returned instead of created, one that a fresh run is created when nothing
 matches, and a unit test of `_answers_alike`: a changed spend limit still
 resumes, a changed model or candidate cap does not.
+
+*Correction, same day:* as committed, the comparison never succeeded.
+`RunRepo.create` stores `{**config_snapshot, "manufacturers": names}`, and
+`create_run` compared the stored row against a plain `config_snapshot()` that
+has no `manufacturers` key, so every attempt looked different and every attempt
+wrote a new run. On the first real pass that produced two empty runs
+(`1c357f89`, `83483c7c`) where one continuation was intended, each paying for
+the same pairs again. `create_run` now builds the snapshot exactly as it will be
+stored and passes that to both the comparison and the insert; a test asserts
+`repo.compared == repo.created["config_snapshot"]`, which is the invariant whose
+absence hid this.
+
