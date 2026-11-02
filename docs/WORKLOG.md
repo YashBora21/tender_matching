@@ -2821,3 +2821,32 @@ hit inside a run (`_assess` passes no `model`), so every re-run pays full price.
 `tender_page` is empty project-wide and self-heals on the next ingest of each
 tender. Run `5a9d4ecc` has been `retrieving` since 27 Oct; `reconcile` covers
 tenders, not runs.
+
+### Step 21 - a re-read of an already-matched tender crashed (D-129)
+
+The report was concrete: re-uploading `9d62cf12` raised
+`ForeignKeyViolation` on `result_requirement_id_fkey`, and the tender stayed at
+`processing`. Reproduced against `tender_test`: 31 requirements, one
+`rate_limited` run with 7 results.
+
+- `replace_items` and `replace_requirements` now call `_forget_results` first.
+  Both delete the tender's requirement rows, and the FK refuses while a result
+  still points at one - the items stage deletes first, so that is where the
+  re-upload failed. The results go with the rows they answered, and the count is
+  logged.
+- `audit_tender` rolls the session back when the pipeline raises. Without it the
+  caller's `set_status` runs on an aborted transaction, fails, and the tender
+  never reaches a terminal state.
+
+*Verified:* three tests - a requirements re-read, an items re-read, and the audit
+rollback. On the real tender, inside a rolled-back transaction: 7 results
+removed, 31 requirements deleted, no error; after the rollback, 31 requirements
+and 7 results still there.
+
+**Left:** requirement ids are `uuid4`, so a re-read re-keys every requirement and
+the confirmed gold labels (keyed on `requirement_id`) stop resolving. Stable ids
+from item + page + clause text are the real fix, and that is an ingestion change.
+The staged run itself is still blocked on the provider: the key in `.env` is a
+free Groq tier at 8,000 TPM, which is ~3 calls a minute for this prompt, and
+`execute_run` refuses to resume a `rate_limited` run even though its loop already
+skips the pairs it has (`answered`). Both need a decision before the paid pass.

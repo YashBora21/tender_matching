@@ -173,6 +173,13 @@ def audit_tender(
         )
     except Exception as exc:  # noqa: BLE001 - one bad tender must not stop the audit
         logger.warning("could not process %s: %s", tender_id, exc)
+        # A statement that failed leaves the transaction unusable, and the
+        # caller's next write is the tender's terminal status. Without this the
+        # status write fails too and the tender sits at `processing` with
+        # nothing left to move it (D-128).
+        session = getattr(repo, "session", None)
+        if session is not None:
+            session.rollback()
         return TenderAudit(
             tender_id=tender_id,
             filename=manifest.get("filename") or tender_dir.name,

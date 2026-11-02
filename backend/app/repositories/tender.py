@@ -27,15 +27,20 @@ from sqlalchemy.orm import Session
 
 from app.schemas.enums import TenderStatus
 
+from app.core.logging import get_logger
 from app.repositories.schema import (
     extraction_batch,
     llm_cache,
     requirement,
+    result,
+    run,
     tender,
     tender_attachment,
     tender_item,
     tender_page,
 )
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -284,6 +289,31 @@ class TenderRepo:
 
     # --- the items ---
 
+    def _forget_results(self, tender_id: str) -> int:
+        """Remove the results of this tender's runs, and say how many.
+
+        A result names one requirement row. The items and the requirements are
+        both replaced by a re-read, and the foreign key refuses to delete a
+        requirement a result still points at - so a tender that had ever been
+        matched could never be read again, which is exactly what a
+        `rate_limited` tender needs to be. The results are not `carried over`
+        because a re-read is a new set: every requirement gets a new id (D-128).
+        """
+        removed = self.session.execute(
+            delete(result).where(
+                result.c.run_id.in_(
+                    select(run.c.id).where(run.c.tender_id == tender_id)
+                )
+            )
+        ).rowcount
+        if removed:
+            logger.warning(
+                "tender %s: %d result(s) removed with the rows they answered",
+                tender_id,
+                removed,
+            )
+        return removed
+
     def replace_items(self, tender_id: str, items: list[dict]) -> int:
         """The tender's items, replacing what was there.
 
@@ -294,6 +324,7 @@ class TenderRepo:
         and the number, and a bill of quantities that repeats a number is a
         document with a mistake in it, not a reason to lose the tender.
         """
+        self._forget_results(tender_id)
         self.session.execute(
             delete(requirement).where(requirement.c.tender_id == tender_id)
         )
@@ -344,7 +375,12 @@ class TenderRepo:
     # --- the requirements ---
 
     def replace_requirements(self, tender_id: str, requirements: list[StoredRequirement]) -> int:
-        """The tender's requirements, replacing what was there."""
+        """The tender's requirements, replacing what was there.
+
+        The results that answered the old set go with it: a re-read is a new
+        set, and every requirement gets a new id.
+        """
+        self._forget_results(tender_id)
         self.session.execute(
             delete(requirement).where(requirement.c.tender_id == tender_id)
         )

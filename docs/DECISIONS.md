@@ -2982,3 +2982,44 @@ for those 63 pairs.
 executes, and the command parses `"delval_flow, Flowserve"` into two trimmed
 names. The `_matching` and `create_run` fakes in the existing tests were updated
 for the new parameter; the full suite is 651 passing.
+
+---
+
+## D-129 - A re-read replaces the answers along with the rows they answered
+
+Re-uploading `9d62cf12` - a `rate_limited` tender with one run holding 7 results
+- raised `ForeignKeyViolation` on `result.requirement_id -> requirement.id`, and
+the tender then sat at `processing` with no terminal state. Reproduced against
+the real rows: 31 requirements, one `rate_limited` run, 7 results.
+
+Two separate faults:
+
+- **The delete.** `replace_items` and `replace_requirements` both delete the
+  tender's `requirement` rows, and the foreign key refuses while a `result` still
+  points at one. Since the items stage runs first, that is where the re-upload
+  hit it. `_forget_results(tender_id)` now removes the results of the tender's
+  runs before either delete, and logs how many went. A result names exactly one
+  requirement row, and a re-read gives every requirement a new `uuid4`, so those
+  results are not answers to the new set: keeping them would leave a report
+  pointing at rows that no longer exist.
+- **The dead transaction.** `audit_tender` caught the pipeline's exception and
+  returned a failure, but left the aborted transaction in place. `ingest` then
+  wrote the terminal status on that transaction, which failed in turn, so the
+  tender had no state a reader could act on. It now rolls the repo's session back
+  before returning, and the failure is recorded where it belongs.
+
+*Why delete the results and not refuse the re-read:* a `rate_limited` tender is
+resumed by reading it again. Refusing whenever results exist would make the one
+case that needs a re-read impossible.
+
+*Left:* requirement ids are `uuid4`, so a re-read still re-keys every
+requirement, and a gold label or audit row keyed on a requirement id stops
+resolving after one. Deriving the id from the clause's provenance and text would
+make it stable; that is a change to ingestion, not a guard, and was not made
+here.
+
+*Verified:* three tests - a requirements re-read and an items re-read, each with
+a stored result, and an audit test that the session is rolled back when the
+pipeline raises. Against the real failing tender, inside a transaction that was
+then rolled back: 7 results removed, the 31 requirements deleted without an
+error, and the rows intact after the rollback.
