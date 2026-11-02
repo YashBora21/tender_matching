@@ -3,6 +3,7 @@
     make e2e TENDER=path/to/tender.pdf        # upload it, read it, match it
     make e2e TENDER=<tender_id>               # match a tender already read
     make e2e TENDER=<id> ARGS=--check         # only say what is missing
+    make e2e TENDER=<id> ARGS="--manufacturers delval_flow,Flowserve"
 
 The command is the chain the API runs, in the foreground and in one process:
 ingest the corpus if the database has not, embed the chunks that have no
@@ -310,11 +311,13 @@ def _tender(session: Session, reference: str) -> tuple[Step, str]:
     return Step(STEP_TENDER, state, f"status {status}"), stored
 
 
-def _matching(session: Session, tender_id: str) -> tuple[Step, str]:
+def _matching(
+    session: Session, tender_id: str, manufacturers: Optional[list[str]] = None
+) -> tuple[Step, str]:
     """Create the run and execute it in this process."""
     from app.services.output.runs import create_run, execute_run
 
-    run_id = create_run(session, tender_id)
+    run_id = create_run(session, tender_id, manufacturers)
     session.commit()
     progress = execute_run(run_id, session=session)
     detail = (
@@ -368,7 +371,12 @@ def _needs_a_model(session: Session, tender_id: str) -> Optional[str]:
 
 
 def _run(
-    session: Session, reference: str, *, out_dir: Optional[Path], check_only: bool
+    session: Session,
+    reference: str,
+    *,
+    out_dir: Optional[Path],
+    check_only: bool,
+    manufacturers: Optional[list[str]] = None,
 ) -> E2EResult:
     result = E2EResult(check_only=check_only)
     try:
@@ -410,7 +418,7 @@ def _run(
             result.next_steps.append("set LLM_API_KEY, LLM_MODEL and LLM_BASE_URL in .env")
             return result
 
-        matching_step, run_id = _matching(session, tender_id)
+        matching_step, run_id = _matching(session, tender_id, manufacturers)
         result.steps.append(matching_step)
         result.run_id = run_id
         if matching_step.failed:
@@ -433,15 +441,28 @@ def run_end_to_end(
     session: Optional[Session] = None,
     out_dir: Optional[Path] = None,
     check_only: bool = False,
+    manufacturers: Optional[list[str]] = None,
 ) -> E2EResult:
     """Take the whole chain, or stop at the first step that cannot be taken."""
     if session is not None:
-        return _run(session, reference, out_dir=out_dir, check_only=check_only)
+        return _run(
+            session,
+            reference,
+            out_dir=out_dir,
+            check_only=check_only,
+            manufacturers=manufacturers,
+        )
 
     from app.repositories.db import session_scope
 
     with session_scope() as own:
-        return _run(own, reference, out_dir=out_dir, check_only=check_only)
+        return _run(
+            own,
+            reference,
+            out_dir=out_dir,
+            check_only=check_only,
+            manufacturers=manufacturers,
+        )
 
 
 def preflight(session: Session, *, tender_ref: Optional[str] = None) -> dict:
@@ -492,6 +513,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="say what is missing, and change nothing",
     )
     parser.add_argument("--out", default=None, help="write the report here (default: DATA_DIR/e2e)")
+    parser.add_argument(
+        "--manufacturers",
+        default=None,
+        help="comma-separated names to compare against (default: the whole corpus)",
+    )
     args = parser.parse_args(argv)
 
     settings = get_settings()
@@ -499,10 +525,15 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     configure_logging(settings.log_level)
 
+    manufacturers = None
+    if args.manufacturers:
+        manufacturers = [name.strip() for name in args.manufacturers.split(",") if name.strip()]
+
     result = run_end_to_end(
         args.tender,
         out_dir=Path(args.out) if args.out else None,
         check_only=args.check,
+        manufacturers=manufacturers,
     )
     print(result.as_text())
     return result.exit_code

@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from app.services.tender.collect import (
+    _filename_for,
     classify_document,
     collect_tender,
     discover_links,
@@ -47,6 +48,14 @@ def server():
                 self.send_response(403)
                 self.send_header("Content-Length", "0")
                 self.end_headers()
+            elif self.path.startswith("/contract/slafds"):
+                # Two different documents behind one path, told apart by the
+                # query string, exactly as GeM serves its SLA and ATC links.
+                body = b"%PDF-1.4 " + self.path.encode()
+                self.send_response(200)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
             else:
                 self.send_response(404)
                 self.send_header("Content-Length", "0")
@@ -155,6 +164,58 @@ def test_a_scanned_document_is_still_a_document(tmp_path):
     kind, pages = classify_document(data, "x.pdf")
     assert kind == "scanned"
     assert pages == 1
+
+
+def test_a_gem_download_is_named_by_its_download_path():
+    """Every GeM SLA and ATC link ends in `/contract/slafds`, so the path
+    names four different documents the same. The name is in the query."""
+    url = (
+        "https://fulfilment.gem.gov.in/contract/slafds?"
+        "fileDownloadPath=SLA_UPLOAD_PATH/2026/Jul/GEM/CL10360/NewIP_ab12_CPS2HMDAM1.pdf"
+    )
+
+    assert _filename_for(url, 2) == "NewIP_ab12_CPS2HMDAM1.pdf"
+
+
+def test_two_gem_downloads_do_not_share_a_name():
+    first = (
+        "https://fulfilment.gem.gov.in/contract/slafds?"
+        "fileDownloadPath=SLA_UPLOAD_PATH/2026/Jul/GEM/CL10360/NewIP_ab12_CPS2HMDAM1.pdf"
+    )
+    second = (
+        "https://fulfilment.gem.gov.in/contract/slafds?"
+        "fileDownloadPath=SLA_UPLOAD_PATH/2026/Jul/GEM/CLM0010/ATC_cd34_CPS2HMDAM1.pdf"
+    )
+
+    assert _filename_for(first, 2) != _filename_for(second, 3)
+
+
+def test_a_plain_url_is_named_by_its_path():
+    assert _filename_for("https://example.com/docs/spec.pdf", 0) == "spec.pdf"
+    assert _filename_for("https://example.com/", 7) == "document-7"
+
+
+def test_two_documents_behind_one_path_are_both_frozen(tmp_path, server, monkeypatch):
+    """The bug this guards: both links resolve to `slafds`, the second fetch
+    overwrote the first, and the tender was read against half its papers."""
+    base, _ = server
+    _allow_localhost(monkeypatch)
+    path = tmp_path / "tender.pdf"
+    _wrapper_with_links(
+        path,
+        [
+            f"{base}/contract/slafds?fileDownloadPath=SLA_UPLOAD_PATH/CL10360/NewIP_ab12.pdf",
+            f"{base}/contract/slafds?fileDownloadPath=SLA_UPLOAD_PATH/CLM0010/ATC_cd34.pdf",
+        ],
+    )
+
+    manifest = collect_tender("T1", path, tmp_path / "out")
+
+    names = [document.filename for document in manifest.documents]
+    assert names == ["NewIP_ab12.pdf", "ATC_cd34.pdf"]
+    for document in manifest.documents:
+        assert document.status == "new"
+        assert (tmp_path / "out" / document.path).exists()
 
 
 def test_a_fetched_document_is_frozen_with_its_hash_and_url(tmp_path, server, monkeypatch):

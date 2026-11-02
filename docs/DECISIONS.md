@@ -2795,3 +2795,67 @@ Beyond that, the changes are the package docstrings and the one-line code
 reference in `DECISIONS.md` and `WORKLOG.md`. All 47 distinct `app.services.*`
 references in the tree resolve to a real module, and the full suite passes
 unchanged (645).
+
+---
+
+## D-126 - An attachment is named by the name in its link, not by the path it shares
+
+GeM serves every SLA and ATC link through the same path: `/contract/slafds`,
+with the real file named in the `fileDownloadPath` query parameter.
+`_filename_for` read only `urlsplit(url).path`, so every one of those links
+became `raw/slafds` and each fetch overwrote the one before it. Measured on the
+stored tenders: `2bc8f917` held four attachment rows over three files - the
+24-page SLA replaced on disk by the 17-page ATC - and `acdd1135`, a tender whose
+status is `done`, held four rows over one file, two of them with no path at all.
+A tender read in that state is read against a document its own row does not
+name.
+
+The name now comes from `fileDownloadPath` when the query carries one, unquoted
+and reduced to its last segment, and from the URL path otherwise, for the hosts
+that do put the name there. Two links that still resolve to one name are both
+kept: the later one is prefixed with its index and recorded in a `claimed` map,
+instead of silently replacing the first.
+
+The cache path changed with it. A frozen copy used to be written under the *old*
+manifest's filename, so a tender collected before this fix would never have
+reached disk under the corrected name. The cached bytes are now written under
+the name this run computes.
+
+*Why the collision guard and not only the query parameter:* the parameter is a
+GeM convention, not a promise from every host. The guard is what makes "every
+attachment has its own file" true whichever host the link came from.
+
+*Verified:* four tests - a GeM download is named from its download path, two
+downloads behind one path get different names, a plain URL still uses its path
+(and a URL with no name falls back to `document-<n>`), and two documents behind
+one `/contract/slafds` path are both frozen and both recorded `new`. Run against
+the stored `2bc8f917` manifest, the two colliding URLs now resolve to
+`NewIP_dd4c4653-7156-4592-81be1785321584049_CPS2HMDAM1.pdf` and
+`ATC_f7ad0fe4-2309-421f-95f81785321657881_CPS2HMDAM1.pdf`.
+
+---
+
+## D-127 - A test run can name its manufacturers
+
+`make e2e` always ran the whole corpus: 21 requirements against 20
+manufacturers is 420 pairs, and `_match_candidate` spends at least one model
+call on every candidate passage, so a run under `LLM_CALL_BUDGET=300` could
+never finish - it stopped at the budget and landed `rate_limited` with a partial
+report. The API already accepted `manufacturers` on `POST /api/runs`; only the
+CLI had no way to pass it.
+
+`--manufacturers a,b` is threaded from `main()` through `run_end_to_end` and
+`_run` into `_matching`, which hands the list to `create_run`. Omitted, the
+behaviour is unchanged: the whole corpus. A name the corpus does not hold is
+still rejected by `create_run` with the names it does hold, so a typo is an
+error and not an empty report.
+
+*Why:* the first honest end-to-end pass has to be cheap enough to repeat. The
+three manufacturers the confirmed gold rows name (delval_flow, Flowserve,
+valmatic) cost 63 pairs instead of 420 - measured at 1,498 candidate passages
+for those 63 pairs.
+
+*Verified:* two tests - the named list reaches `create_run` and the run
+executes, and the command parses `"delval_flow, Flowserve"` into two trimmed
+names. The `_matching` and `create_run` fakes in the existing tests were updated
+for the new parameter; the full suite is 651 passing.

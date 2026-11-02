@@ -163,7 +163,12 @@ class _Calls:
         )
         monkeypatch.setattr(e2e, "_needs_a_model", lambda session, tid: None)
         monkeypatch.setattr(
-            e2e, "_matching", lambda session, tid: (step(e2e.STEP_MATCHING)[0], "run-1")
+            e2e,
+            "_matching",
+            lambda session, tid, manufacturers=None: (
+                step(e2e.STEP_MATCHING)[0],
+                "run-1",
+            ),
         )
 
         def fake_report(session, run_id, out_dir):
@@ -328,7 +333,7 @@ def test_a_run_stopped_by_the_budget_names_what_it_kept(monkeypatch):
         def commit(self) -> None:
             pass
 
-    monkeypatch.setattr(runs, "create_run", lambda session, tender_id: "run-1")
+    monkeypatch.setattr(runs, "create_run", lambda session, tender_id, manufacturers=None: "run-1")
     monkeypatch.setattr(
         runs,
         "execute_run",
@@ -347,3 +352,62 @@ def test_a_run_stopped_by_the_budget_names_what_it_kept(monkeypatch):
     assert step.state == "failed"
     assert "7 result(s) kept" in step.detail
     assert "Run the same command again" in step.detail
+
+
+def test_the_named_manufacturers_are_the_ones_compared(monkeypatch):
+    """The whole corpus is 20 makers; a test run against three of them costs a
+    fifteenth as much, so the command has to be able to name them."""
+    from types import SimpleNamespace
+
+    from app.services.output import runs
+
+    seen = {}
+
+    class _Session:
+        def commit(self) -> None:
+            pass
+
+    def fake_create_run(session, tender_id, manufacturers=None):
+        seen["manufacturers"] = manufacturers
+        return "run-1"
+
+    monkeypatch.setattr(runs, "create_run", fake_create_run)
+    monkeypatch.setattr(
+        runs,
+        "execute_run",
+        lambda run_id, session=None: SimpleNamespace(
+            status="done", results=3, manufacturers=["delval_flow"], llm_calls=9, error=None
+        ),
+    )
+
+    step, run_id = e2e._matching(_Session(), "tender-1", ["delval_flow"])
+
+    assert seen["manufacturers"] == ["delval_flow"]
+    assert run_id == "run-1"
+    assert step.state == "done"
+
+
+def test_the_command_reads_the_manufacturer_list(monkeypatch, calls, tmp_path):
+    calls.install(monkeypatch, facts=_ready_facts())
+    seen = {}
+
+    def fake_matching(session, tid, manufacturers=None):
+        seen["manufacturers"] = manufacturers
+        return Step(e2e.STEP_MATCHING, "done"), "run-1"
+
+    monkeypatch.setattr(e2e, "_matching", fake_matching)
+    monkeypatch.setattr(
+        e2e, "_report", lambda session, run_id, out_dir: (Step(e2e.STEP_REPORT, "done"), {})
+    )
+
+    class _Scope:
+        def __enter__(self):
+            return object()
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr("app.repositories.db.session_scope", lambda: _Scope())
+    main([str(tmp_path / "tender.pdf"), "--manufacturers", "delval_flow, Flowserve"])
+
+    assert seen["manufacturers"] == ["delval_flow", "Flowserve"]

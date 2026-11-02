@@ -2707,3 +2707,40 @@ the old-to-new table for a reader following an older decision.
 contents now import from the new path; the file names were not renamed, because
 a test file is named for the job it checks and renaming twenty of them adds
 churn to a commit whose whole point is that nothing moved but paths.
+
+---
+
+## Phase 20 - two things that would have wasted a paid run (started 2026-11-02)
+
+Before spending the company API budget on a real end-to-end pass, the backend
+was audited with zero model calls: migrations at head `0011_result_reason_code`,
+`/api/health` and `/api/preflight` both 200 with `can_run: true`, 101 corpus
+documents and 29,688 chunks all embedded locally, 20 manufacturers and 99
+products, 651 tests green. Two defects would have made the run either
+misleading or unaffordable, and both were fixed before anything was spent.
+
+### Step 19 - an attachment keeps its own name; a run can name its makers (D-126, D-127)
+
+- `collect._filename_for` now reads the `fileDownloadPath` query parameter GeM
+  puts the real name in, and `collect_tender` keeps two links that resolve to
+  one name by prefixing the later one with its index. The cached-copy path no
+  longer re-freezes a document under the old manifest's name, so a re-collect
+  actually writes the corrected names.
+- `--manufacturers a,b` on `make e2e`, threaded to `create_run`. Omitted, the
+  whole corpus runs as before.
+
+*Measured:* `2bc8f917` had four attachment rows over three files - the 24-page
+SLA overwritten by the 17-page ATC; `acdd1135`, a `done` tender, had four rows
+over one file. The two colliding GeM links now resolve to
+`NewIP_..._CPS2HMDAM1.pdf` and `ATC_..._CPS2HMDAM1.pdf`. The three gold
+manufacturers cost 63 pairs and 1,498 candidate passages instead of 420 pairs.
+
+**Left:** the atomizer does not split the two confirmed gold clauses
+(`6ffe6648`, `5c07614c`) into atoms - each stays one run-on clause with no
+attribute, operator or value, so it cannot reach `missing_capability` until the
+parser is worked on. `resolve_roles` still prefers `boq-pdf` over `kind: spec`,
+so a tender's SLA and ATC are collected but not read. `_cached_fact` can never
+hit inside a run (`_assess` passes no `model`), so every re-run pays full price.
+`tender_page` is empty project-wide and self-heals on the next ingest of each
+tender. Run `5a9d4ecc` has been `retrieving` since 27 Oct; `reconcile` covers
+tenders, not runs.

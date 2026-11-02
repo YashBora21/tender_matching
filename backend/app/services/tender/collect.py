@@ -257,9 +257,21 @@ def _has_boq_header(data: bytes) -> bool:
 
 
 def _filename_for(url: str, index: int) -> str:
-    from urllib.parse import urlsplit
+    """The name a document is frozen under.
 
-    name = urlsplit(url).path.rsplit("/", 1)[-1]
+    GeM puts the real name in the query string: every SLA and ATC link ends in
+    `/contract/slafds?fileDownloadPath=.../CPS2HMDAM1.pdf`, so the path alone
+    names four different documents `slafds` and the last one written wins. The
+    download path is read first, and the URL path is the fallback for the hosts
+    that carry the name there.
+    """
+    from urllib.parse import parse_qs, unquote, urlsplit
+
+    parts = urlsplit(url)
+    download = parse_qs(parts.query).get("fileDownloadPath", [""])[0]
+    name = unquote(download).rsplit("/", 1)[-1] if download else ""
+    if not name:
+        name = parts.path.rsplit("/", 1)[-1]
     name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._-")
     if not name:
         name = f"document-{index}"
@@ -310,6 +322,7 @@ def collect_tender(
         if doc.get("url")
     }
     cache_enabled = get_settings().fetch_cache_enabled
+    claimed: dict[str, str] = {}
 
     for index, url in enumerate(discover_links(wrapper_path)):
         allowed, note = robots_allows(url)
@@ -324,13 +337,16 @@ def collect_tender(
         # with the same hash is not fetched again.
         data: Optional[bytes] = None
         filename = _filename_for(url, index)
+        # Two links can still name the same file. A suffix keeps both on disk
+        # instead of letting the second one silently overwrite the first.
+        if claimed.setdefault(filename, url) != url:
+            filename = f"{index}-{filename}"
+            claimed[filename] = url
         target = raw_dir / filename
         if cache_enabled and old and old.get("sha256"):
             frozen = raw_dir / (old.get("filename") or "")
             if frozen.exists() and sha256_file(frozen) == old["sha256"]:
                 data = frozen.read_bytes()
-                filename = old.get("filename") or filename
-                target = frozen
 
         if data is None:
             try:
