@@ -137,4 +137,21 @@ describe('RunPage', () => {
     await screen.findByText('synthetic-tender.pdf')
     expect(screen.getByText('Ranking')).toBeTruthy()
   })
+
+  it('serves the report of a run the provider stopped', async () => {
+    // The API treats `rate_limited` as terminal and answers with the report of
+    // what it stored. A page that polled on would never show those answers.
+    vi.mocked(getRun).mockResolvedValue({
+      ...finished,
+      status: 'rate_limited',
+      results: 2,
+      progress_percent: 50,
+      error: 'the model was rate limited',
+    })
+
+    render(<RunPage runId="run-1" onNewTender={() => {}} />)
+
+    await screen.findByText('synthetic-tender.pdf')
+    expect(screen.getByText('Ranking')).toBeTruthy()
+  })
 })

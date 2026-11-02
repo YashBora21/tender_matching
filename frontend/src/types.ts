@@ -4,7 +4,16 @@
  * is not an error; a missing one the UI assumes is.
  */
 
-export type TenderStatus = 'queued' | 'processing' | 'done' | 'failed' | 'rate_limited'
+/** `incomplete` is the third state, and the one a reader most easily misreads:
+ * the document was opened, but not all of it was read, so its requirement list
+ * is short because of what is missing, not because the tender states less. */
+export type TenderStatus =
+  | 'queued'
+  | 'processing'
+  | 'done'
+  | 'failed'
+  | 'rate_limited'
+  | 'incomplete'
 
 export interface TenderUpload {
   tender_id: string

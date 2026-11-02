@@ -18,6 +18,7 @@ import { AssessmentTable } from './AssessmentTable'
 import { EvidenceDrawer } from './EvidenceDrawer'
 import { Notice } from './Notice'
 import { ReviewQueue } from './ReviewQueue'
+import { Trail } from './Trail'
 
 type Tab = 'requirements' | 'review'
 
@@ -93,6 +94,8 @@ export function ReportPage({
 
   return (
     <div className="stack">
+      <Trail stage="report" onBack={onNewTender} />
+
       <section className="panel">
         <div className="report-head">
           <div>
@@ -100,7 +103,8 @@ export function ReportPage({
             <h1>{report.tender.filename ?? 'Tender'}</h1>
             <p className="muted">
               {report.run.manufacturers.length} manufacturers · started{' '}
-              {formatDate(report.run.started_at)} · run {report.run.id.slice(0, 8)}
+              {formatDate(report.run.started_at)} · run{' '}
+              <span className="mono">{report.run.id.slice(0, 8)}</span>
             </p>
           </div>
           <div className="actions actions-end">

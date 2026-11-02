@@ -36,7 +36,7 @@ export function EvidenceDrawer({
         onClick={onClose}
       />
       <aside
-        className="drawer"
+        className={`drawer drawer-${result.status}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby="drawer-title"

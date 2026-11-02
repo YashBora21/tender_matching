@@ -2710,6 +2710,83 @@ churn to a commit whose whole point is that nothing moved but paths.
 
 ---
 
+## Phase 19 - the screens read like the artifact they produce (started 2026-11-02)
+
+The backend and its tests were audited for three phases; the frontend was not.
+Read on its own, it was two things: a visual default that could have been
+attached to any admin tool, and two affordances a reviewer needs and did not
+have - a way back from a report, and a way to stop a page that asks the API once
+a second. This phase changes `frontend/src` only. No backend file, no route, no
+request shape, no Docker or nginx config, and no number on screen was touched.
+
+### Step 17 - the case-file restyle, back and stop (D-124)
+
+- `styles.css` was rewritten around a token set taken from the work itself: a
+  cool ledger paper, ink, one seal navy, and the five PRD 4 verdict colours.
+  Three type roles - serif for headings and the evidence quote, system sans for
+  body, mono uppercase for labels, page numbers, run ids and document names.
+  No webfont, because the bundle is served static through nginx and the demo
+  machine may have no network.
+- One signature device: the verdict rail, a 3px left edge in the status colour,
+  reused on a report row, a rank card, a notice, the drawer, its quote and its
+  title, and in miniature in the brand mark. It is drawn from `--rail` and
+  `:has()` selectors, so it needed no new DOM and no new field. The mandatory
+  gate flips its card crimson with `.rank-card:has(.flag)`, which puts
+  "fails mandatory" ahead of the score in the reading order.
+- `App.tsx`: each view is entered as a history entry, so the browser Back button
+  returns to the upload from a report; the topbar gains a sticky "Back to the
+  tender" while a run is open, and an SVG brand mark.
+- `components/Trail.tsx` (new): Tender, Match, Report, with the current step
+  `aria-current="step"`. Only "Tender" is a button - "Match" is not a screen a
+  reviewer can go back to on purpose, so making it clickable would have been a
+  broken promise.
+- `RunPage.tsx` and `UploadPage.tsx`: "Stop watching" closes the page's own poll
+  or EventSource and leaves the last payload on screen, with "Watch it again" /
+  "Follow it again" to resume. There is no cancel route in the API and the
+  contract was out of scope, so the copy names the thing that stops: the page,
+  not the run.
+- `EvidenceDrawer.tsx`: `drawer-${result.status}` on the aside, which is how the
+  rail gets its colour without a prop per status.
+- Motion: a staggered rise on the stack, a breathing dot on a pill that is still
+  in flight, a sheen along the progress fill, a press scale on the controls - all
+  inside the existing `prefers-reduced-motion` guard.
+
+*Checked before writing:* how a breadcrumb should behave (hierarchy first, an
+escape hatch second, complementing Back rather than replacing it) and the polish
+list a design engineer expects - concentric radii, a header that says it is
+floating, tabular numbers, balanced headings, interruptible motion.
+
+**Left:** no visual-regression harness; the rails and the type roles were
+verified by computed style in the browser, which a future edit cannot re-check on
+its own. The run page still shows one percentage because that is all the API
+reports.
+
+### Step 18 - three backend states the screens did not speak (D-125)
+
+Every route the frontend calls was read against the handler that answers it.
+The shapes match - request fields, response fields, SSE event names, the
+attachment types, the CORS and nginx wiring. Three states did not exist in the
+UI:
+
+- a run ending `rate_limited` was polled forever, because the run page's
+  terminal set was `{done, failed}` while the API serves its report. Now
+  `{done, failed, rate_limited}`.
+- a tender ending `incomplete` left the upload page spinning "Reading the
+  tender…" with no run offered and no way out, because anything that was not
+  done, failed or rate-limited was read as still reading. It is its own phase,
+  quoting the stored reason and naming the one action that works.
+- four status words had no label and no colour, and one rule styled a status
+  (`running`) that no enum contains. The in-flight list now matches `RunStatus`.
+
+Two tests added, one per dead end. 29 frontend tests pass; build and lint clean.
+
+**Left:** three report fields the API returns and the app drops - `not_assessed`,
+`unknown_requirements` and the per-result `reason_code` - and the attachment
+panel's advice to re-upload a tender that is already `done`, which the API
+ignores. Each needs a decision about which side changes, so none was taken here.
+
+---
+
 ## Phase 20 - two things that would have wasted a paid run (started 2026-11-02)
 
 Before spending the company API budget on a real end-to-end pass, the backend

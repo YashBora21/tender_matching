@@ -288,6 +288,27 @@ describe('UploadPage', () => {
     expect(vi.mocked(getRequirements)).toHaveBeenCalledTimes(1)
   })
 
+  it('names an incomplete read, and refuses to run it', async () => {
+    vi.mocked(getRequirements).mockResolvedValue(
+      read({
+        status: 'incomplete',
+        error: 'the bill of quantities gave no items',
+        requirements: [],
+        counts: { items: 0, requirements: 0, flagged: 0 },
+      }),
+    )
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+
+    chooseFile(container)
+
+    // Neither "still reading" nor "failed": the document opened and came up short.
+    await screen.findByText('The tender was not read in full')
+    expect(screen.getByText(/the bill of quantities gave no items/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Run the match' })).toBeNull()
+    // One poll was enough: the state is final until the caller uploads again.
+    expect(vi.mocked(getRequirements)).toHaveBeenCalledTimes(1)
+  })
+
   it('fills the list from the stream while the tender is still being read', async () => {
     const globals = globalThis as { EventSource?: unknown }
     globals.EventSource = FakeEventSource

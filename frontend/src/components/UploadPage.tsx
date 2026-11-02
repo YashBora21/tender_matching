@@ -34,14 +34,26 @@ function sleep(ms: number) {
  * `rate_limited` is the read stopping at the provider's limit, not a failure:
  * the requirements it did read are there, and the rest can be resumed by
  * uploading the same file again (D8, D-69).
+ *
+ * `incomplete` is the state between the two: the document opened and was read,
+ * but a part of it never arrived, so its requirement list is short because of
+ * what is missing rather than because the tender states less (PRD 4).
  */
-type Phase = 'idle' | 'uploading' | 'reading' | 'ready' | 'rate_limited' | 'failed'
+type Phase =
+  | 'idle'
+  | 'uploading'
+  | 'reading'
+  | 'ready'
+  | 'rate_limited'
+  | 'incomplete'
+  | 'failed'
 
 /** The phase a payload means. Anything still being read is `reading`. */
 function phaseOf(data: TenderRequirements): Phase {
   if (data.status === 'done') return 'ready'
   if (data.status === 'failed') return 'failed'
   if (data.status === 'rate_limited') return 'rate_limited'
+  if (data.status === 'incomplete') return 'incomplete'
   return 'reading'
 }
 
@@ -56,8 +68,14 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
   const [selected, setSelected] = useState<string[]>([])
   const [starting, setStarting] = useState(false)
 
+  // Following the read is a choice: the poll loop and the stream ask for it, so
+  // a reviewer can rest the page without touching the read on the server.
+  const [watching, setWatching] = useState(true)
+  const follow = useRef(true)
+
   const alive = useRef(true)
   const source = useRef<EventSource | null>(null)
+  const readId = useRef<string | null>(null)
   useEffect(() => {
     alive.current = true
     return () => {
@@ -91,17 +109,17 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
   }
 
   async function poll(tenderId: string) {
-    while (alive.current) {
+    while (alive.current && follow.current) {
       try {
         const data = await getRequirements(tenderId)
         const next = apply(data)
-        if (next === null) return
+        if (next === null || !follow.current) return
         // Every state but "still reading" is final for this upload: polling a
         // rate-limited tender would poll forever, because nothing will resume
         // it without the caller asking again.
         if (next !== 'reading') return
       } catch (cause) {
-        if (!alive.current) return
+        if (!alive.current || !follow.current) return
         // A 409 is an older backend saying "not read yet"; the current one
         // answers with what it has read so far and `partial`.
         if (cause instanceof ApiError && cause.status === 409) {
@@ -125,6 +143,7 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
    * answers with everything read so far.
    */
   async function watch(tenderId: string) {
+    readId.current = tenderId
     if (typeof EventSource === 'undefined') {
       await poll(tenderId)
       return
@@ -141,7 +160,7 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
     }
 
     const onPayload = (event: Event) => {
-      if (settled) return
+      if (settled || !follow.current) return
       try {
         apply(JSON.parse((event as MessageEvent<string>).data) as TenderRequirements)
       } catch {
@@ -160,10 +179,25 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
     stream.addEventListener('error', () => {
       // The stream broke before the read finished. The route still answers,
       // so the page keeps what it has and asks it.
-      if (settled) return
+      if (settled || !follow.current) return
       finish()
       void poll(tenderId)
     })
+  }
+
+  /** Rest the page, not the read: the server finishes the tender either way. */
+  function stopWatching() {
+    follow.current = false
+    setWatching(false)
+    source.current?.close()
+    source.current = null
+  }
+
+  function followAgain() {
+    if (!readId.current) return
+    follow.current = true
+    setWatching(true)
+    void watch(readId.current)
   }
 
   async function choose(file: File) {
@@ -175,6 +209,9 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
     setTender(null)
     setDuplicate(false)
     setPhase('uploading')
+    follow.current = true
+    setWatching(true)
+    readId.current = null
     try {
       const uploaded = await uploadTender(file)
       if (!alive.current) return
@@ -209,6 +246,8 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
   }
 
   const reading = phase === 'uploading' || phase === 'reading'
+  /** The read is running *and* this page is still listening to it. */
+  const following = reading && watching
   const canRun =
     (phase === 'ready' || phase === 'rate_limited') &&
     tender !== null &&
@@ -231,18 +270,18 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
           </Notice>
         )}
 
-        <label className={`dropzone${reading ? ' dropzone-busy' : ''}`}>
+        <label className={`dropzone${following ? ' dropzone-busy' : ''}`}>
           <input
             type="file"
             accept="application/pdf,.pdf"
-            disabled={reading}
+            disabled={following}
             onChange={(event) => {
               const file = event.target.files?.[0]
               if (file) void choose(file)
               event.target.value = ''
             }}
           />
-          {reading ? (
+          {following ? (
             <>
               <span className="spinner" aria-hidden="true" />
               <strong>
@@ -254,11 +293,68 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
             </>
           ) : (
             <>
+              {/* A tender sheet with its clause rail: the same mark the header
+                  carries, so the drop target asks for a document, not a file. */}
+              <svg
+                className="dropzone-mark"
+                width="44"
+                height="44"
+                viewBox="0 0 44 44"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <rect
+                  x="11.5"
+                  y="5.5"
+                  width="21"
+                  height="33"
+                  rx="3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeOpacity="0.45"
+                />
+                <rect x="15.5" y="12" width="2" height="20" rx="1" fill="currentColor" />
+                <g
+                  stroke="currentColor"
+                  strokeOpacity="0.5"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  fill="none"
+                >
+                  <path d="M21.5 14h7" />
+                  <path d="M21.5 20h7" />
+                  <path d="M21.5 26h4" />
+                </g>
+              </svg>
               <strong>Drop a tender PDF here, or click to choose one</strong>
               <span className="muted">PDF only. The file is stored on the server, not in the browser.</span>
             </>
           )}
         </label>
+
+        {reading &&
+          (watching ? (
+            <div className="actions">
+              <button type="button" className="button" onClick={stopWatching}>
+                Stop watching
+              </button>
+              <span className="muted">
+                The read carries on either way; this only rests the page.
+              </span>
+            </div>
+          ) : (
+            <Notice variant="info" title="Not following this read">
+              <p>
+                The requirements below are what the server had read when this page stopped
+                listening. Nothing was cancelled, and what was already read is still here.
+              </p>
+              <div className="actions">
+                <button type="button" className="button button-primary" onClick={followAgain}>
+                  Follow it again
+                </button>
+              </div>
+            </Notice>
+          ))}
 
         {duplicate && tender && (
           <Notice variant="info" title="Already uploaded">
@@ -288,6 +384,22 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
           <button type="button" className="button" onClick={reset}>
             Upload another tender
           </button>
+        </section>
+      )}
+
+      {phase === 'incomplete' && tender && (
+        <section className="panel">
+          <h2>The tender was not read in full</h2>
+          <Notice variant="warning" title="Incomplete reading">
+            {tender.error ?? 'A part of the tender was never read.'}
+          </Notice>
+          <p className="muted">
+            The document opened, but what came out of it is short because of what did not
+            arrive - not because the tender states less. Running it now would be refused: a
+            requirement nobody read is not a requirement the manufacturer fails. Supply the
+            missing document above, then upload the same file again; the reading runs on from
+            what is already stored.
+          </p>
         </section>
       )}
 

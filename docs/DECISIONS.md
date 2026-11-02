@@ -2798,6 +2798,129 @@ unchanged (645).
 
 ---
 
+## D-124 - The frontend reads like a case file, and a reviewer can go back and stop
+
+The three screens were a generic admin panel: one blue, one sans, a stack of
+white boxes. The work they show is a tender review, and the artifact a reviewer
+produces is a case file - one verdict per requirement, each claim backed by a
+quote on a page. The restyle takes its vocabulary from that, not from a UI kit.
+
+*Tokens:* a cool ledger paper (`--paper`, `--surface`, `--sunk`), ink for text,
+one seal navy for the product's own edge, and the five verdict colours already
+named in PRD 4 (`--v-full`, `--v-partial`, `--v-missing`, `--v-silent`,
+`--v-na`). Nothing new is encoded: a colour is a status and nowhere else.
+
+*Type:* three roles, not three fonts to look designed. A serif for headings and
+for the evidence quote - the two places a person reads a sentence; the system
+sans for body; mono uppercase for labels, page numbers, run ids and document
+names, which are identifiers and should not look like prose. No webfont is
+loaded: `frontend/Dockerfile` serves a static bundle through nginx and the demo
+machine has no network at runtime, so a font request is a render-blocking
+failure for a slightly nicer letterform. The stack is
+`Iowan Old Style / Palatino / Georgia`, all of which ship with the OS.
+
+*The one signature:* the verdict rail - a 3px left edge in the status colour,
+reused on a report row, a rank card, a notice, the drawer, the quote inside it
+and the drawer title, and drawn in miniature in the brand mark. It is set with a
+`--rail` custom property and `:has()` selectors
+(`.report-table tbody tr:has(.pill-missing_capability)`), so no component
+changed its DOM and no number on screen changed. The mandatory gate is the
+loudest thing on a rank card for the same reason: `.rank-card:has(.flag)` turns
+its rail crimson and paints the flag, so "fails mandatory" is visible before the
+score is read.
+
+*Back:* the app has two views and, until now, no way from a report back to an
+upload except reloading the page. `App.tsx` enters each view as a history entry
+(`pushState` on go, `popstate` on Back), so the browser's Back button works; the
+topbar carries a sticky "Back to the tender" while a run is open; and a new
+`Trail` component shows the hierarchy - Tender, Match, Report - with the current
+step marked `aria-current="step"`. Following the research rather than the habit,
+the trail complements Back instead of replacing it, and only the crumb that is
+genuinely reachable is a button: "Match" is not clickable from the report,
+because there is no screen that shows a chosen run on demand - clicking it would
+have gone somewhere it does not describe.
+
+*Stop:* there is no cancel route in the API and the contract was out of scope, so
+a "Stop run" button would have been a lie. The controls are "Stop watching" and
+"Watch it again" on the run page, and "Stop watching" / "Follow it again" on the
+tender read. They close the page's own poll and EventSource, the last payload
+stays on screen, and the copy says which thing stopped: the page asked once a
+second, the run carries on server-side, nothing was cancelled.
+
+*Motion:* a staggered rise on the stack, a breathing dot on a status pill that is
+still in flight, a slow sheen along the progress fill, and a press scale on the
+controls. Each one marks a state that changes on its own; none is decoration on
+a static table. All sit inside the existing `prefers-reduced-motion` guard - the
+sheen's gradient is dropped there and the dot stays, unblinking, so the
+information survives.
+
+*Craft:* concentric radii (a card's 12px outer corner over the rail's 4px inner),
+a sticky table header with a shadow so it is obvious the header is floating,
+tabular numbers, balanced headings, a ruled-paper background under the panels.
+
+*Not done:* no CSS framework, no token pipeline, no component library, no dark
+mode, no cancel endpoint, and no visual-regression harness. The run page's
+progress bar is still a single bar: the API reports one percentage and the UI
+does not invent stages it was not told about.
+
+*Why:* the previous look said "software template" to a reviewer who is judging
+whether the output can be trusted in a tender evaluation. A case file is the
+form this work actually takes, and it also fixed two real gaps: no way back and
+no way to stop a page that asks the API every second.
+
+*Verified:* 27 frontend tests pass unchanged - every assertion is on text or an
+ARIA role, and none of them moved, which is the proof that the data shown did
+not change. `tsc -b && vite build` clean, `oxlint` 0 warnings 0 errors. In the
+browser, computed styles confirm each rail resolves to its verdict colour
+(`rgb(13,97,70)` full, `rgb(157,27,46)` missing, `rgb(43,92,138)` silent,
+`rgb(138,91,6)` partial, `rgb(74,85,97)` unsupported), the gated rank card to
+crimson against `rgb(18,50,95)` for a clean one, `position: sticky` on `th`, and
+the drawer edge taking the status colour. Stop and resume were clicked through on
+both the run page and the tender read.
+
+---
+
+## D-125 - Three backend states the screens did not speak
+
+The frontend was read against the routes it calls. Every request shape and
+response field matched, and three states did not exist in the UI at all:
+
+`rate_limited` for a run. The API counts it terminal and serves the report of
+what was stored (`api/runs.py`, and the status is really set at
+`services/output/runs.py`), but the run page's terminal set was
+`{done, failed}`. A run stopped by the provider's limit was polled forever:
+frozen progress, no report, no exit. `rate_limited` joins the set.
+
+`incomplete` for a tender. The read finished and came up short - no
+specification page read, no BOQ items, no requirements
+(`services/tender/upload.py`) - and the stream closes it with `end` because it
+is not partial. The upload page mapped anything that was not done, failed or
+rate-limited to `reading`, so the page spun on a read nobody was doing, offered
+no run, and its polling fallback never stopped. `POST /api/runs` refuses that
+tender too, so there was no path out at all. It is now its own phase, with the
+reason the backend stored and the one action that works: supply the missing
+document, then upload the same file again - a duplicate in this state is
+re-read, unlike one in `done`.
+
+`parsing`, `verifying`, `rate_limited` and `incomplete` as words. None had a
+label or a pill colour, and `.pill-running` - added the same day - matched
+nothing, because no status in either enum is called `running`. The in-flight
+list now matches `RunStatus`, and the two stopped-short states wear the same
+amber as a partial match: neither a failure nor an answer.
+
+*Why these three and not the rest of the audit:* each one left a reviewer with
+no screen and no next action. The other findings show the app dropping report
+fields it could render (`not_assessed`, `unknown_requirements`, `reason_code`) -
+a gap in what a reader is told, not a dead end - and are left for their own
+decision.
+
+*Verified:* two new tests, one per dead end - a rate-limited run reaches the
+report, and an incomplete read names itself, quotes the stored reason, offers no
+run and stops after one poll. 29 frontend tests pass, `tsc -b && vite build`
+clean, `oxlint` 0 warnings 0 errors. No backend file, route or payload changed.
+
+---
+
 ## D-126 - An attachment is named by the name in its link, not by the path it shares
 
 GeM serves every SLA and ATC link through the same path: `/contract/slafds`,
