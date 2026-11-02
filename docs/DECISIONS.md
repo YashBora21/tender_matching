@@ -3184,3 +3184,44 @@ and a pair nothing retrieved records only the search; the report carries the
 figures, and says *Not recorded* when there are none. 103 tests pass across the
 run, matching, report and run-API files, and the full unit suite passes.
 
+## D-132 - One pass works a run, and no transaction waits on the provider
+
+Judging the external architecture proposal turned up two defects in what we
+already have, both of them about paying twice rather than about which model
+reads a passage.
+
+*Nothing is read while the provider thinks.* `match_requirement` retrieves rows,
+and the first query begins a transaction. The run commits only once a pair is
+answered, so that transaction stayed open for the whole call - measured at
+roughly 27 seconds per pair - holding a pool connection idle-in-transaction,
+which also keeps PostgreSQL from cleaning up the rows it read. `_match_candidate`
+now commits before it asks the model. Nothing pending is lost: the run writes its
+result and commits after the call returns, and the only other caller is the
+one-off `match` command, which stores under `--store` after the answer. The
+release happens per candidate read, not per requirement, so a second passage does
+not resume a transaction the first one's page read opened.
+
+*One pass works a run at a time.* D-130 made `POST /api/runs` answer a repeated
+command with the run it can continue, and the route then schedules `execute_run`
+for every caller. `execute_run` only refused to work on a `done` or `failed` run,
+so two callers of one `rate_limited` run started two passes over the same missing
+pairs - and `result` has no key on a requirement x manufacturer pair, so each
+pair was paid for twice and stored twice. The run row's state is now the lock:
+`RunRepo.claim` moves `queued` or `rate_limited` to `retrieving` in one update
+whose condition is that same state, and only the caller whose update landed works
+it. The caller that did not is told the state as stored, with the costs the run
+already recorded, because it is the run it was handed.
+
+*What it does not do:* no status, score, flag or verdict reads either change, so
+no expected-status test moved. A run left `retrieving` or `scoring` by a process
+that died is not picked up by the claim - that recovery does not exist either
+way, since only a `rate_limited` run is ever continued, and a fresh command
+starts a fresh run as before. The tender-reading pipeline keeps its own session
+discipline; this is the matching path.
+
+*Verified:* 3 tests added - a pass reads rows and asks the model twice, and each
+call is made with a transaction already closed; a run another pass holds matches
+nothing, stores nothing and reports the stored state; the claim's update names the
+states an attempt may start from, so it cannot be an unconditional write. 71 tests
+pass in `test_matching.py` and `test_runs.py`, and the full unit suite passes.
+

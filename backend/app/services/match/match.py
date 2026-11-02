@@ -326,6 +326,11 @@ def _match_candidate(
         document_id=candidate.document_id,
     )
 
+    # The rows read to reach this point opened a transaction, and it would
+    # otherwise hold its connection idle for the seconds the provider takes to
+    # answer. Nothing written is pending here: a pair is stored and committed
+    # by the run, after this call returns.
+    session.commit()
     with stage(result.stage_seconds, "extract"):
         extracted = extract_fact(requirement_text, candidate.text, client=client)
     result.llm_calls = 1

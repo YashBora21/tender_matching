@@ -85,6 +85,16 @@ class FakeRunRepo:
         if error is not None:
             self.run["error"] = error
 
+    def claim(self, run_id):
+        """The lock the row gives: only one pass takes a waiting run."""
+        if self.run["status"] not in (
+            RunStatus.QUEUED.value,
+            RunStatus.RATE_LIMITED.value,
+        ):
+            return False
+        self.set_status(run_id, RunStatus.RETRIEVING)
+        return True
+
     def set_metrics(self, run_id, metrics):
         self.metrics_writes.append(dict(metrics))
         self.run["metrics"] = dict(metrics)
@@ -674,6 +684,29 @@ def test_a_finished_run_is_not_run_again():
     assert outcome.status == RunStatus.DONE.value
 
 
+def test_a_run_another_pass_holds_is_not_worked_twice():
+    """Two callers of POST /api/runs can be handed the same resumable run
+    (D-130), and the route schedules the work for both. The second pass must
+    not read the pairs the first is still answering."""
+    repo = FakeRunRepo(status="retrieving")
+    repo.stored = [{"requirement_id": "r1"}]
+    tenders = FakeTenderRepo(REQUIREMENTS, ITEMS)
+    calls: list[dict] = []
+
+    outcome = _execute(
+        repo,
+        tenders,
+        _recording_matcher(calls),
+        _recording_store(repo, {}),
+    )
+
+    assert calls == []
+    assert repo.history == []
+    assert outcome.results == 1
+    # What the caller is told is the stored state, not this attempt's guess.
+    assert outcome.status == RunStatus.RETRIEVING.value
+
+
 def test_a_run_that_does_not_exist_is_a_not_found():
     with pytest.raises(NotFoundError):
         execute_run(
@@ -1078,6 +1111,8 @@ def test_progress_expects_only_the_assessable_requirements(monkeypatch):
 
 
 class _Rows:
+    rowcount = 1
+
     def __init__(self, rows):
         self.rows = rows
 
@@ -1093,6 +1128,9 @@ class _RecordingSession:
     def execute(self, statement):
         self.statement = statement
         return _Rows(self.rows)
+
+    def commit(self) -> None:
+        pass
 
 
 def _evidence_row(path, url):
@@ -1120,6 +1158,22 @@ def _evidence_row(path, url):
         "b" * 64,
         url,
     )
+
+
+def test_claiming_a_run_filters_on_the_states_an_attempt_starts_from():
+    """The row's state is the lock (D-132). An update that named no state would
+    let every caller take the run, which is the double spend the claim exists
+    to stop."""
+    from app.repositories.runs import RunRepo
+
+    session = _RecordingSession([])
+    claimed = RunRepo(session).claim(RUN_ID)
+
+    assert claimed is True
+    where = str(session.statement.whereclause)
+    assert "run.id = " in where
+    assert "run.status IN" in where
+    assert session.statement.compile().params["status"] == RunStatus.RETRIEVING.value
 
 
 def test_the_report_query_reads_only_columns_the_schema_has():

@@ -2932,3 +2932,41 @@ flag reads a timing, so no expected-status test moved.
 **Left:** `make migrate` has to be applied before the next run writes metrics.
 The frontend does not show the timings yet, and the `e2e` command prints the
 counts it is handed rather than the stored ones.
+
+### Step 24 - one pass works a run, and no transaction waits on the provider (D-132)
+
+*Date: 2026-11-02. P0 of the priority order the user set after the architecture
+proposal was judged.*
+
+Two defects the proposal's review turned up, both about paying twice:
+
+- the transaction the retrieval query opened stayed idle for the ~27 s the
+  provider took to answer, because a pair commits only once its result is
+  written. `_match_candidate` now releases it before the call, once per passage
+  read;
+- two callers of `POST /api/runs` can be handed the same resumable run (D-130)
+  and the route schedules the work for both, so one run could be worked by two
+  passes at once. `result` has no key on a pair, so the pairs were answered
+  twice and stored twice. `RunRepo.claim` makes the run row's state the lock:
+  the update from `queued`/`rate_limited` to `retrieving` lands once, and the
+  caller that lost is told the stored state and the costs recorded so far.
+
+Refused in the same review, and recorded so it is not proposed again: dropping
+sibling pages from the extraction prompt (there are none - the prompt is one
+passage plus a 1,737-character instruction, and siblings are separate
+candidates for documents of three pages or fewer, which D-102 and D-107 added on
+purpose); comparing values before the passage is read; and collapsing the five
+statuses plus `verification_outcome`, `applicability` and `reason_code` into four.
+
+**Files:** `services/match/match.py` (`_match_candidate`), `repositories/runs.py`
+(`claim`), `services/output/runs.py` (`execute_run`).
+
+**Verified:** 3 tests added; 71 pass in `test_matching.py` and `test_runs.py` and
+the full unit suite passes. No verdict, score or flag changed, so no
+expected-status test moved.
+
+**Left:** P1 next - the candidate-level fact cache. `_cached_fact` needs a
+product, which is only known after retrieval, and nothing on the run path ever
+writes a fact (`store_fact` is reached only from `match --store`), so FR-21's
+cache never hits during a run. A run left `retrieving` by a dead process is still
+not resumable, unchanged from before.

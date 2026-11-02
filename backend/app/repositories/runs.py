@@ -140,6 +140,33 @@ class RunRepo:
             .values(status=status.value, error=error)
         )
 
+    def claim(self, run_id: str) -> bool:
+        """Take the run for this attempt, or say another pass already holds it.
+
+        The row's state is the lock: the update from `queued` or `rate_limited`
+        lands once, because the second attempt finds a row that no longer
+        matches its condition. `POST /api/runs` hands the same resumable run to
+        two callers (D-130) and schedules the work for both, so without this
+        the pairs one pass is still answering get paid for twice and stored
+        twice - `result` has no key on a requirement x manufacturer pair.
+
+        A run left `retrieving` or `scoring` by a pass that died is not picked
+        up again here: a new attempt starts a new run, which is what happens
+        today, because only a `rate_limited` run is ever continued.
+        """
+        claimed = self.session.execute(
+            update(run)
+            .where(run.c.id == run_id)
+            .where(
+                run.c.status.in_(
+                    [RunStatus.QUEUED.value, RunStatus.RATE_LIMITED.value]
+                )
+            )
+            .values(status=RunStatus.RETRIEVING.value, error=None)
+        ).rowcount
+        self.session.commit()
+        return bool(claimed)
+
     def set_metrics(self, run_id: str, metrics: dict) -> None:
         """What the run cost, written with the state it ended in (D-131)."""
         self.session.execute(

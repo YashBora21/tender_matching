@@ -9,7 +9,17 @@ from app.services.match.match import build_query, match_requirement
 
 
 class FakeSession:
-    """A session that answers nothing, so the retrieval finds nothing."""
+    """A session that answers nothing, so the retrieval finds nothing.
+
+    It counts commits because the matcher releases the transaction before
+    asking the model, and a test can then say that it did.
+    """
+
+    def __init__(self) -> None:
+        self.commits = 0
+
+    def commit(self) -> None:
+        self.commits += 1
 
 
 class FakeClient:
@@ -894,3 +904,40 @@ def test_a_requirement_nothing_retrieves_costs_only_the_search(monkeypatch):
     result = match_requirement(FakeSession(), "Body shall be SS316", client=FakeClient({}))
 
     assert set(result.stage_seconds) == {"cached_fact", "retrieve"}
+
+
+def test_the_transaction_is_closed_before_the_model_is_asked(monkeypatch):
+    """Reading the rows that lead here opens a transaction, and the model then
+    runs for seconds. Left open, it holds its connection idle for every pair
+    the pass works (D-132)."""
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
+
+    monkeypatch.setattr(
+        match,
+        "search",
+        lambda *a, **k: [
+            Candidate(
+                chunk_id=f"c{index}",
+                document_id="d1",
+                text=f" passage {index}",
+                page=index,
+                model="SYNTHETIC-1",
+            )
+            for index in (1, 2)
+        ],
+    )
+    monkeypatch.setattr(match, "_page_text", lambda s, c: c.text)
+
+    session = FakeSession()
+    commits_at_call: list[int] = []
+
+    class Watching(FakeClient):
+        def complete_json(self, system, user, **kwargs):
+            commits_at_call.append(session.commits)
+            return {"requirements": []}
+
+    match_requirement(session, "Body shall be SS316", client=Watching({}))
+
+    # One release before each reading, not one for the whole requirement.
+    assert commits_at_call == [1, 2]

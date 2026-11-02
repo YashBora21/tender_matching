@@ -370,8 +370,14 @@ def execute_run(
             # `queued` for a caller to poll and never hear back.
             client = LLMClient()
 
-        run_repo.set_status(run_id, RunStatus.RETRIEVING)
-        session.commit()
+        # One pass works a run at a time. The caller that arrives second is
+        # told what the run already holds instead of starting a second pass
+        # over the pairs the first is still answering (D-132).
+        if not run_repo.claim(run_id):
+            held = run_repo.get(run_id) or run
+            progress.status = held["status"]
+            _apply_costs(progress, held.get("metrics") or {})
+            return progress
 
         items = {item["item_id"]: item for item in tenders.list_items(run["tender_id"])}
         # The pairs this pass must not ask about again. A run that stopped at a
