@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from app.services.corpusseed import SeedReport, _family_of, _title_of
+from app.services.corpus.seed import SeedReport, _family_of, _title_of
 
 
 def test_a_title_is_read_from_the_file_name():

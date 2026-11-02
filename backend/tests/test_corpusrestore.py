@@ -17,8 +17,8 @@ import pytest
 
 from app.core.config import get_settings
 from app.core.fetching import Fetched, FetchRefused
-from app.services import corpusrestore
-from app.services.corpusrestore import Entry, Outcome, main, manifest_entries, restore, summary
+from app.services.corpus import restore as restore_module
+from app.services.corpus.restore import Entry, Outcome, main, manifest_entries, restore, summary
 
 PDF = b"%PDF-1.7\na datasheet\n"
 PDF_SHA = hashlib.sha256(PDF).hexdigest()
@@ -97,14 +97,14 @@ def data_dir(tmp_path: Path) -> Path:
 @pytest.fixture
 def robots(monkeypatch) -> _Robots:
     fake = _Robots()
-    monkeypatch.setattr(corpusrestore, "robots_allows", fake)
+    monkeypatch.setattr(restore_module, "robots_allows", fake)
     return fake
 
 
 @pytest.fixture
 def fetcher(monkeypatch, robots) -> _Fetcher:
     fake = _Fetcher()
-    monkeypatch.setattr(corpusrestore, "fetch", fake)
+    monkeypatch.setattr(restore_module, "fetch", fake)
     return fake
 
 

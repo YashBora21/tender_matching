@@ -42,7 +42,7 @@ from app.core.logging import get_logger
 from app.repositories.db import session_scope
 from app.repositories.tender import TenderRepo
 from app.schemas.enums import TenderStatus
-from app.services.tenderupload import (
+from app.services.tender.upload import (
     ingest,
     safe_name,
     store_upload,
@@ -344,7 +344,7 @@ def upload_attachment(
             detail=f"the file is {size} bytes, over the {settings.fetch_max_bytes} limit",
         )
 
-    from app.services.tendercollect import classify_document, now_iso, sha256_file
+    from app.services.tender.collect import classify_document, now_iso, sha256_file
 
     digest = sha256_file(target)
     detected_kind, pages = classify_document(target.read_bytes(), name)

@@ -30,15 +30,15 @@ from app.core.logging import get_logger
 from app.repositories.tender import LLMCache, StoredRequirement, TenderRepo
 from app.schemas.enums import RequirementType
 from app.schemas.models import EXTRACTION_VERSION
-from app.services.atomizer import atomize_records
-from app.services.extractor import (
+from app.services.requirement.atomize import atomize_records
+from app.services.requirement.extract import (
     ExtractedRequirement,
     extract_requirements,
 )
 from app.services.llm import LLMClient, LLMRateLimited
-from app.services.pageclassify import NON_TECHNICAL_REASON, is_non_technical
-from app.services.retyping import retype_technical
-from app.services.tenderingest import (
+from app.services.tender.classify import NON_TECHNICAL_REASON, is_non_technical
+from app.services.requirement.retype import retype_technical
+from app.services.tender.ingest import (
     PageRead,
     RequirementRecord,
     SpecificationRead,
@@ -81,14 +81,14 @@ def _reader_version() -> str:
     A change to the reader is a change to what the stage produces, so it
     is part of the stage's key.
     """
-    from app.services.tenderingest import READER_VERSION
+    from app.services.tender.ingest import READER_VERSION
 
     return READER_VERSION
 
 
 def _classifier_version() -> str:
     """The version of the classifier, read where it is used."""
-    from app.services.tendercollect import CLASSIFIER_VERSION
+    from app.services.tender.collect import CLASSIFIER_VERSION
 
     return CLASSIFIER_VERSION
 
@@ -99,7 +99,7 @@ def _prompt_version() -> str:
     It is read from the extractor at the moment it is used, so the key of a
     stage always names the prompt that produced it.
     """
-    from app.services.extractor import PROMPT_VERSION
+    from app.services.requirement.extract import PROMPT_VERSION
 
     return PROMPT_VERSION
 
@@ -110,7 +110,7 @@ def _atomizer_version() -> str:
     A change to the split changes what the requirements stage produces, so it
     is part of that stage's key and invalidates everything after it.
     """
-    from app.services.atomizer import ATOMIZER_VERSION
+    from app.services.requirement.atomize import ATOMIZER_VERSION
 
     return ATOMIZER_VERSION
 
@@ -329,7 +329,7 @@ def _categories_hash() -> str:
     It decides what category an item gets, so a change to it invalidates the
     item stage and everything after it.
     """
-    from app.services.categories import categories_path
+    from app.services.match.category import categories_path
 
     path = Path(categories_path())
     if not path.exists():
@@ -768,7 +768,7 @@ def assign_categories(items: list[TenderItem]) -> list[TenderItem]:
     that names no category - or two - is left `unknown` and flagged rather
     than given the tender's guess (FR-T9).
     """
-    from app.services.categories import infer_category
+    from app.services.match.category import infer_category
 
     for item in items:
         guess = infer_category(item.title, item.description)

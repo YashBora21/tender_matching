@@ -15,7 +15,7 @@ import json
 
 import pytest
 
-from app.services.categories import (
+from app.services.match.category import (
     UNKNOWN,
     categories_path,
     category_names,
@@ -140,7 +140,7 @@ def test_the_items_stage_is_keyed_on_the_category_vocabulary(tmp_path, monkeypat
     inputs: correcting the vocabulary re-reads the items, and nothing before
     them."""
     from app.core.config import get_settings
-    from app.services.pipeline import STAGE_ATTACHMENTS, STAGE_ITEMS, stage_keys
+    from app.services.tender.pipeline import STAGE_ATTACHMENTS, STAGE_ITEMS, stage_keys
 
     one = tmp_path / "one.json"
     one.write_text(json.dumps({"categories": [{"name": "valves", "terms": ["valve"]}]}))
@@ -267,8 +267,8 @@ def test_mentioned_categories_tells_silent_from_different():
 def test_every_item_is_classified_from_its_own_words():
     """Two items in one tender can be in two categories: the tender's own
     category is not copied onto them (FR-16, FR-T9)."""
-    from app.services.pipeline import assign_categories
-    from app.services.tenderingest import TenderItem
+    from app.services.tender.pipeline import assign_categories
+    from app.services.tender.ingest import TenderItem
 
     items = assign_categories(
         [

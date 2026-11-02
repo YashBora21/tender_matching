@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.ingestion import ingest_corpus
+from app.services.corpus.ingest import ingest_corpus
 
 
 class FakeSession:
@@ -83,7 +83,7 @@ def test_a_collected_document_is_ingested(tmp_path, monkeypatch):
             calls.append({"chunks": chunks})
             return len(chunks)
 
-    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+    monkeypatch.setattr("app.services.corpus.ingest.PostgresDocumentRepo", FakeRepo)
 
     report = ingest_corpus(tmp_path, FakeSession())
 
@@ -121,7 +121,7 @@ def test_a_document_is_written_and_closed_off_on_its_own(tmp_path, monkeypatch):
         def insert_chunks(self, document_id, chunks):
             return len(chunks)
 
-    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+    monkeypatch.setattr("app.services.corpus.ingest.PostgresDocumentRepo", FakeRepo)
 
     session = FakeSession()
     report = ingest_corpus(tmp_path, session)
@@ -159,7 +159,7 @@ def test_a_document_that_did_not_change_is_not_re_ingested(tmp_path, monkeypatch
         def insert_chunks(self, document_id, chunks):  # pragma: no cover
             raise AssertionError("an unchanged document must not be re-ingested")
 
-    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+    monkeypatch.setattr("app.services.corpus.ingest.PostgresDocumentRepo", FakeRepo)
 
     report = ingest_corpus(tmp_path, FakeSession())
 
@@ -203,7 +203,7 @@ def test_a_corrected_category_reaches_an_unchanged_document(tmp_path, monkeypatc
         def insert_chunks(self, document_id, chunks):  # pragma: no cover
             raise AssertionError("the text did not change, so it must not be re-read")
 
-    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+    monkeypatch.setattr("app.services.corpus.ingest.PostgresDocumentRepo", FakeRepo)
 
     report = ingest_corpus(tmp_path, FakeSession())
 
@@ -236,7 +236,7 @@ def test_a_document_that_cannot_be_parsed_is_reported_not_raised(tmp_path, monke
         def insert_chunks(self, document_id, chunks):  # pragma: no cover
             raise AssertionError
 
-    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+    monkeypatch.setattr("app.services.corpus.ingest.PostgresDocumentRepo", FakeRepo)
 
     report = ingest_corpus(tmp_path, FakeSession())
 
@@ -294,7 +294,7 @@ def test_a_csv_catalogue_is_ingested(tmp_path, monkeypatch):
         def insert_chunks(self, document_id, chunks):
             return len(chunks)
 
-    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+    monkeypatch.setattr("app.services.corpus.ingest.PostgresDocumentRepo", FakeRepo)
 
     report = ingest_corpus(tmp_path, FakeSession())
 
@@ -362,7 +362,7 @@ def test_one_file_named_by_two_manifests_is_ingested_once(tmp_path, monkeypatch)
         def insert_chunks(self, document_id, chunks):
             return len(chunks)
 
-    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+    monkeypatch.setattr("app.services.corpus.ingest.PostgresDocumentRepo", FakeRepo)
 
     report = ingest_corpus(tmp_path, FakeSession())
 
@@ -393,7 +393,7 @@ def test_a_document_on_disk_that_no_manifest_lists_is_still_ingested(tmp_path, m
         def insert_chunks(self, document_id, chunks):
             return len(chunks)
 
-    monkeypatch.setattr("app.services.ingestion.PostgresDocumentRepo", FakeRepo)
+    monkeypatch.setattr("app.services.corpus.ingest.PostgresDocumentRepo", FakeRepo)
 
     report = ingest_corpus(tmp_path, FakeSession())
 
@@ -414,7 +414,7 @@ def test_every_doc_type_the_corpus_uses_is_in_the_vocabulary():
     import csv
 
     from app.core.config import get_settings
-    from app.services.evidence import load_doc_types
+    from app.services.match.evidence import load_doc_types
 
     vocabulary = set(load_doc_types().doc_types)
     catalogue = Path(get_settings().data_dir) / "catalogue"
@@ -436,7 +436,7 @@ def test_ingesting_a_corpus_seeds_the_products_its_documents_are_about(monkeypat
     what the evidence is for and the fact cache can never hit (FR-21)."""
     from contextlib import contextmanager
 
-    from app.services import ingestion
+    from app.services.corpus import ingest
 
     calls: list[str] = []
 
@@ -465,16 +465,16 @@ def test_ingesting_a_corpus_seeds_the_products_its_documents_are_about(monkeypat
         "app.repositories.aliases.seed_aliases", lambda s: calls.append("aliases")
     )
     monkeypatch.setattr(
-        ingestion, "ingest_corpus", lambda *a, **k: calls.append("ingest") or Report()
+        ingest, "ingest_corpus", lambda *a, **k: calls.append("ingest") or Report()
     )
     monkeypatch.setattr(
-        "app.services.corpusseed.seed_corpus",
+        "app.services.corpus.seed.seed_corpus",
         lambda s: calls.append("seed") or Seed(),
     )
     monkeypatch.setattr(
-        "app.services.corpusseed.remove_stale_products",
+        "app.services.corpus.seed.remove_stale_products",
         lambda s: calls.append("stale") or 0,
     )
 
-    assert ingestion.main() == 0
+    assert ingest.main() == 0
     assert calls == ["attributes", "aliases", "ingest", "seed", "stale"]

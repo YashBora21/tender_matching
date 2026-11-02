@@ -40,11 +40,11 @@ from app.schemas.enums import (
     ValueType,
     VerificationOutcome,
 )
-from app.services.facts import extract_fact
+from app.services.match.facts import extract_fact
 from app.services.llm import LLMClient
-from app.services.normalizer import parse_range
-from app.services.retrieval import Candidate, search
-from app.services.verifier import check_citation, listed_set_exclusion, verify
+from app.services.requirement.normalize import parse_range
+from app.services.match.retrieve import Candidate, search
+from app.services.match.verify import check_citation, listed_set_exclusion, verify
 
 logger = get_logger(__name__)
 
@@ -191,7 +191,7 @@ def match_requirement(
     # an item that names two types equally is not filtered on a guess (D-97).
     product_type: Optional[str] = None
     if category and item_title:
-        from app.services.categories import infer_type
+        from app.services.match.category import infer_type
 
         product_type = infer_type(category, item_title).product_type
 
@@ -498,7 +498,7 @@ def _cached_fact(
     another.
     """
     from app.comparison.attributes import find_attribute
-    from app.services.findings import cached_fact, product_id_for
+    from app.services.match.findings import cached_fact, product_id_for
 
     if not (manufacturer_name and model):
         return None
@@ -593,7 +593,7 @@ def store_fact(
     again by the term (FR-21). The wording the model used is kept as the
     original name.
     """
-    from app.services.findings import (
+    from app.services.match.findings import (
         StoredFact,
         _attribute_id,
         product_id_for,
@@ -645,7 +645,7 @@ def store_match(
     The fact is written first, because the result carries its id: a reviewer
     who reads "full match" can get back to the sentence that said so.
     """
-    from app.services.findings import store_result
+    from app.services.match.findings import store_result
 
     fact_id = store_fact(session, match, extractor_version=extractor_version)
 
@@ -708,7 +708,7 @@ def _canonical_attribute(session, attribute: Optional[str]) -> Optional[str]:
     A fact is filed under the canonical term, so the cache finds it by the
     term a requirement uses, whatever wording the model answered in.
     """
-    from app.services.resolution import resolve_attribute
+    from app.services.requirement.resolve import resolve_attribute
 
     if not attribute:
         return None

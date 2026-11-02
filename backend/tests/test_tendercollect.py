@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.tendercollect import (
+from app.services.tender.collect import (
     classify_document,
     collect_tender,
     discover_links,

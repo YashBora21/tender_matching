@@ -24,9 +24,9 @@ from app.api.deps import get_session
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.schemas.enums import RunStatus
-from app.services.report import build_report, render_csv, render_html
-from app.services.runs import create_run, execute_run
-from app.services.runs import progress as run_progress
+from app.services.output.report import build_report, render_csv, render_html
+from app.services.output.runs import create_run, execute_run
+from app.services.output.runs import progress as run_progress
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api/runs", tags=["runs"])

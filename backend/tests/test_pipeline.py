@@ -13,8 +13,8 @@ import pytest
 
 from app.core.config import get_settings
 from app.schemas.enums import RequirementType
-from app.services import pipeline
-from app.services.pipeline import (
+from app.services.tender import pipeline
+from app.services.tender.pipeline import (
     STAGE_ATTACHMENTS,
     STAGE_EXTRACTION,
     STAGE_ITEMS,
@@ -24,7 +24,7 @@ from app.services.pipeline import (
     run_pipeline,
     stage_keys,
 )
-from app.services.tenderingest import PageRead, SpecificationRead
+from app.services.tender.ingest import PageRead, SpecificationRead
 
 
 class FakeSession:
@@ -190,8 +190,8 @@ def _boq_csv(path: Path) -> None:
 
 def _stage_keys_for(attachments: list[dict]) -> dict[str, str]:
     """The stage keys, computed the way the pipeline computes them."""
-    from app.services.extractor import PROMPT_VERSION
-    from app.services.pipeline import _vocabulary_hash
+    from app.services.requirement.extract import PROMPT_VERSION
+    from app.services.tender.pipeline import _vocabulary_hash
 
     settings = get_settings()
     return stage_keys(
@@ -395,7 +395,7 @@ def test_a_changed_reader_re_reads_the_items_and_the_requirements(tmp_path, monk
     repo.stages = _stage_keys_for(attachments)
 
     # The reader changed.
-    import app.services.tenderingest as reader
+    import app.services.tender.ingest as reader
 
     monkeypatch.setattr(reader, "READER_VERSION", "changed")
     result = run_pipeline(
@@ -415,7 +415,7 @@ def test_a_changed_classifier_re_reads_the_attachments(tmp_path, monkeypatch):
 
     repo.stages = _stage_keys_for(attachments)
 
-    import app.services.tendercollect as collector
+    import app.services.tender.collect as collector
 
     monkeypatch.setattr(collector, "CLASSIFIER_VERSION", "changed")
     result = run_pipeline(
@@ -441,7 +441,7 @@ def test_a_changed_prompt_re_extracts_but_does_not_re_read_the_items(tmp_path, m
 
     # The prompt version changed: the extraction key changes, the item key
     # does not. It is read from the extractor, which owns the prompt.
-    import app.services.extractor as extractor
+    import app.services.requirement.extract as extractor
 
     monkeypatch.setattr(extractor, "PROMPT_VERSION", "2")
     result = run_pipeline(
@@ -685,8 +685,8 @@ def test_a_stored_row_is_stamped_with_the_versions_the_run_uses():
     invalidated.
     """
     from app.schemas.models import EXTRACTION_VERSION
-    from app.services.pipeline import to_stored
-    from app.services.tenderingest import RequirementRecord
+    from app.services.tender.pipeline import to_stored
+    from app.services.tender.ingest import RequirementRecord
 
     stored = to_stored(RequirementRecord(text="Head >= 20 m", item_id="1"), "tender-1")
 

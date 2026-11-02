@@ -38,8 +38,8 @@ from app.core.errors import NotFoundError
 from app.repositories.runs import RunRepo
 from app.repositories.tender import TenderRepo
 from app.schemas.enums import LedgerStatus, RequirementStatus, RequirementType
-from app.services.pageclassify import NON_TECHNICAL_REASON
-from app.services.runs import assessable, summarise
+from app.services.tender.classify import NON_TECHNICAL_REASON
+from app.services.output.runs import assessable, summarise
 
 # What each status means, in the words of PRD 4. The HTML report carries this so
 # a reader cannot misread "no evidence found" as a failing capability. It is

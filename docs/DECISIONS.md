@@ -975,7 +975,7 @@ with a JSONL gold file on `(tender sha256, requirement_id, manufacturer)` and
 computes status accuracy, the confusion matrix, per-status precision/recall/F1,
 the false-confident rate, coverage, review rate and citation correctness. It
 runs with no database, API or model. A quote counts as verified only if
-`app.services.verifier.check_citation` finds it on the cited page; the corpus
+`app.services.match.verify.check_citation` finds it on the cited page; the corpus
 is indexed from the manifests, and a document that is not on disk is reported
 as unavailable and excluded from the citation denominator. A label whose pair
 is absent from the report stops the run and lists the keys; a prediction with
@@ -2749,3 +2749,49 @@ noticed.
 *Not done:* the folder was not reorganised for looking crowded. A file count is
 not evidence; each of the remaining modules has a caller, and the count was
 taken from the import graph before anything was touched (D-123 is the grouping).
+
+---
+
+## D-123 - The services folder is grouped by stage, not by kind
+
+`backend/app/services` held 31 modules in one flat list, and finding one meant
+knowing the domain already. They are now grouped by the stage of the flow each
+belongs to:
+
+    tender/       receive, collect, parse, classify, ingest, pipeline
+    requirement/  a clause turned into a typed requirement
+    corpus/       the manufacturer corpus: read, seed, restore, audit
+    match/        a requirement against the corpus: retrieve, extract,
+                  verify, score, record
+    output/       what a run produces: its state and its report
+    cli/          the commands that drive the whole flow
+
+Three modules stay at the top - `llm`, `embeddings`, `textnorm` - because every
+layer imports them and no stage owns them. Giving them a package would invent an
+owner and risk an import cycle for a tidier listing.
+
+*The rule:* group by the stage a module serves, never by what it is. There is no
+`utils/`, no `helpers/`, no `models/`: a folder named for a kind is where things
+go when they do not belong anywhere, and then nobody can say what is in it.
+
+*Renames:* a module was renamed only where the package already carried its name
+(`tenderupload` -> `tender/upload`, `matching` -> `match/match`). Everything else
+kept its name, so `rg verifier` still finds the verifier. The full map is in
+`services/__init__.py`, because a decision written before this one names modules
+by their old path and a reader following it must still land on a file.
+
+*Rejected:* splitting `tender/pipeline.py` (964 lines) and
+`tender/ingest.py` (1,019) into smaller files - the project's own rule is to
+split by job, never by line count, and both already are one job. Grouping by FR
+number - the folders would move every time the PRD is renumbered.
+
+*Verified:* this is a move plus an import rewrite. Inside a moved file the edits
+are its import lines, with two exceptions the move forced:
+`match/evidence.py` and `match/category.py` find their data file by
+`Path(__file__).resolve().parents[N]`, and the extra package level makes that
+`parents[3]`. The test suite caught it (every category and doc-type assertion
+failed at once) - a depth constant is the one thing a move can break silently.
+Beyond that, the changes are the package docstrings and the one-line code
+reference in `DECISIONS.md` and `WORKLOG.md`. All 47 distinct `app.services.*`
+references in the tree resolve to a real module, and the full suite passes
+unchanged (645).

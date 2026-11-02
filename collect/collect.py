@@ -55,7 +55,7 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from app.core.config import get_settings  # noqa: E402
 from app.core.robots import allows as robots_allows  # noqa: E402
-from app.services.evidence import doc_types_path  # noqa: E402
+from app.services.match.evidence import doc_types_path  # noqa: E402
 
 # The collector asks the same sites the app's fence will ask later, so it does
 # not carry its own copy of the rules: who it identifies as, how long it waits,

@@ -36,7 +36,7 @@ class DocumentClass(StrEnum):
     IGNORED = "ignored"
 
 
-DOC_TYPES_PATH = Path(__file__).resolve().parents[2] / "data" / "doc_types.json"
+DOC_TYPES_PATH = Path(__file__).resolve().parents[3] / "data" / "doc_types.json"
 
 
 def doc_types_path() -> str:

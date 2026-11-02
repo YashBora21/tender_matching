@@ -47,7 +47,7 @@ from app.schemas.enums import (
 )
 from app.services.llm import LLMBudgetExceeded, LLMClient, LLMRateLimited
 from app.services.llm import config_error
-from app.services.scoring import (
+from app.services.match.score import (
     ScoredResult,
     score_manufacturer,
     rank,
@@ -148,8 +148,8 @@ def config_snapshot() -> dict:
     Every one of these can change the answer, so a report that does not name
     them cannot be reproduced.
     """
-    from app.services.extractor import PROMPT_VERSION
-    from app.services.scoring import SCORING_POLICY_VERSION
+    from app.services.requirement.extract import PROMPT_VERSION
+    from app.services.match.score import SCORING_POLICY_VERSION
 
     settings = get_settings()
     return {
@@ -289,7 +289,7 @@ def execute_run(
                 client=client,
             )
 
-    from app.services.matching import match_requirement, store_match
+    from app.services.match.match import match_requirement, store_match
 
     run_repo = repo or RunRepo(session)
     tenders = tender_repo or TenderRepo(session)
@@ -483,7 +483,7 @@ def _assess(
     # is weaker than it looks. The reason is inferred from the item's own
     # words again, so the flag says why and not only that.
     if category is None:
-        from app.services.categories import infer_category
+        from app.services.match.category import infer_category
 
         if item:
             reason = infer_category(item.get("name") or "").reason
@@ -511,7 +511,7 @@ def _requirement_type(value) -> RequirementType:
 
 def _unsupported(requirement_type: RequirementType, text: str):
     """A requirement no document can answer, recorded as such (FR-14)."""
-    from app.services.matching import MatchResult
+    from app.services.match.match import MatchResult
 
     reason = (
         "the clause is "

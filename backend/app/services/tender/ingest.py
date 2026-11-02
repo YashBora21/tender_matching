@@ -25,7 +25,7 @@ from typing import Optional
 
 from app.core.logging import get_logger
 from app.schemas.enums import ExtractionMethod, LedgerStatus, RequirementType
-from app.services.pageclassify import (
+from app.services.tender.classify import (
     BOILERPLATE,
     NUMBER_WITH_UNIT,
     classify_page,
@@ -251,7 +251,7 @@ def _read_scanned_items(
     """
     import pymupdf
 
-    from app.services.docparser import ocr_page
+    from app.services.tender.parse import ocr_page
 
     items: list[TenderItem] = []
     seen: set[str] = set()
@@ -704,7 +704,7 @@ def _image_share(page) -> float:
 
 def _ocr(document, number: int) -> tuple[str, Optional[str]]:
     """The OCRed text of one page, and why it is empty when it is."""
-    from app.services.docparser import ocr_page_with_reason
+    from app.services.tender.parse import ocr_page_with_reason
 
     if document is None:
         return "", "the document could not be opened for OCR"

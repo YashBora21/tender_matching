@@ -161,7 +161,7 @@ def complete_catalogue_manifest(catalogue_dir: Path) -> int:
     import csv
     from datetime import datetime, timezone
 
-    from app.services.tendercollect import classify_document, sha256_file
+    from app.services.tender.collect import classify_document, sha256_file
 
     catalogue_dir = Path(catalogue_dir)
     manifest_path = catalogue_dir / "manifest.csv"

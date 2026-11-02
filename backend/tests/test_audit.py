@@ -6,7 +6,7 @@ import json
 from types import SimpleNamespace
 
 from app.schemas.enums import TenderStatus
-from app.services import audit
+from app.services.corpus import audit
 
 
 class FakeRepo:

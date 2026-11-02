@@ -86,7 +86,7 @@ def client(tmp_path, monkeypatch, scheduled):
     FakeRepo.items.clear()
     FakeRepo.requirements.clear()
     monkeypatch.setattr("app.api.tenders.TenderRepo", FakeRepo)
-    monkeypatch.setattr("app.services.tenderupload.TenderRepo", FakeRepo)
+    monkeypatch.setattr("app.services.tender.upload.TenderRepo", FakeRepo)
 
     session = FakeSession()
     app = create_app()

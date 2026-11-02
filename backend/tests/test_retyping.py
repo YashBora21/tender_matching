@@ -6,8 +6,8 @@ Every clause below is synthetic. None of it is taken from a real tender.
 from __future__ import annotations
 
 from app.schemas.enums import Operator, RequirementType
-from app.services.retyping import retype, retype_technical
-from app.services.tenderingest import RequirementRecord
+from app.services.requirement.retype import retype, retype_technical
+from app.services.tender.ingest import RequirementRecord
 
 
 def _unknown(text: str, *, page_tag: str = "technical") -> RequirementRecord:

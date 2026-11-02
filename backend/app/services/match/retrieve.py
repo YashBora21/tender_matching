@@ -167,7 +167,7 @@ def _category_filter(category: Optional[str]):
     """
     if not category:
         return None
-    from app.services.categories import category_names
+    from app.services.match.category import category_names
 
     others = category_names() - {category}
     if not others:
@@ -205,7 +205,7 @@ def _type_filter(
     """
     if not category or not product_type:
         return candidates
-    from app.services.categories import document_type, mentioned_types
+    from app.services.match.category import document_type, mentioned_types
 
     kept: list[Candidate] = []
     for candidate in candidates:
@@ -254,7 +254,7 @@ def _category_scope_filter(
     """
     if not category or not candidates:
         return candidates
-    from app.services.categories import mentioned_categories
+    from app.services.match.category import mentioned_categories
 
     kept: list[Candidate] = []
     for candidate in candidates:

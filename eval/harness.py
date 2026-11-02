@@ -11,7 +11,7 @@ Two rules keep the numbers honest:
   from the report stops the run with the keys listed; a prediction with no
   label is counted as unlabelled, never as a pass.
 - **A citation is verified the way the pipeline verifies it.** The quote is
-  checked against the cited page with `app.services.verifier.check_citation`,
+  checked against the cited page with `app.services.match.verify.check_citation`,
   the code that gates publication, rather than a second implementation that
   could be more forgiving than the product.
 
@@ -36,7 +36,7 @@ BACKEND = REPO_ROOT / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from app.services.verifier import check_citation  # noqa: E402
+from app.services.match.verify import check_citation  # noqa: E402
 
 # The statuses a technical requirement can be scored on, then the one that is
 # not scored at all. The order is the PRD's.

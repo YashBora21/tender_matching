@@ -21,8 +21,8 @@ from typing import Optional
 
 from app.core.logging import get_logger
 from app.schemas.enums import TenderStatus
-from app.services.tendercollect import read_manifest
-from app.services.pipeline import PipelineResult, resolve_roles, run_pipeline
+from app.services.tender.collect import read_manifest
+from app.services.tender.pipeline import PipelineResult, resolve_roles, run_pipeline
 
 logger = get_logger(__name__)
 

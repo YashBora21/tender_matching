@@ -25,7 +25,7 @@ def _reconcile_on_startup() -> None:
     """
     try:
         from app.repositories.db import session_scope
-        from app.services.tenderrecovery import reconcile
+        from app.services.cli.recover import reconcile
 
         with session_scope() as session:
             reconcile(session)

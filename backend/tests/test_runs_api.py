@@ -14,8 +14,8 @@ from fastapi.testclient import TestClient
 from app.api.deps import get_session
 from app.core.errors import NotFoundError
 from app.main import create_app
-from app.services.report import STATUS_MEANINGS
-from app.services.runs import RunProgress
+from app.services.output.report import STATUS_MEANINGS
+from app.services.output.runs import RunProgress
 
 RUN_ID = "11111111-1111-4111-8111-111111111111"
 TENDER_ID = "22222222-2222-4222-8222-222222222222"

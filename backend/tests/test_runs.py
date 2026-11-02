@@ -17,8 +17,8 @@ from app.schemas.enums import (
     RunStatus,
     VerificationOutcome,
 )
-from app.services.matching import MatchResult
-from app.services.runs import (
+from app.services.match.match import MatchResult
+from app.services.output.runs import (
     _manufacturer_names,
     create_run,
     execute_run,
@@ -200,7 +200,7 @@ def _fake_manufacturer_id(monkeypatch):
     """The run resolves names to ids through the corpus; the fake corpus has
     no id column, so the mapping is supplied here."""
     monkeypatch.setattr(
-        "app.services.runs.manufacturer_id", lambda session, name: f"mfr-{name}"
+        "app.services.output.runs.manufacturer_id", lambda session, name: f"mfr-{name}"
     )
 
 
@@ -560,7 +560,7 @@ def test_a_run_for_a_tender_that_does_not_exist_is_a_not_found(monkeypatch):
         def get_tender(self, tender_id):
             return None
 
-    monkeypatch.setattr("app.services.runs.TenderRepo", lambda session: MissingTender([]))
+    monkeypatch.setattr("app.services.output.runs.TenderRepo", lambda session: MissingTender([]))
 
     with pytest.raises(NotFoundError):
         create_run(FakeSession(), TENDER_ID)
@@ -577,7 +577,7 @@ def test_a_run_against_a_tender_still_being_read_is_a_conflict(monkeypatch):
         def get_tender(self, tender_id):
             return {"id": TENDER_ID, "status": "processing"}
 
-    monkeypatch.setattr("app.services.runs.TenderRepo", lambda session: Reading([]))
+    monkeypatch.setattr("app.services.output.runs.TenderRepo", lambda session: Reading([]))
 
     with pytest.raises(ConflictError) as raised:
         create_run(FakeSession(), TENDER_ID)
@@ -590,7 +590,7 @@ def test_a_run_against_a_tender_that_could_not_be_read_is_a_conflict(monkeypatch
         def get_tender(self, tender_id):
             return {"id": TENDER_ID, "status": "failed"}
 
-    monkeypatch.setattr("app.services.runs.TenderRepo", lambda session: Unreadable([]))
+    monkeypatch.setattr("app.services.output.runs.TenderRepo", lambda session: Unreadable([]))
 
     with pytest.raises(ConflictError):
         create_run(FakeSession(), TENDER_ID)
@@ -605,7 +605,7 @@ def test_a_run_against_an_incomplete_tender_is_a_conflict(monkeypatch):
         def get_tender(self, tender_id):
             return {"id": TENDER_ID, "status": "incomplete"}
 
-    monkeypatch.setattr("app.services.runs.TenderRepo", lambda session: Incomplete([]))
+    monkeypatch.setattr("app.services.output.runs.TenderRepo", lambda session: Incomplete([]))
 
     with pytest.raises(ConflictError):
         create_run(FakeSession(), TENDER_ID)
@@ -619,22 +619,22 @@ def test_a_run_against_a_rate_limited_tender_is_allowed(monkeypatch):
         def get_tender(self, tender_id):
             return {"id": TENDER_ID, "status": "rate_limited"}
 
-    monkeypatch.setattr("app.services.runs.TenderRepo", lambda session: Limited([]))
+    monkeypatch.setattr("app.services.output.runs.TenderRepo", lambda session: Limited([]))
     monkeypatch.setattr(
-        "app.services.runs.list_manufacturers", lambda session: [{"name": "Acme"}]
+        "app.services.output.runs.list_manufacturers", lambda session: [{"name": "Acme"}]
     )
-    monkeypatch.setattr("app.services.runs.corpus_hash", lambda session: "hash")
+    monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
 
     assert create_run(FakeSession(), TENDER_ID, repo=FakeRunRepo()) == RUN_ID
 
 
 def test_a_run_against_a_manufacturer_the_corpus_lacks_is_a_validation_error(monkeypatch):
     monkeypatch.setattr(
-        "app.services.runs.list_manufacturers",
+        "app.services.output.runs.list_manufacturers",
         lambda session: [{"name": "Acme"}, {"name": "Beta"}],
     )
     monkeypatch.setattr(
-        "app.services.runs.TenderRepo", lambda session: FakeTenderRepo([])
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([])
     )
 
     with pytest.raises(ValidationError) as raised:
@@ -647,13 +647,13 @@ def test_a_run_against_a_manufacturer_the_corpus_lacks_is_a_validation_error(mon
 
 def test_a_run_without_manufacturers_covers_the_whole_corpus(monkeypatch):
     monkeypatch.setattr(
-        "app.services.runs.list_manufacturers",
+        "app.services.output.runs.list_manufacturers",
         lambda session: [{"name": "Beta"}, {"name": "Acme"}],
     )
     monkeypatch.setattr(
-        "app.services.runs.TenderRepo", lambda session: FakeTenderRepo([])
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([])
     )
-    monkeypatch.setattr("app.services.runs.corpus_hash", lambda session: "hash")
+    monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
     repo = FakeRunRepo()
 
     create_run(FakeSession(), TENDER_ID, repo=repo)
@@ -690,10 +690,10 @@ def test_a_run_that_must_read_a_datasheet_is_refused_without_a_model(monkeypatch
     """
     _no_model(monkeypatch)
     monkeypatch.setattr(
-        "app.services.runs.list_manufacturers", lambda session: [{"name": "Acme"}]
+        "app.services.output.runs.list_manufacturers", lambda session: [{"name": "Acme"}]
     )
     monkeypatch.setattr(
-        "app.services.runs.TenderRepo", lambda session: FakeTenderRepo(REQUIREMENTS)
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo(REQUIREMENTS)
     )
 
     with pytest.raises(ValidationError) as raised:
@@ -708,13 +708,13 @@ def test_a_tender_of_only_commercial_lines_is_started_without_a_model(monkeypatc
     to refuse the report (FR-14, D-108)."""
     _no_model(monkeypatch)
     monkeypatch.setattr(
-        "app.services.runs.list_manufacturers", lambda session: [{"name": "Acme"}]
+        "app.services.output.runs.list_manufacturers", lambda session: [{"name": "Acme"}]
     )
     monkeypatch.setattr(
-        "app.services.runs.TenderRepo",
+        "app.services.output.runs.TenderRepo",
         lambda session: FakeTenderRepo([dict(REQUIREMENTS[1])]),
     )
-    monkeypatch.setattr("app.services.runs.corpus_hash", lambda session: "hash")
+    monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
     repo = FakeRunRepo()
 
     assert create_run(FakeSession(), TENDER_ID, repo=repo) == RUN_ID
@@ -741,7 +741,7 @@ def test_a_run_stopped_by_a_missing_model_records_why(monkeypatch):
 
 def test_manufacturers_are_deduplicated_in_the_order_asked_for(monkeypatch):
     monkeypatch.setattr(
-        "app.services.runs.list_manufacturers",
+        "app.services.output.runs.list_manufacturers",
         lambda session: [{"name": "Acme"}, {"name": "Beta"}],
     )
     session = object()
@@ -750,7 +750,7 @@ def test_manufacturers_are_deduplicated_in_the_order_asked_for(monkeypatch):
 
 
 def test_an_empty_corpus_cannot_be_run_against(monkeypatch):
-    monkeypatch.setattr("app.services.runs.list_manufacturers", lambda session: [])
+    monkeypatch.setattr("app.services.output.runs.list_manufacturers", lambda session: [])
 
     with pytest.raises(ValidationError) as raised:
         _manufacturer_names(object(), None)
@@ -837,7 +837,7 @@ def test_progress_counts_what_is_stored(monkeypatch):
     repo = FakeRunRepo(manufacturers=("Acme", "Beta"))
     repo.stored = [_stored("r1", "mfr-Acme", "full_match", 1.0)]
     monkeypatch.setattr(
-        "app.services.runs.TenderRepo", lambda session: FakeTenderRepo(REQUIREMENTS)
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo(REQUIREMENTS)
     )
 
     state = progress(object(), RUN_ID, repo=repo)
@@ -854,7 +854,7 @@ def test_progress_expects_only_the_assessable_requirements(monkeypatch):
     requirements = [*REQUIREMENTS, {"id": "r3", "type": "unknown", "text": "5.2"}]
     repo = FakeRunRepo(manufacturers=("Acme", "Beta"))
     monkeypatch.setattr(
-        "app.services.runs.TenderRepo", lambda session: FakeTenderRepo(requirements)
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo(requirements)
     )
 
     state = progress(object(), RUN_ID, repo=repo)

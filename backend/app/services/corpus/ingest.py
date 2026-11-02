@@ -17,7 +17,7 @@ from typing import Optional
 
 from app.core.logging import get_logger
 from app.repositories.postgres import PostgresDocumentRepo
-from app.services.docparser import iter_csv_corpus, iter_manifest_documents, parse_document
+from app.services.tender.parse import iter_csv_corpus, iter_manifest_documents, parse_document
 
 logger = get_logger(__name__)
 
@@ -146,7 +146,7 @@ def main() -> int:
     from app.core.config import get_settings
     from app.repositories.aliases import seed_aliases, seed_attributes
     from app.repositories.db import session_scope
-    from app.services.corpusseed import remove_stale_products, seed_corpus
+    from app.services.corpus.seed import remove_stale_products, seed_corpus
 
     data_dir = get_settings().data_dir
     with session_scope() as session:

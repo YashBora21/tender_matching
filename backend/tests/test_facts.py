@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.facts import ExtractedFact, extract_fact
+from app.services.match.facts import ExtractedFact, extract_fact
 
 
 class FakeClient:

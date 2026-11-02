@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from app.services import e2e
-from app.services.e2e import E2EResult, Facts, Step, assess, main, run_end_to_end
+from app.services.cli import e2e
+from app.services.cli.e2e import E2EResult, Facts, Step, assess, main, run_end_to_end
 
 
 def test_an_emptier_corpus_blocks_and_names_the_two_ways_to_fix_it():
@@ -322,7 +322,7 @@ def test_a_run_stopped_by_the_budget_names_what_it_kept(monkeypatch):
     command continues from the pairs still missing (D-110)."""
     from types import SimpleNamespace
 
-    from app.services import runs
+    from app.services.output import runs
 
     class _Session:
         def commit(self) -> None:

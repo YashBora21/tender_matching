@@ -14,8 +14,8 @@ import pytest
 
 from app.core.config import get_settings
 from app.schemas.enums import TenderStatus
-from app.services import tenderupload
-from app.services.tendercollect import TenderManifest, read_manifest
+from app.services.tender import upload
+from app.services.tender.collect import TenderManifest, read_manifest
 
 
 def _pdf(path: Path, text: str) -> bytes:
@@ -81,7 +81,7 @@ def _fakes(tmp_path, monkeypatch):
     FakeRepo.statuses.clear()
     FakeRepo.row.clear()
     FakeRepo.row.update({"id": "T1", "status": "queued", "error": None})
-    monkeypatch.setattr(tenderupload, "TenderRepo", FakeRepo)
+    monkeypatch.setattr(upload, "TenderRepo", FakeRepo)
     return tmp_path
 
 
@@ -98,31 +98,31 @@ def _fakes(tmp_path, monkeypatch):
     ],
 )
 def test_the_uploaded_name_is_reduced_to_its_final_component(given, expected):
-    assert tenderupload.safe_name(given) == expected
+    assert upload.safe_name(given) == expected
 
 
 @pytest.mark.parametrize("given", ["", None, ".hidden.pdf", "tender.exe", "notes"])
 def test_a_file_that_is_not_a_named_pdf_is_refused(given):
-    with pytest.raises(tenderupload.ValidationError):
-        tenderupload.safe_name(given)
+    with pytest.raises(upload.ValidationError):
+        upload.safe_name(given)
 
 
 def test_the_content_decides_whether_it_is_a_pdf():
-    assert tenderupload.is_pdf(b"%PDF-1.7\n...")
+    assert upload.is_pdf(b"%PDF-1.7\n...")
     # A name says nothing about what the bytes are.
-    assert not tenderupload.is_pdf(b"<html>not a pdf</html>")
+    assert not upload.is_pdf(b"<html>not a pdf</html>")
 
 
 def test_bytes_that_are_not_a_pdf_are_refused(_fakes):
-    with pytest.raises(tenderupload.ValidationError):
-        tenderupload.store_upload(
+    with pytest.raises(upload.ValidationError):
+        upload.store_upload(
             FakeSession(), filename="tender.pdf", data=b"<html>not a pdf</html>"
         )
 
 
 def test_an_empty_file_is_refused(_fakes):
-    with pytest.raises(tenderupload.ValidationError):
-        tenderupload.store_upload(FakeSession(), filename="tender.pdf", data=b"")
+    with pytest.raises(upload.ValidationError):
+        upload.store_upload(FakeSession(), filename="tender.pdf", data=b"")
 
 
 # --- freezing --------------------------------------------------------------
@@ -131,7 +131,7 @@ def test_an_empty_file_is_refused(_fakes):
 def test_an_uploaded_tender_is_frozen_with_its_hash_before_it_is_read(_fakes):
     data = b"%PDF-1.7\n% synthetic\n"
 
-    uploaded = tenderupload.store_upload(
+    uploaded = upload.store_upload(
         FakeSession(), filename="tender.pdf", data=data
     )
 
@@ -143,7 +143,7 @@ def test_an_uploaded_tender_is_frozen_with_its_hash_before_it_is_read(_fakes):
     # The file is on disk, under the tender's own id, not in a web root.
     assert (directory / "tender.pdf").read_bytes() == data
     manifest = read_manifest(directory / "manifest.json")
-    assert manifest["wrapper_sha256"] == tenderupload.sha256_bytes(data)
+    assert manifest["wrapper_sha256"] == upload.sha256_bytes(data)
     assert manifest["filename"] == "tender.pdf"
     # The row was created in the queued state; it is not read yet.
     assert FakeRepo.created[0]["status"] is TenderStatus.QUEUED
@@ -151,11 +151,11 @@ def test_an_uploaded_tender_is_frozen_with_its_hash_before_it_is_read(_fakes):
 
 def test_a_second_upload_of_the_same_file_is_the_same_tender(_fakes):
     data = b"%PDF-1.7\n% synthetic\n"
-    tenderupload.store_upload(FakeSession(), filename="tender.pdf", data=data)
+    upload.store_upload(FakeSession(), filename="tender.pdf", data=data)
     first = read_manifest(_fakes / "tenders" / "T1" / "manifest.json")
 
     # A different name, the same bytes: the hash decides it is the same file.
-    uploaded = tenderupload.store_upload(
+    uploaded = upload.store_upload(
         FakeSession(), filename="renamed.pdf", data=data
     )
 
@@ -167,10 +167,10 @@ def test_a_second_upload_of_the_same_file_is_the_same_tender(_fakes):
 
 def test_a_duplicate_says_what_state_the_tender_reached(_fakes):
     data = b"%PDF-1.7\n% synthetic\n"
-    tenderupload.store_upload(FakeSession(), filename="tender.pdf", data=data)
+    upload.store_upload(FakeSession(), filename="tender.pdf", data=data)
     FakeRepo.row["status"] = TenderStatus.DONE.value
 
-    uploaded = tenderupload.store_upload(
+    uploaded = upload.store_upload(
         FakeSession(), filename="tender.pdf", data=data
     )
 
@@ -195,10 +195,10 @@ def test_a_document_uploaded_by_hand_survives_a_re_read():
     previous = {"documents": [manual, fetched]}
     collected = TenderManifest(
         tender_id="T1",
-        documents=[tenderupload.TenderDocument(url=fetched["url"], status="unchanged")],
+        documents=[upload.TenderDocument(url=fetched["url"], status="unchanged")],
     )
 
-    kept = tenderupload._manual_documents(previous, collected)
+    kept = upload._manual_documents(previous, collected)
 
     assert [document.url for document in kept] == ["upload://boq.csv"]
     assert kept[0].path == "raw/boq.csv"
@@ -208,10 +208,10 @@ def test_a_manual_document_is_not_duplicated_when_it_is_also_a_link():
     manual = {"url": "https://example.test/boq.csv", "status": "manual"}
     collected = TenderManifest(
         tender_id="T1",
-        documents=[tenderupload.TenderDocument(url=manual["url"], status="manual")],
+        documents=[upload.TenderDocument(url=manual["url"], status="manual")],
     )
 
-    assert tenderupload._manual_documents({"documents": [manual]}, collected) == []
+    assert upload._manual_documents({"documents": [manual]}, collected) == []
 
 
 def test_a_tender_that_is_its_own_specification_becomes_an_attachment(tmp_path):
@@ -220,7 +220,7 @@ def test_a_tender_that_is_its_own_specification_becomes_an_attachment(tmp_path):
     path = tmp_path / "tender.pdf"
     _pdf(path, "TECHNICAL SPECIFICATION - the body shall be SS316")
 
-    document = tenderupload._wrapper_document(path, tmp_path)
+    document = upload._wrapper_document(path, tmp_path)
 
     assert document is not None
     assert document.kind == "spec"
@@ -233,18 +233,18 @@ def test_a_wrapper_with_nothing_readable_inside_is_not_an_attachment(tmp_path):
     path = tmp_path / "wrapper.pdf"
     _pdf(path, "Click here to download the bill of quantities")
 
-    assert tenderupload._wrapper_document(path, tmp_path) is None
+    assert upload._wrapper_document(path, tmp_path) is None
 
 
 # --- the background read ---------------------------------------------------
 
 
 def _stored_tender(tmp_path: Path) -> Path:
-    directory = tenderupload.tender_dir("T1")
+    directory = upload.tender_dir("T1")
     directory.mkdir(parents=True, exist_ok=True)
     wrapper = directory / "tender.pdf"
     _pdf(wrapper, "TECHNICAL SPECIFICATION - the body shall be SS316")
-    tenderupload.write_manifest(
+    upload.write_manifest(
         TenderManifest(
             tender_id="T1",
             filename="tender.pdf",
@@ -270,14 +270,14 @@ def test_reading_a_tender_moves_it_from_processing_to_done(_fakes, monkeypatch):
         requirements = 1
 
     monkeypatch.setattr(
-        tenderupload,
+        upload,
         "collect_tender",
         lambda *a, **k: TenderManifest(tender_id="T1", documents=[]),
     )
-    monkeypatch.setattr(tenderupload, "audit_tender", lambda *a, **k: Audit())
+    monkeypatch.setattr(upload, "audit_tender", lambda *a, **k: Audit())
     monkeypatch.setattr("app.repositories.db.session_scope", _scope(FakeSession()))
 
-    assert tenderupload.ingest("T1") == TenderStatus.DONE.value
+    assert upload.ingest("T1") == TenderStatus.DONE.value
     assert FakeRepo.statuses == [
         (TenderStatus.PROCESSING.value, None),
         (TenderStatus.DONE.value, None),
@@ -302,13 +302,13 @@ def _audit(**values):
 
 def _ingest_with(monkeypatch, audit):
     monkeypatch.setattr(
-        tenderupload,
+        upload,
         "collect_tender",
         lambda *a, **k: TenderManifest(tender_id="T1", documents=[]),
     )
-    monkeypatch.setattr(tenderupload, "audit_tender", lambda *a, **k: audit)
+    monkeypatch.setattr(upload, "audit_tender", lambda *a, **k: audit)
     monkeypatch.setattr("app.repositories.db.session_scope", _scope(FakeSession()))
-    return tenderupload.ingest("T1")
+    return upload.ingest("T1")
 
 
 def test_a_tender_with_no_page_read_is_not_done(_fakes, monkeypatch):
@@ -360,14 +360,14 @@ def test_a_rate_limited_tender_is_neither_done_nor_failed(_fakes, monkeypatch):
         rate_limited_detail = "the model was rate limited; retry in 24.9s"
 
     monkeypatch.setattr(
-        tenderupload,
+        upload,
         "collect_tender",
         lambda *a, **k: TenderManifest(tender_id="T1", documents=[]),
     )
-    monkeypatch.setattr(tenderupload, "audit_tender", lambda *a, **k: Audit())
+    monkeypatch.setattr(upload, "audit_tender", lambda *a, **k: Audit())
     monkeypatch.setattr("app.repositories.db.session_scope", _scope(FakeSession()))
 
-    assert tenderupload.ingest("T1") == TenderStatus.RATE_LIMITED.value
+    assert upload.ingest("T1") == TenderStatus.RATE_LIMITED.value
     status, error = FakeRepo.statuses[-1]
     assert status == TenderStatus.RATE_LIMITED.value
     assert "24.9" in error
@@ -382,14 +382,14 @@ def test_a_tender_that_cannot_be_read_is_failed_with_its_reason(_fakes, monkeypa
         rate_limited_detail = None
 
     monkeypatch.setattr(
-        tenderupload,
+        upload,
         "collect_tender",
         lambda *a, **k: TenderManifest(tender_id="T1", documents=[]),
     )
-    monkeypatch.setattr(tenderupload, "audit_tender", lambda *a, **k: Audit())
+    monkeypatch.setattr(upload, "audit_tender", lambda *a, **k: Audit())
     monkeypatch.setattr("app.repositories.db.session_scope", _scope(FakeSession()))
 
-    assert tenderupload.ingest("T1") == TenderStatus.FAILED.value
+    assert upload.ingest("T1") == TenderStatus.FAILED.value
     status, error = FakeRepo.statuses[-1]
     assert status == TenderStatus.FAILED.value
     assert "no bill of quantities" in error
@@ -401,11 +401,11 @@ def test_an_exception_is_recorded_and_never_left_processing(_fakes, monkeypatch)
     def explode(*args, **kwargs):
         raise RuntimeError("the wrapper is empty")
 
-    monkeypatch.setattr(tenderupload, "collect_tender", explode)
+    monkeypatch.setattr(upload, "collect_tender", explode)
     session = FakeSession()
     monkeypatch.setattr("app.repositories.db.session_scope", _scope(session))
 
-    assert tenderupload.ingest("T1") == TenderStatus.FAILED.value
+    assert upload.ingest("T1") == TenderStatus.FAILED.value
     assert session.rollbacks == 1
     status, error = FakeRepo.statuses[-1]
     assert status == TenderStatus.FAILED.value
@@ -415,13 +415,13 @@ def test_an_exception_is_recorded_and_never_left_processing(_fakes, monkeypatch)
 def test_a_tender_whose_file_is_gone_is_failed_with_what_to_do(_fakes, monkeypatch):
     directory = _fakes / "tenders" / "T1"
     directory.mkdir(parents=True)
-    tenderupload.write_manifest(
+    upload.write_manifest(
         TenderManifest(tender_id="T1", filename="tender.pdf", documents=[]),
         directory,
     )
     monkeypatch.setattr("app.repositories.db.session_scope", _scope(FakeSession()))
 
-    assert tenderupload.ingest("T1") == TenderStatus.FAILED.value
+    assert upload.ingest("T1") == TenderStatus.FAILED.value
     status, error = FakeRepo.statuses[-1]
     assert status == TenderStatus.FAILED.value
     assert "upload it again" in error

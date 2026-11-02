@@ -202,7 +202,7 @@ class TenderRepo:
         it by the hash of that file. The two are reconciled here, so the rest
         of the pipeline works with the database's id and never with a name.
         """
-        from app.services.tendercollect import manifest_identity
+        from app.services.tender.collect import manifest_identity
 
         sha256, filename = manifest_identity(manifest, tender_dir)
         if not sha256:

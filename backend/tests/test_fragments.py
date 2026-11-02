@@ -5,7 +5,7 @@ Every clause below is synthetic. None of it is taken from a real tender.
 
 from __future__ import annotations
 
-from app.services.tenderingest import (
+from app.services.tender.ingest import (
     FragmentReport,
     RequirementRecord,
     drop_fragments,

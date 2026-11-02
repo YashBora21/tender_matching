@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.schemas.enums import Applicability, RequirementStatus, VerificationOutcome
-from app.services.verifier import (
+from app.services.match.verify import (
     check_citation,
     check_comparison,
     check_entity,

@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from app.schemas.enums import ExtractionMethod
-from app.services.atomizer import atomize, atomize_records
-from app.services.tenderingest import RequirementRecord
+from app.services.requirement.atomize import atomize, atomize_records
+from app.services.tender.ingest import RequirementRecord
 
 
 def test_a_compound_line_is_split() -> None:

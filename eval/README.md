@@ -25,7 +25,7 @@ gold file is JSONL, one label per line.
 | Citation correctness | Verified quotes ÷ predicted claims. A claim with no quote counts against; a source that is not on disk is reported and excluded, never counted as correct |
 | Unsupported | Reported in its own block, excluded from every metric above (as it is excluded from the score) |
 
-A quote counts as verified only if `app.services.verifier.check_citation` finds
+A quote counts as verified only if `app.services.match.verify.check_citation` finds
 it on the cited page — the same function that gates publication, so the
 evaluation cannot be more forgiving than the product.
 

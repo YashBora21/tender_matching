@@ -2,7 +2,7 @@
 
 Run it over the tenders that have been collected:
 
-    python -m app.services.corpus --audit
+    python -m app.services.corpus.run --audit
 
 A second run over an unchanged corpus makes no downloads and no LLM calls:
 every stage is keyed by the inputs it read, and nothing changed.
@@ -20,8 +20,8 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.repositories.db import session_scope
 from app.repositories.tender import LLMCache, TenderRepo
-from app.services.audit import AuditReport, audit_corpus
-from app.services.tendercollect import collect_tender, read_manifest, write_manifest
+from app.services.corpus.audit import AuditReport, audit_corpus
+from app.services.tender.collect import collect_tender, read_manifest, write_manifest
 
 logger = get_logger(__name__)
 

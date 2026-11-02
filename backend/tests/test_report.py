@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 
-from app.services.report import build_report, render_csv, render_html
+from app.services.output.report import build_report, render_csv, render_html
 
 RUN_ID = "11111111-1111-4111-8111-111111111111"
 TENDER_ID = "22222222-2222-4222-8222-222222222222"

@@ -241,7 +241,7 @@ def atomize_records(records):
     already one atom is returned unchanged, so nothing the reader set - a
     page tag, a confidence, a review flag - is lost.
     """
-    from app.services.tenderingest import RequirementRecord
+    from app.services.tender.ingest import RequirementRecord
 
     atomized: list[RequirementRecord] = []
     for record in records:

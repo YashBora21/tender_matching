@@ -18,7 +18,7 @@ from app.core.logging import get_logger
 from app.repositories.db import ping
 from app.schemas.enums import HealthState
 from app.schemas.models import DependencyHealth, HealthResponse
-from app.services.e2e import preflight
+from app.services.cli.e2e import preflight
 
 logger = get_logger(__name__)
 router = APIRouter(prefix="/api", tags=["health"])

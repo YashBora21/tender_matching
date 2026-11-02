@@ -14,7 +14,7 @@ import pytest
 
 from app.comparison import attributes as attrs
 from app.comparison.vocabulary import load_vocabulary
-from app.services.normalizer import normalize
+from app.services.requirement.normalize import normalize
 
 CUSTOM_VOCABULARY = {
     "attributes": [

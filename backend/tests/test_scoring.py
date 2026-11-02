@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from app.core.config import ScoringPolicy
 from app.schemas.enums import Applicability, RequirementStatus, VerificationOutcome
-from app.services.scoring import ScoredResult, rank, score_manufacturer
+from app.services.match.score import ScoredResult, rank, score_manufacturer
 
 POLICY = ScoringPolicy()
 

@@ -37,8 +37,8 @@ from app.core.errors import ValidationError
 from app.core.logging import get_logger
 from app.repositories.tender import LLMCache, TenderRepo
 from app.schemas.enums import TenderStatus
-from app.services.audit import audit_tender
-from app.services.tendercollect import (
+from app.services.corpus.audit import audit_tender
+from app.services.tender.collect import (
     TenderDocument,
     TenderManifest,
     classify_document,

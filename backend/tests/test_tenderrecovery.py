@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.repositories.tender import StoredRequirement, TenderRepo
 from app.schemas.enums import TenderStatus
-from app.services.tenderrecovery import final_state, reconcile
+from app.services.cli.recover import final_state, reconcile
 
 
 # --- the decision, from the stages alone ---------------------------------

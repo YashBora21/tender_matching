@@ -32,7 +32,7 @@ from typing import Callable, Iterable, Optional
 from app.comparison import attributes as attrs
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.services.evidence import load_doc_types
+from app.services.match.evidence import load_doc_types
 from app.services.textnorm import strip_control
 
 logger = get_logger(__name__)

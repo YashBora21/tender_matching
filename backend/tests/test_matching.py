@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.schemas.enums import RequirementStatus, VerificationOutcome
-from app.services.matching import build_query, match_requirement
+from app.services.match.match import build_query, match_requirement
 
 
 class FakeSession:
@@ -26,9 +26,9 @@ class FakeClient:
 
 def test_a_requirement_nothing_answers_is_no_evidence_found(monkeypatch):
     """No evidence is not a missing capability (PRD 4)."""
-    from app.services import matching
+    from app.services.match import match
 
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [])
+    monkeypatch.setattr(match, "search", lambda *a, **k: [])
 
     result = match_requirement(FakeSession(), "Body shall be SS316", client=FakeClient({}))
 
@@ -39,7 +39,7 @@ def test_a_requirement_nothing_answers_is_no_evidence_found(monkeypatch):
 
 
 def _passage_candidate(passage: str):
-    from app.services.retrieval import Candidate
+    from app.services.match.retrieve import Candidate
 
     return Candidate(
         chunk_id="c1",
@@ -54,16 +54,16 @@ def _passage_candidate(passage: str):
 def test_a_listed_set_that_excludes_the_requirement_is_missing_capability(monkeypatch):
     """The document offers flanged or butt weld ends, not screwed. That is a
     documented failing value, not silence (PRD 4)."""
-    from app.services import matching
-    from app.services.facts import FactResult
+    from app.services.match import match
+    from app.services.match.facts import FactResult
 
     passage = "Body Style: Flanged end / Butt weld end"
     monkeypatch.setattr(
-        matching, "search", lambda *a, **k: [_passage_candidate(passage)]
+        match, "search", lambda *a, **k: [_passage_candidate(passage)]
     )
-    monkeypatch.setattr(matching, "_page_text", lambda *a, **k: passage)
+    monkeypatch.setattr(match, "_page_text", lambda *a, **k: passage)
     monkeypatch.setattr(
-        matching, "extract_fact", lambda *a, **k: FactResult(facts=[])
+        match, "extract_fact", lambda *a, **k: FactResult(facts=[])
     )
 
     result = match_requirement(
@@ -80,16 +80,16 @@ def test_a_listed_set_that_excludes_the_requirement_is_missing_capability(monkey
 def test_a_silent_passage_stays_no_evidence_found(monkeypatch):
     """A page that does not mention the attribute is silent. It is never
     turned into a missing capability (AGENTS #4)."""
-    from app.services import matching
-    from app.services.facts import FactResult
+    from app.services.match import match
+    from app.services.match.facts import FactResult
 
     passage = "Maximum operating temperature is 60 degC."
     monkeypatch.setattr(
-        matching, "search", lambda *a, **k: [_passage_candidate(passage)]
+        match, "search", lambda *a, **k: [_passage_candidate(passage)]
     )
-    monkeypatch.setattr(matching, "_page_text", lambda *a, **k: passage)
+    monkeypatch.setattr(match, "_page_text", lambda *a, **k: passage)
     monkeypatch.setattr(
-        matching, "extract_fact", lambda *a, **k: FactResult(facts=[])
+        match, "extract_fact", lambda *a, **k: FactResult(facts=[])
     )
 
     result = match_requirement(
@@ -128,7 +128,7 @@ def test_a_query_part_is_added_once() -> None:
 def test_a_bare_clause_is_searched_with_its_item_and_attribute(monkeypatch):
     """The stored clause may be "1500 RPM". Searching for it alone matches
     every page that mentions a speed; the item names the pump (D-96)."""
-    from app.services import matching
+    from app.services.match import match
 
     seen: dict = {}
 
@@ -136,7 +136,7 @@ def test_a_bare_clause_is_searched_with_its_item_and_attribute(monkeypatch):
         seen["text"] = text
         return []
 
-    monkeypatch.setattr(matching, "search", search)
+    monkeypatch.setattr(match, "search", search)
 
     match_requirement(
         FakeSession(),
@@ -157,7 +157,7 @@ def test_a_bare_clause_is_searched_with_its_item_and_attribute(monkeypatch):
 def test_the_item_type_is_sent_to_the_search(monkeypatch):
     """The category is `valves`; the type inside it is read from the item's
     title and passed to retrieval (D-97)."""
-    from app.services import matching
+    from app.services.match import match
 
     seen: dict = {}
 
@@ -165,7 +165,7 @@ def test_the_item_type_is_sent_to_the_search(monkeypatch):
         seen.update(kwargs)
         return []
 
-    monkeypatch.setattr(matching, "search", search)
+    monkeypatch.setattr(match, "search", search)
 
     match_requirement(
         FakeSession(),
@@ -179,7 +179,7 @@ def test_the_item_type_is_sent_to_the_search(monkeypatch):
 
 
 def test_an_ambiguous_item_type_is_not_filtered_on_a_guess(monkeypatch):
-    from app.services import matching
+    from app.services.match import match
 
     seen: dict = {}
 
@@ -187,7 +187,7 @@ def test_an_ambiguous_item_type_is_not_filtered_on_a_guess(monkeypatch):
         seen.update(kwargs)
         return []
 
-    monkeypatch.setattr(matching, "search", search)
+    monkeypatch.setattr(match, "search", search)
 
     match_requirement(
         FakeSession(),
@@ -201,14 +201,14 @@ def test_an_ambiguous_item_type_is_not_filtered_on_a_guess(monkeypatch):
 
 
 def test_a_passage_that_states_nothing_is_no_evidence_found(monkeypatch):
-    from app.services import matching
-    from app.services.retrieval import Candidate
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
 
     candidate = Candidate(
         chunk_id="c1", document_id="d1", text="A gearbox for the pump", page=1
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
-    monkeypatch.setattr(matching, "_page_text", lambda s, c: "A gearbox for the pump")
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "_page_text", lambda s, c: "A gearbox for the pump")
 
     client = FakeClient(
         {
@@ -234,15 +234,15 @@ def test_a_passage_that_states_nothing_is_no_evidence_found(monkeypatch):
 def test_a_quote_that_is_not_on_the_page_fails_the_citation_layer(monkeypatch):
     """A claim whose quote is not on the page it names is not verified
     (FR-23)."""
-    from app.services import matching
-    from app.services.retrieval import Candidate
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
 
     candidate = Candidate(
         chunk_id="c1", document_id="d1", text="Body of body shall be SS316", page=1
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
     # The page says something else.
-    monkeypatch.setattr(matching, "_page_text", lambda s, c: "A completely different page")
+    monkeypatch.setattr(match, "_page_text", lambda s, c: "A completely different page")
 
     client = FakeClient(
         {
@@ -278,15 +278,15 @@ def test_a_range_clause_is_compared_with_the_pair_it_states(monkeypatch):
     requirement published *no evidence found* - the registry's range rule was
     never reachable from a run (D-121).
     """
-    from app.services import matching
-    from app.services.retrieval import Candidate
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
 
     passage = "Rated flow 15 m3/h at 8 bar."
     candidate = Candidate(
         chunk_id="c1", document_id="d1", text=passage, page=1, model="SYNTHETIC-1"
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
-    monkeypatch.setattr(matching, "_page_text", lambda s, c: passage)
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "_page_text", lambda s, c: passage)
     client = FakeClient(
         {
             "requirements": [
@@ -324,8 +324,8 @@ def test_a_page_that_does_not_repeat_the_manufacturer_is_still_that_manufacturer
     A CIRCOR brochure page that says only "body shall be SS316" used to fail
     the entity layer because the word CIRCOR was not on the page.
     """
-    from app.services import matching
-    from app.services.retrieval import Candidate
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
 
     candidate = Candidate(
         chunk_id="c1",
@@ -335,8 +335,8 @@ def test_a_page_that_does_not_repeat_the_manufacturer_is_still_that_manufacturer
         manufacturer="Acme Valves",
         model="GV-100",
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
-    monkeypatch.setattr(matching, "_page_text", lambda s, c: candidate.text)
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "_page_text", lambda s, c: candidate.text)
 
     client = FakeClient(
         {
@@ -371,8 +371,8 @@ def test_a_pressure_class_uses_its_ordered_evaluator(monkeypatch):
     """The model answers "class", the registry has a rule for the canonical
     term `pressure_class`, and Class 300 against a Class 150 requirement is a
     partial match that goes to review (D-95, D-99)."""
-    from app.services import matching
-    from app.services.retrieval import Candidate
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
 
     candidate = Candidate(
         chunk_id="c1",
@@ -382,8 +382,8 @@ def test_a_pressure_class_uses_its_ordered_evaluator(monkeypatch):
         manufacturer="Acme Valves",
         model="GV-100",
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
-    monkeypatch.setattr(matching, "_page_text", lambda s, c: candidate.text)
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "_page_text", lambda s, c: candidate.text)
 
     client = FakeClient(
         {
@@ -417,14 +417,14 @@ def test_a_pressure_class_uses_its_ordered_evaluator(monkeypatch):
 
 def test_an_extraction_that_fails_is_flagged_not_silently_empty(monkeypatch):
     """A failed extraction is a failure the reviewer can see."""
-    from app.services import matching
+    from app.services.match import match
     from app.services.llm import LLMError
-    from app.services.retrieval import Candidate
+    from app.services.match.retrieve import Candidate
 
     candidate = Candidate(
         chunk_id="c1", document_id="d1", text="Body of body shall be SS316", page=1
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
 
     result = match_requirement(
         FakeSession(), "Body shall be SS316", client=FakeClient(LLMError("not JSON"))
@@ -440,14 +440,14 @@ def test_a_rate_limit_stops_the_match_instead_of_reading_as_no_evidence(monkeypa
     can record `rate_limited` (D5)."""
     import pytest
 
-    from app.services import matching
+    from app.services.match import match
     from app.services.llm import LLMRateLimited
-    from app.services.retrieval import Candidate
+    from app.services.match.retrieve import Candidate
 
     candidate = Candidate(
         chunk_id="c1", document_id="d1", text="Body of body shall be SS316", page=1
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
 
     with pytest.raises(LLMRateLimited):
         match_requirement(
@@ -461,14 +461,14 @@ def test_the_fact_that_answers_the_requirement_is_the_one_compared(monkeypatch):
     """One passage can state several capabilities. The comparison runs on the
     one that answers the requirement, not on whichever the model listed
     first."""
-    from app.services import matching
-    from app.services.retrieval import Candidate
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
 
     candidate = Candidate(
         chunk_id="c1", document_id="d1", text="Body of body shall be SS316", page=1
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
-    monkeypatch.setattr(matching, "_page_text", lambda s, c: candidate.text)
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "_page_text", lambda s, c: candidate.text)
 
     client = FakeClient(
         {
@@ -498,8 +498,8 @@ def test_family_level_evidence_is_capped_and_flagged_not_a_confirmed_match(monke
     """A catalogue that covers a family is not evidence confirmed for one
     model: the score is capped and the claim goes to review (PRD 4)."""
     from app.schemas.enums import Applicability
-    from app.services import matching
-    from app.services.retrieval import Candidate
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
 
     candidate = Candidate(
         chunk_id="c1",
@@ -508,8 +508,8 @@ def test_family_level_evidence_is_capped_and_flagged_not_a_confirmed_match(monke
         page=1,
         is_family_level=True,
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
-    monkeypatch.setattr(matching, "_page_text", lambda s, c: candidate.text)
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "_page_text", lambda s, c: candidate.text)
 
     client = FakeClient(
         {
@@ -539,8 +539,8 @@ def test_evidence_from_a_document_with_no_declared_type_is_family_level(monkeypa
     different product. The claim is kept, but it is not model-level evidence
     and its score is capped (D-100)."""
     from app.schemas.enums import Applicability
-    from app.services import matching
-    from app.services.retrieval import Candidate
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
 
     candidate = Candidate(
         chunk_id="c1",
@@ -549,8 +549,8 @@ def test_evidence_from_a_document_with_no_declared_type_is_family_level(monkeypa
         page=1,
         type_unconfirmed=True,
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
-    monkeypatch.setattr(matching, "_page_text", lambda s, c: candidate.text)
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "_page_text", lambda s, c: candidate.text)
 
     client = FakeClient(
         {
@@ -581,8 +581,8 @@ def test_an_unmapped_attribute_has_its_own_reason_code(monkeypatch):
     silent'. Both keep the status *no evidence found*, and the code is what
     tells them apart (D-101)."""
     from app.schemas.enums import ReasonCode, VerificationOutcome
-    from app.services import matching
-    from app.services.retrieval import Candidate
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
 
     candidate = Candidate(
         chunk_id="c1",
@@ -590,8 +590,8 @@ def test_an_unmapped_attribute_has_its_own_reason_code(monkeypatch):
         text="Wibble factor is 12",
         page=1,
     )
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [candidate])
-    monkeypatch.setattr(matching, "_page_text", lambda s, c: candidate.text)
+    monkeypatch.setattr(match, "search", lambda *a, **k: [candidate])
+    monkeypatch.setattr(match, "_page_text", lambda s, c: candidate.text)
 
     client = FakeClient(
         {
@@ -617,9 +617,9 @@ def test_a_silent_corpus_has_no_reason_code(monkeypatch):
     """Nothing was found, so no limit of ours stopped a comparison: the code
     stays empty, which is how a report counts silence apart from a gap in our
     own evaluation (D-101)."""
-    from app.services import matching
+    from app.services.match import match
 
-    monkeypatch.setattr(matching, "search", lambda *a, **k: [])
+    monkeypatch.setattr(match, "search", lambda *a, **k: [])
 
     result = match_requirement(
         FakeSession(), "Body shall be SS316", client=FakeClient({})
@@ -631,12 +631,12 @@ def test_a_silent_corpus_has_no_reason_code(monkeypatch):
 
 def test_a_verified_fact_is_answered_without_retrieving_again(monkeypatch):
     """The structured fact cache is checked before retrieval (FR-21)."""
-    from app.services import matching
+    from app.services.match import match
 
     def no_search(*args, **kwargs):  # pragma: no cover
         raise AssertionError("retrieval ran despite a cached fact")
 
-    monkeypatch.setattr(matching, "_cached_fact", lambda *a, **k: {
+    monkeypatch.setattr(match, "_cached_fact", lambda *a, **k: {
         "id": "f1",
         "value": "SS316",
         "unit": None,
@@ -647,7 +647,7 @@ def test_a_verified_fact_is_answered_without_retrieving_again(monkeypatch):
         "attribute": "body material",
         "is_family_level": False,
     })
-    monkeypatch.setattr(matching, "search", no_search)
+    monkeypatch.setattr(match, "search", no_search)
 
     result = match_requirement(
         FakeSession(),
@@ -685,8 +685,8 @@ def _full_match_answer(text="Body of body shall be SS316"):
 def test_a_verified_full_match_stops_the_search(monkeypatch):
     """Nothing a further passage says can beat a verified full match, so the
     remaining passages are not paid for (D19)."""
-    from app.services import matching
-    from app.services.retrieval import Candidate
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
 
     candidates = [
         Candidate(
@@ -697,8 +697,8 @@ def test_a_verified_full_match_stops_the_search(monkeypatch):
         )
         for index in range(3)
     ]
-    monkeypatch.setattr(matching, "search", lambda *a, **k: list(candidates))
-    monkeypatch.setattr(matching, "_page_text", lambda s, c: c.text)
+    monkeypatch.setattr(match, "search", lambda *a, **k: list(candidates))
+    monkeypatch.setattr(match, "_page_text", lambda s, c: c.text)
 
     calls = []
 
@@ -727,7 +727,7 @@ def test_the_number_of_passages_read_comes_from_the_settings(monkeypatch):
     """The cost ceiling of a match is configuration, not a literal (D19)."""
     from types import SimpleNamespace
 
-    from app.services import matching
+    from app.services.match import match
 
     seen: dict = {}
 
@@ -735,9 +735,9 @@ def test_the_number_of_passages_read_comes_from_the_settings(monkeypatch):
         seen.update(kwargs)
         return []
 
-    monkeypatch.setattr(matching, "search", search)
+    monkeypatch.setattr(match, "search", search)
     monkeypatch.setattr(
-        matching, "get_settings", lambda: SimpleNamespace(match_max_candidates=4)
+        match, "get_settings", lambda: SimpleNamespace(match_max_candidates=4)
     )
 
     match_requirement(FakeSession(), "Body shall be SS316", client=FakeClient({}))
@@ -789,7 +789,7 @@ def _corpus_pdf(root, relative):
 
 
 def _candidate(page=1):
-    from app.services.retrieval import Candidate
+    from app.services.match.retrieve import Candidate
 
     return Candidate(chunk_id="c1", document_id="d1", text="Body: SS316", page=page)
 
@@ -800,14 +800,14 @@ def test_a_relative_document_path_is_found_in_the_catalogue(tmp_path, monkeypatc
     for in the catalogue as well as the collector's tree."""
     from types import SimpleNamespace
 
-    from app.services import matching
+    from app.services.match import match
 
     _corpus_pdf(tmp_path, "datasheet.pdf")
     monkeypatch.setattr(
         "app.core.config.get_settings", lambda: SimpleNamespace(data_dir=tmp_path)
     )
 
-    text = matching._page_text(_DocumentSession("datasheet.pdf"), _candidate())
+    text = match._page_text(_DocumentSession("datasheet.pdf"), _candidate())
 
     assert text is not None
     assert "SS316" in text
@@ -816,14 +816,14 @@ def test_a_relative_document_path_is_found_in_the_catalogue(tmp_path, monkeypatc
 def test_an_absolute_document_path_is_read_as_it_is(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
-    from app.services import matching
+    from app.services.match import match
 
     path = _corpus_pdf(tmp_path, "datasheet.pdf")
     monkeypatch.setattr(
         "app.core.config.get_settings", lambda: SimpleNamespace(data_dir=tmp_path)
     )
 
-    text = matching._page_text(_DocumentSession(str(path)), _candidate())
+    text = match._page_text(_DocumentSession(str(path)), _candidate())
 
     assert text is not None
     assert "SS316" in text
@@ -834,10 +834,10 @@ def test_a_document_that_is_not_on_disk_has_no_page_text(tmp_path, monkeypatch):
     than being accepted on the model's word."""
     from types import SimpleNamespace
 
-    from app.services import matching
+    from app.services.match import match
 
     monkeypatch.setattr(
         "app.core.config.get_settings", lambda: SimpleNamespace(data_dir=tmp_path)
     )
 
-    assert matching._page_text(_DocumentSession("gone.pdf"), _candidate()) is None
+    assert match._page_text(_DocumentSession("gone.pdf"), _candidate()) is None

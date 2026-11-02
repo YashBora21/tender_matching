@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.schemas.enums import Operator, ValueType
-from app.services.normalizer import normalize
+from app.services.requirement.normalize import normalize
 
 
 @pytest.mark.parametrize(
@@ -53,7 +53,7 @@ def test_a_range_below_zero_keeps_its_sign() -> None:
 def test_the_pair_is_read_back_from_a_value_written_as_a_range() -> None:
     """The comparison is handed the clause's value text, so the pair is read
     with the same grammar that parsed it."""
-    from app.services.normalizer import parse_range
+    from app.services.requirement.normalize import parse_range
 
     assert parse_range("10-20") == (10.0, 20.0)
     assert parse_range("10 to 20") == (10.0, 20.0)

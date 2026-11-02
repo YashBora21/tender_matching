@@ -42,7 +42,7 @@ from typing import Optional
 from app.core.config import get_settings
 from app.core.fetching import FetchRefused, fetch, robots_allows
 from app.core.logging import get_logger
-from app.services.docparser import sha256_of_file
+from app.services.tender.parse import sha256_of_file
 
 logger = get_logger(__name__)
 
@@ -331,7 +331,7 @@ def summary(outcome: Outcome) -> str:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="python -m app.services.corpusrestore",
+        prog="python -m app.services.corpus.restore",
         description="Restore the collected corpus from the addresses the manifests record.",
     )
     parser.add_argument(

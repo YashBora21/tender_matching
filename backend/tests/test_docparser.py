@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from app.services.docparser import (
+from app.services.tender.parse import (
     TEXT_CONFIDENCE,
     Chunk,
     ParsedDocument,
@@ -125,7 +125,7 @@ def test_a_page_with_no_text_is_ocr_flagged(tmp_path, monkeypatch):
     def fake_ocr(page):
         return "Body of body shall be SS316"
 
-    monkeypatch.setattr("app.services.docparser.ocr_page", fake_ocr)
+    monkeypatch.setattr("app.services.tender.parse.ocr_page", fake_ocr)
     # A page whose text layer is this short is treated as scanned.
     monkeypatch.setenv("INGEST_MIN_CHARS_FOR_TEXT", "10000")
 
@@ -141,7 +141,7 @@ def test_a_page_that_cannot_be_read_is_reported_as_failed(tmp_path, monkeypatch)
     path = tmp_path / "doc.pdf"
     _pdf_with_two_pages(path)
 
-    monkeypatch.setattr("app.services.docparser.ocr_page", lambda page: None)
+    monkeypatch.setattr("app.services.tender.parse.ocr_page", lambda page: None)
     monkeypatch.setenv("INGEST_MIN_CHARS_FOR_TEXT", "10000")
 
     parsed = parse_document(path)
@@ -154,7 +154,7 @@ def test_a_page_that_cannot_be_read_is_reported_as_failed(tmp_path, monkeypatch)
 def test_a_missing_tesseract_is_named_as_the_reason_a_page_cannot_be_read(monkeypatch):
     """A machine without the program and a page without words are different
     answers, and the ledger has to record the right one (FR-9)."""
-    monkeypatch.setattr("app.services.docparser.shutil.which", lambda name: None)
+    monkeypatch.setattr("app.services.tender.parse.shutil.which", lambda name: None)
 
     reason = tesseract_missing()
 
@@ -165,7 +165,7 @@ def test_a_missing_tesseract_is_named_as_the_reason_a_page_cannot_be_read(monkey
 
 def test_a_page_is_not_handed_to_ocr_when_the_program_is_missing(monkeypatch):
     monkeypatch.setattr(
-        "app.services.docparser.tesseract_missing", lambda: "tesseract is not installed"
+        "app.services.tender.parse.tesseract_missing", lambda: "tesseract is not installed"
     )
 
     class _Page:
@@ -180,7 +180,7 @@ def test_a_page_is_not_handed_to_ocr_when_the_program_is_missing(monkeypatch):
 
 
 def test_an_ocr_that_raises_gives_the_page_a_reason(monkeypatch):
-    monkeypatch.setattr("app.services.docparser.tesseract_missing", lambda: None)
+    monkeypatch.setattr("app.services.tender.parse.tesseract_missing", lambda: None)
 
     class _Page:
         def get_textpage_ocr(self, **kwargs):
@@ -193,7 +193,7 @@ def test_an_ocr_that_raises_gives_the_page_a_reason(monkeypatch):
 
 
 def test_a_page_the_ocr_reads_as_empty_says_so(monkeypatch):
-    monkeypatch.setattr("app.services.docparser.tesseract_missing", lambda: None)
+    monkeypatch.setattr("app.services.tender.parse.tesseract_missing", lambda: None)
 
     class _Page:
         def get_textpage_ocr(self, **kwargs):
@@ -337,6 +337,6 @@ def test_empty_table_cells_do_not_become_a_row_of_separators(tmp_path):
 
 
 def _render_row(cells) -> str:
-    from app.services.docparser import _rows_to_markdown
+    from app.services.tender.parse import _rows_to_markdown
 
     return _rows_to_markdown([cells])[0][1]

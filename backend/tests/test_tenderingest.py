@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from app.schemas.enums import ExtractionMethod, LedgerStatus, RequirementType
-from app.services.tenderingest import (
+from app.services.tender.ingest import (
     RequirementRecord,
     TenderItem,
     assign_to_items,
@@ -100,7 +100,7 @@ def test_the_item_column_is_not_mistaken_for_the_description():
 def test_a_table_that_runs_over_a_page_break_keeps_its_columns():
     """A table that continues onto the next page does not repeat its
     header, so the columns are carried over."""
-    from app.services.tenderingest import _find_header_row, read_boq_table
+    from app.services.tender.ingest import _find_header_row, read_boq_table
 
     first = [
         ["BOQ", "", "", ""],
@@ -129,10 +129,10 @@ def test_a_scanned_page_without_specifications_gives_no_items(monkeypatch, tmp_p
     """A scanned page carries the buyer's letterhead and the signature block
     as well as the requirements, and those are numbered too. A line that
     states no specification is not an item."""
-    from app.services import tenderingest
+    from app.services.tender import ingest
 
     scanned = "1.\nShow Cause Notice\n2.\n0 Circulation of the names of Agencies\n"
-    monkeypatch.setattr("app.services.docparser.ocr_page", lambda page: scanned)
+    monkeypatch.setattr("app.services.tender.parse.ocr_page", lambda page: scanned)
 
     path = tmp_path / "scanned.pdf"
     import pymupdf
@@ -142,7 +142,7 @@ def test_a_scanned_page_without_specifications_gives_no_items(monkeypatch, tmp_p
     document.save(path)
     document.close()
 
-    items = tenderingest.read_boq_items(path, "T1")
+    items = ingest.read_boq_items(path, "T1")
 
     assert items == []
 
@@ -150,10 +150,10 @@ def test_a_scanned_page_without_specifications_gives_no_items(monkeypatch, tmp_p
 def test_a_repeated_item_number_is_written_once(monkeypatch, tmp_path):
     """A scanner reads a two-column table as two columns of text, so a
     number can be seen twice."""
-    from app.services import tenderingest
+    from app.services.tender import ingest
 
     scanned = "1.\nGATE VALVE 150 MM\nFlanged gate valve\n1.\nGATE VALVE 150 MM\nFlanged gate valve\n"
-    monkeypatch.setattr("app.services.docparser.ocr_page", lambda page: scanned)
+    monkeypatch.setattr("app.services.tender.parse.ocr_page", lambda page: scanned)
 
     path = tmp_path / "scanned.pdf"
     import pymupdf
@@ -163,7 +163,7 @@ def test_a_repeated_item_number_is_written_once(monkeypatch, tmp_path):
     document.save(path)
     document.close()
 
-    items = tenderingest.read_boq_items(path, "T1")
+    items = ingest.read_boq_items(path, "T1")
 
     assert [item.item_id for item in items] == ["1"]
 
@@ -184,11 +184,11 @@ def test_a_scanned_bill_of_quantities_gives_its_items(monkeypatch, tmp_path):
     The number of an item arrives on its own line when the table was read as
     two columns, and the item is named on the line below.
     """
-    from app.services import tenderingest
+    from app.services.tender import ingest
 
     scanned = "1.\nGATE VALVE SIZE 150 MM\nFlanged gate valve 6 inch\n2.\nCHECK VALVE\nWafer check valve\n"
     monkeypatch.setattr(
-        "app.services.docparser.ocr_page", lambda page: scanned
+        "app.services.tender.parse.ocr_page", lambda page: scanned
     )
 
     path = tmp_path / "scanned.pdf"
@@ -199,7 +199,7 @@ def test_a_scanned_bill_of_quantities_gives_its_items(monkeypatch, tmp_path):
     document.save(path)
     document.close()
 
-    items = tenderingest.read_boq_items(path, "T1")
+    items = ingest.read_boq_items(path, "T1")
 
     assert [item.item_id for item in items] == ["1", "2"]
     assert items[0].title.startswith("GATE VALVE")
@@ -209,11 +209,11 @@ def test_a_scanned_bill_of_quantities_gives_its_items(monkeypatch, tmp_path):
 def test_a_scanned_bill_of_quantities_with_inline_numbers(monkeypatch, tmp_path):
     """The number and the words arrive on one line when the table was not
     read as two columns."""
-    from app.services import tenderingest
+    from app.services.tender import ingest
 
     scanned = "1. GATE VALVE SIZE 150 MM\nFlanged gate valve 6 inch\n"
     monkeypatch.setattr(
-        "app.services.docparser.ocr_page", lambda page: scanned
+        "app.services.tender.parse.ocr_page", lambda page: scanned
     )
 
     path = tmp_path / "scanned.pdf"
@@ -224,7 +224,7 @@ def test_a_scanned_bill_of_quantities_with_inline_numbers(monkeypatch, tmp_path)
     document.save(path)
     document.close()
 
-    items = tenderingest.read_boq_items(path, "T1")
+    items = ingest.read_boq_items(path, "T1")
 
     assert [item.item_id for item in items] == ["1"]
     assert items[0].title.startswith("GATE VALVE")
@@ -389,7 +389,7 @@ def test_a_page_that_is_mostly_a_picture_is_ocred(monkeypatch, tmp_path):
     document.close()
 
     monkeypatch.setattr(
-        "app.services.docparser.ocr_page_with_reason",
+        "app.services.tender.parse.ocr_page_with_reason",
         lambda page: ("5.1 The pump shall deliver 50 m3/h at 30 m head.", None),
     )
 
@@ -415,7 +415,7 @@ def test_a_picture_page_that_cannot_be_ocred_is_a_failed_page_with_the_reason(tm
     document.close()
 
     monkeypatch.setattr(
-        "app.services.docparser.tesseract_missing",
+        "app.services.tender.parse.tesseract_missing",
         lambda: "tesseract is not installed, so a page with no text layer cannot be read",
     )
 

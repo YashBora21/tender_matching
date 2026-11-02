@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.pageclassify import (
+from app.services.tender.classify import (
     BOILERPLATE,
     COMMERCIAL_LEGAL,
     MIXED,

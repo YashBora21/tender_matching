@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.services.llm import config_error
-from app.services.runs import needs_model
+from app.services.output.runs import needs_model
 
 logger = get_logger(__name__)
 
@@ -181,7 +181,7 @@ def measure(session: Session, *, tender_id: Optional[str] = None) -> Facts:
     """Read the facts `assess` needs. No download, no model call."""
     from app.repositories.corpus import list_manufacturers
     from app.repositories.tender import TenderRepo
-    from app.services.docparser import iter_csv_corpus, iter_manifest_documents, tesseract_missing
+    from app.services.tender.parse import iter_csv_corpus, iter_manifest_documents, tesseract_missing
 
     makers = list_manufacturers(session)
     settings = get_settings()
@@ -237,8 +237,8 @@ def _stored_id(session: Session, reference: str) -> Optional[str]:
 def _corpus(session: Session, facts: Facts) -> list[Step]:
     """Ingest and seed the corpus, but only what is not already there."""
     from app.repositories.aliases import seed_aliases, seed_attributes
-    from app.services.corpusseed import remove_stale_products, seed_corpus
-    from app.services.ingestion import ingest_corpus
+    from app.services.corpus.seed import remove_stale_products, seed_corpus
+    from app.services.corpus.ingest import ingest_corpus
 
     if facts.documents:
         return [
@@ -288,7 +288,7 @@ def _tender(session: Session, reference: str) -> tuple[Step, str]:
     """Have the tender read, or say that it already is."""
     from app.repositories.tender import TenderRepo
     from app.schemas.enums import TenderStatus
-    from app.services.tenderupload import ingest, store_upload
+    from app.services.tender.upload import ingest, store_upload
 
     stored = _stored_id(session, reference)
     if stored is None:
@@ -312,7 +312,7 @@ def _tender(session: Session, reference: str) -> tuple[Step, str]:
 
 def _matching(session: Session, tender_id: str) -> tuple[Step, str]:
     """Create the run and execute it in this process."""
-    from app.services.runs import create_run, execute_run
+    from app.services.output.runs import create_run, execute_run
 
     run_id = create_run(session, tender_id)
     session.commit()
@@ -338,7 +338,7 @@ def _matching(session: Session, tender_id: str) -> tuple[Step, str]:
 
 def _report(session: Session, run_id: str, out_dir: Path) -> tuple[Step, dict]:
     """Write the three report formats beside one another."""
-    from app.services.report import build_report, render_csv, render_html
+    from app.services.output.report import build_report, render_csv, render_html
 
     report = build_report(session, run_id)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -482,7 +482,7 @@ def preflight(session: Session, *, tender_ref: Optional[str] = None) -> dict:
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="python -m app.services.e2e",
+        prog="python -m app.services.cli.e2e",
         description="Take one tender from file to report in one command.",
     )
     parser.add_argument("tender", help="a tender PDF, a tender directory, or a stored tender id")

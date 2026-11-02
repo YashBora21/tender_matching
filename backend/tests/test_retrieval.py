@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.retrieval import (
+from app.services.match.retrieve import (
     Candidate,
     fuse,
     identifiers,
@@ -74,14 +74,14 @@ def _sql(expression) -> str:
 
 
 def test_a_requirement_without_a_category_is_not_filtered():
-    from app.services.retrieval import _category_filter
+    from app.services.match.retrieve import _category_filter
 
     assert _category_filter(None) is None
 
 
 def test_a_document_in_another_category_is_excluded():
     """A pump catalogue is not evidence for a gate valve (FR-17)."""
-    from app.services.retrieval import _category_filter
+    from app.services.match.retrieve import _category_filter
 
     sql = _sql(_category_filter("valves"))
 
@@ -101,7 +101,7 @@ def test_a_document_that_declares_no_category_is_kept():
     Filtering on equality alone dropped the whole corpus and reported the
     silence as "no evidence found" (PRD 4).
     """
-    from app.services.retrieval import _category_filter
+    from app.services.match.retrieve import _category_filter
 
     sql = _sql(_category_filter("circor"))
 
@@ -113,16 +113,16 @@ def test_a_document_that_declares_no_category_is_kept():
 def test_a_chunk_that_names_a_different_valve_type_is_dropped(monkeypatch):
     """A gate-valve requirement is not answered by a ball-valve datasheet,
     even though both are `valves` (D-97)."""
-    from app.services import retrieval
+    from app.services.match import retrieve
 
     silent = _candidate("silent", "Body shall be SS316")
     gate = _candidate("gate", "Gate valve body shall be SS316")
     ball = _candidate("ball", "Ball valve body shall be SS316")
 
     monkeypatch.setattr(
-        retrieval, "keyword_search", lambda *a, **k: [silent, gate, ball]
+        retrieve, "keyword_search", lambda *a, **k: [silent, gate, ball]
     )
-    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+    monkeypatch.setattr(retrieve, "semantic_search", lambda *a, **k: [])
 
     kept = search(None, "gate valve", category="valves", product_type="gate")
 
@@ -133,7 +133,7 @@ def test_a_chunk_that_names_a_different_valve_type_is_dropped(monkeypatch):
 def test_a_document_title_names_the_type_of_a_silent_chunk(monkeypatch):
     """The title is where a catalogue declares what it covers, and a chunk
     page rarely repeats it."""
-    from app.services import retrieval
+    from app.services.match import retrieve
 
     ball = Candidate(
         chunk_id="ball",
@@ -142,8 +142,8 @@ def test_a_document_title_names_the_type_of_a_silent_chunk(monkeypatch):
         document_title="Ball-Valve-Catalog",
     )
 
-    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [ball])
-    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+    monkeypatch.setattr(retrieve, "keyword_search", lambda *a, **k: [ball])
+    monkeypatch.setattr(retrieve, "semantic_search", lambda *a, **k: [])
 
     assert search(None, "gate valve", category="valves", product_type="gate") == []
 
@@ -151,7 +151,7 @@ def test_a_document_title_names_the_type_of_a_silent_chunk(monkeypatch):
 def test_a_document_family_places_a_silent_chunk(monkeypatch):
     """A chunk that never says "ball valve" is still in a ball-valve
     catalogue, and the document's declared family says so (D-100)."""
-    from app.services import retrieval
+    from app.services.match import retrieve
 
     ball = Candidate(
         chunk_id="ball",
@@ -160,8 +160,8 @@ def test_a_document_family_places_a_silent_chunk(monkeypatch):
         model_or_family="Series 7/8",
     )
 
-    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [ball])
-    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+    monkeypatch.setattr(retrieve, "keyword_search", lambda *a, **k: [ball])
+    monkeypatch.setattr(retrieve, "semantic_search", lambda *a, **k: [])
 
     kept = search(None, "ball valve", category="valves", product_type="ball")
 
@@ -173,7 +173,7 @@ def test_a_document_family_places_a_silent_chunk(monkeypatch):
 def test_a_silent_chunk_in_a_different_type_document_is_dropped(monkeypatch):
     """A control-valve brochure cannot answer a gate-valve requirement just
     because one of its pages never repeats "control valve" (D-100)."""
-    from app.services import retrieval
+    from app.services.match import retrieve
 
     control = Candidate(
         chunk_id="control",
@@ -182,8 +182,8 @@ def test_a_silent_chunk_in_a_different_type_document_is_dropped(monkeypatch):
         model_or_family="D-Series",
     )
 
-    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [control])
-    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+    monkeypatch.setattr(retrieve, "keyword_search", lambda *a, **k: [control])
+    monkeypatch.setattr(retrieve, "semantic_search", lambda *a, **k: [])
 
     assert search(None, "gate valve", category="valves", product_type="gate") == []
 
@@ -191,7 +191,7 @@ def test_a_silent_chunk_in_a_different_type_document_is_dropped(monkeypatch):
 def test_a_document_with_no_declared_type_is_kept_but_flagged(monkeypatch):
     """When neither the chunk nor the document names a type, the evidence is
     kept and marked family-level for review, never dropped (PRD 4, D-100)."""
-    from app.services import retrieval
+    from app.services.match import retrieve
 
     unknown = Candidate(
         chunk_id="unknown",
@@ -200,8 +200,8 @@ def test_a_document_with_no_declared_type_is_kept_but_flagged(monkeypatch):
         document_title="WCENBR0001_EN_AQ.pdf",
     )
 
-    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [unknown])
-    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+    monkeypatch.setattr(retrieve, "keyword_search", lambda *a, **k: [unknown])
+    monkeypatch.setattr(retrieve, "semantic_search", lambda *a, **k: [])
 
     kept = search(None, "gate valve", category="valves", product_type="gate")
 
@@ -213,7 +213,7 @@ def test_a_page_in_a_document_of_another_type_is_dropped(monkeypatch):
     """A control-valve handbook that mentions ball valves on one page is not a
     ball-valve datasheet: the document's declared type decides for the whole
     document (D-107)."""
-    from app.services import retrieval
+    from app.services.match import retrieve
 
     handbook = Candidate(
         chunk_id="handbook",
@@ -222,8 +222,8 @@ def test_a_page_in_a_document_of_another_type_is_dropped(monkeypatch):
         model_or_family="Control valve handbook",
     )
 
-    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [handbook])
-    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+    monkeypatch.setattr(retrieve, "keyword_search", lambda *a, **k: [handbook])
+    monkeypatch.setattr(retrieve, "semantic_search", lambda *a, **k: [])
 
     assert search(None, "ball valve", category="valves", product_type="ball") == []
 
@@ -231,7 +231,7 @@ def test_a_page_in_a_document_of_another_type_is_dropped(monkeypatch):
 def test_a_document_that_names_another_category_is_dropped(monkeypatch):
     """A pump catalogue is not evidence for a valve item, even when its
     manifest never filled the category column (D-107)."""
-    from app.services import retrieval
+    from app.services.match import retrieve
 
     pump = Candidate(
         chunk_id="pump",
@@ -240,8 +240,8 @@ def test_a_document_that_names_another_category_is_dropped(monkeypatch):
         model_or_family="Goulds wastewater pumps",
     )
 
-    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [pump])
-    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+    monkeypatch.setattr(retrieve, "keyword_search", lambda *a, **k: [pump])
+    monkeypatch.setattr(retrieve, "semantic_search", lambda *a, **k: [])
 
     assert search(None, "ball valve", category="valves", product_type="ball") == []
 
@@ -250,7 +250,7 @@ def test_a_document_that_names_no_category_is_kept(monkeypatch):
     """Silence is not a different category: a document whose name says nothing
     is kept, because dropping it would report a corpus gap as a missing
     capability (PRD 4)."""
-    from app.services import retrieval
+    from app.services.match import retrieve
 
     silent = Candidate(
         chunk_id="silent",
@@ -259,8 +259,8 @@ def test_a_document_that_names_no_category_is_kept(monkeypatch):
         document_title="salesprogram_e00543-2.pdf",
     )
 
-    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: [silent])
-    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+    monkeypatch.setattr(retrieve, "keyword_search", lambda *a, **k: [silent])
+    monkeypatch.setattr(retrieve, "semantic_search", lambda *a, **k: [])
 
     kept = search(None, "ball valve", category="valves", product_type="ball")
 
@@ -269,14 +269,14 @@ def test_a_document_that_names_no_category_is_kept(monkeypatch):
 
 
 def test_without_a_type_nothing_is_filtered(monkeypatch):
-    from app.services import retrieval
+    from app.services.match import retrieve
 
     candidates = [
         _candidate("gate", "Gate valve"),
         _candidate("ball", "Ball valve"),
     ]
-    monkeypatch.setattr(retrieval, "keyword_search", lambda *a, **k: candidates)
-    monkeypatch.setattr(retrieval, "semantic_search", lambda *a, **k: [])
+    monkeypatch.setattr(retrieve, "keyword_search", lambda *a, **k: candidates)
+    monkeypatch.setattr(retrieve, "semantic_search", lambda *a, **k: [])
 
     kept = search(None, "valve", category="valves", product_type=None)
 
@@ -286,7 +286,7 @@ def test_without_a_type_nothing_is_filtered(monkeypatch):
 def test_query_expansion_adds_the_alias_tables_other_names():
     """A requirement that says "screwed end" should also search the wording
     the datasheet uses - "body style", "end connection" (D-102)."""
-    from app.services.retrieval import _expand_text
+    from app.services.match.retrieve import _expand_text
 
     groups = {
         "connection_type": [
@@ -312,7 +312,7 @@ def test_query_expansion_adds_the_alias_tables_other_names():
 
 
 def test_query_expansion_leaves_an_unrelated_query_alone():
-    from app.services.retrieval import _expand_text
+    from app.services.match.retrieve import _expand_text
 
     groups = {"connection_type": ["end connection", "body style"]}
 
@@ -320,7 +320,7 @@ def test_query_expansion_leaves_an_unrelated_query_alone():
 
 
 def test_only_short_documents_are_eligible_for_sibling_expansion():
-    from app.services.retrieval import _eligible_documents
+    from app.services.match.retrieve import _eligible_documents
 
     eligible = _eligible_documents({"short": 3, "long": 4, "empty": None}, 3)
 
@@ -330,7 +330,7 @@ def test_only_short_documents_are_eligible_for_sibling_expansion():
 def test_siblings_are_inserted_in_page_order_after_the_hit():
     """A three-page bulletin retrieved on page 1 is read whole, and the fused
     order of everything else is unchanged (D-102)."""
-    from app.services.retrieval import _merge_siblings
+    from app.services.match.retrieve import _merge_siblings
 
     first = Candidate(chunk_id="d1p1", document_id="d1", text="", page=1)
     other = Candidate(chunk_id="d2p1", document_id="d2", text="", page=1)
@@ -355,7 +355,7 @@ def test_siblings_are_inserted_in_page_order_after_the_hit():
 
 
 def test_sibling_expansion_keeps_the_candidate_budget():
-    from app.services.retrieval import _merge_siblings
+    from app.services.match.retrieve import _merge_siblings
 
     first = Candidate(chunk_id="d1p1", document_id="d1", text="", page=1)
     tail = Candidate(chunk_id="d2p1", document_id="d2", text="", page=1)
@@ -375,7 +375,7 @@ def test_a_short_document_is_read_whole_even_when_the_cap_is_small():
     """The cap trims the candidates around a short document, never the pages
     it was expanded into: cutting page 2 off and reporting the page as silent
     is the page-level version of "no evidence found" (D-107)."""
-    from app.services.retrieval import _merge_siblings
+    from app.services.match.retrieve import _merge_siblings
 
     hit = Candidate(chunk_id="d1p1a", document_id="d1", text="", page=1)
     other = Candidate(chunk_id="d2p1", document_id="d2", text="", page=1)

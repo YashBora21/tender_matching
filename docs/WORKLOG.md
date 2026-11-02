@@ -1196,7 +1196,7 @@ cannot verify, it refuses (D-66).
   coverage, review rate, citation correctness and a separate unsupported block.
   `check` validates a gold file on its own. `--corpus` overrides the data
   directory (`DATA_DIR` by default), `--out` writes the JSON summary.
-- Citations are checked with `app.services.verifier.check_citation` against the
+- Citations are checked with `app.services.match.verify.check_citation` against the
   cited page of the real PDF, so "verified" means what it means in the
   pipeline. Documents are found through the corpus manifests, by hash then by
   filename; a document that is not on disk is reported as unavailable and left
@@ -2655,3 +2655,55 @@ result, which is why neither was noticed.
 count was checked against the import graph first - 32 modules, 31 with a caller
 - and only the one without a caller was removed. Grouping the rest is the next
 step, done as a move and not as a rewrite.
+
+### Step 16 - the services folder grouped by stage (D-123)
+
+31 modules in one flat list became six packages. This is a move, not a rewrite:
+no module's content changed apart from its import lines.
+
+    tender/       upload collect ingest parse classify pipeline
+    requirement/  atomize retype normalize resolve extract
+    corpus/       ingest run seed restore audit
+    match/        match retrieve verify evidence score findings category facts
+    output/       report runs
+    cli/          e2e recover
+
+`llm`, `embeddings` and `textnorm` stay at the top: every layer imports them, so
+no stage owns them.
+
+*How it was done:* `git mv` per file, then one regex pass over the tree for
+`app.services.<old>`, then the `from app.services import a, b` form, then the
+Makefile's `-m app.services.*` targets. The first attempt did the replacements
+one module at a time and produced `app.services.corpus.run.restore` - `corpus`
+matched inside the already-rewritten `corpus.restore`. It also rewrote the tree
+before the moves, so the moved modules kept their old imports. Both are fixed in
+the script that was actually used: a single alternation pass, and the file list
+recomputed after the moves.
+
+*Measured:*
+
+- 28 files moved, 59 files rewritten. Inside a moved file only the import lines
+  changed, plus two `Path(__file__).resolve().parents[2]` constants
+  (`match/evidence.py`, `match/category.py`) that needed `parents[3]` once the
+  file sat one package deeper. The suite caught that immediately - every
+  category and doc-type test failed - which is the case a dry run cannot see.
+- 47 distinct `app.services.*` references in the tree, all of them importing a
+  real module.
+- Six test files patched the module object they imported and still called it by
+  its old name (`retrieval`, `matching`, `ingestion`, `tenderingest`,
+  `tenderupload`, `corpusrestore`). The bindings now use the new name; in
+  `test_corpusrestore.py` the module is `restore_module`, because the file also
+  imports a function named `restore`.
+- Full suite: 645 tests, 0 failures, 0 errors, 0 skipped.
+
+**Open:** `DECISIONS.md` and `WORKLOG.md` before this step name modules by their
+old path. Only the one line that pointed at
+`app.services.verifier.check_citation` was updated, because it is a pointer to
+code; the rest are a record of what was true then. `services/__init__.py` holds
+the old-to-new table for a reader following an older decision.
+
+**Left:** `backend/tests/` still has one file per old module name
+(`test_atomizer.py`, `test_docparser.py`, `test_matching.py`, ...). Their
+contents now import from the new path; the file names were not renamed, because
+a test file is named for the job it checks and renaming twenty of them adds
+churn to a commit whose whole point is that nothing moved but paths.

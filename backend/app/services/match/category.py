@@ -46,7 +46,7 @@ __all__ = [
     "mentioned_types",
 ]
 
-DEFAULT_CATEGORIES_PATH = Path(__file__).resolve().parents[2] / "data" / "categories.json"
+DEFAULT_CATEGORIES_PATH = Path(__file__).resolve().parents[3] / "data" / "categories.json"
 
 # What an item's category is when the vocabulary cannot say. It is a value and
 # not a null so that the item is visibly unresolved rather than silently

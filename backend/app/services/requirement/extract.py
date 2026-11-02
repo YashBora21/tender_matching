@@ -31,7 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from app.core.logging import get_logger
 from app.schemas.enums import RequirementType
 from app.services.llm import LLMClient, LLMError, LLMRateLimited
-from app.services.tenderingest import RequirementRecord, english_half, is_mangled
+from app.services.tender.ingest import RequirementRecord, english_half, is_mangled
 
 logger = get_logger(__name__)
 

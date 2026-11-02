@@ -367,7 +367,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     from app.core.config import get_settings
     from app.repositories.corpus import list_manufacturers
     from app.repositories.db import session_scope
-    from app.services.matching import match_requirement
+    from app.services.match.match import match_requirement
 
     settings = get_settings()
     cap = args.limit or settings.match_max_candidates

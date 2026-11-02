@@ -468,9 +468,9 @@ class DatabaseRanking:
         return details
 
     def rank(self, label: RecallLabel, limit: int) -> list[Ranked]:
-        from app.services.categories import infer_type
-        from app.services.matching import build_query
-        from app.services.retrieval import search
+        from app.services.match.category import infer_type
+        from app.services.match.match import build_query
+        from app.services.match.retrieve import search
 
         details = self._requirement(label)
         category = details.get("category")

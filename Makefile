@@ -52,28 +52,28 @@ collect: ## Collect the manufacturer corpus (writes the manifest)
 	$(VENV)/Scripts/python.exe collect/collect.py
 
 corpus-restore: ## Put the corpus back from the addresses its manifests record (ARGS="--dry-run")
-	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpusrestore $(ARGS)
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpus.restore $(ARGS)
 
 ingest: ## Parse the collected corpus into the database
-	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.ingestion
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpus.ingest
 
 embed: ## Embed the corpus chunks (FR-11)
 	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.embeddings
 
 match: ## Answer a requirement from the corpus: make match REQ="body shall be SS316"
-	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.matching "$(REQ)" $(ARGS)
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.match.match "$(REQ)" $(ARGS)
 
 report: ## Build a run's report: make report RUN=<run_id> FORMAT=json|html|csv
-	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.report "$(RUN)" --format $(if $(FORMAT),$(FORMAT),json) $(if $(OUT),--out $(OUT),)
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.output.report "$(RUN)" --format $(if $(FORMAT),$(FORMAT),json) $(if $(OUT),--out $(OUT),)
 
 e2e: ## One command, tender to report: make e2e TENDER=<pdf|dir|id> [ARGS=--check]
-	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.e2e "$(TENDER)" $(ARGS)
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.cli.e2e "$(TENDER)" $(ARGS)
 
 tenders: ## Process the tender corpus and report what it gave
-	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpus
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpus.run
 
 tenders-audit: ## Report what the tender corpus holds, without processing it
-	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpus --audit
+	cd backend && ../$(VENV)/Scripts/python.exe -m app.services.corpus.run --audit
 
 eval: ## Score a report against gold labels: make eval REPORT=r.json GOLD=eval/gold/x.jsonl
 	$(VENV)/Scripts/python.exe eval/harness.py score --report "$(REPORT)" --gold "$(GOLD)" $(ARGS)

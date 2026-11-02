@@ -24,8 +24,8 @@ import re
 from typing import Optional
 
 from app.schemas.enums import Operator, RequirementType
-from app.services.pageclassify import is_non_technical
-from app.services.tenderingest import RequirementRecord
+from app.services.tender.classify import is_non_technical
+from app.services.tender.ingest import RequirementRecord
 
 # The attribute a clause names, and the canonical name it is stored under.
 # A word that names the same attribute several ways ("dia", "diameter") maps

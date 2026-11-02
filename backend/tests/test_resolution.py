@@ -13,7 +13,7 @@ import pytest
 from app.comparison.registry import evaluate
 from app.repositories.aliases import AliasRepo, seed_aliases
 from app.schemas.enums import Operator, ValueType
-from app.services.resolution import resolve
+from app.services.requirement.resolve import resolve
 
 
 class FakeAliasRepo(AliasRepo):
@@ -72,7 +72,7 @@ def test_a_canonical_attribute_resolves_to_itself():
 
 def test_an_alias_resolves_to_its_canonical_term(monkeypatch):
     monkeypatch.setattr(
-        "app.services.resolution.AliasRepo",
+        "app.services.requirement.resolve.AliasRepo",
         lambda session: FakeAliasRepo(session, {"spindle speed": ("rotational_speed", 0.9, True)}),
     )
     resolved = _resolve(_session(), "spindle speed")
@@ -92,7 +92,7 @@ def test_an_unknown_attribute_goes_to_review():
 def test_a_low_confidence_alias_goes_to_review(monkeypatch):
     monkeypatch.setenv("ALIAS_CONFIDENCE_THRESHOLD", "0.95")
     monkeypatch.setattr(
-        "app.services.resolution.AliasRepo",
+        "app.services.requirement.resolve.AliasRepo",
         lambda session: FakeAliasRepo(session, {"spindle speed": ("rotational_speed", 0.9, True)}),
     )
     resolved = _resolve(_session(), "spindle speed")
@@ -102,7 +102,7 @@ def test_a_low_confidence_alias_goes_to_review(monkeypatch):
 
 def test_an_unapproved_alias_goes_to_review(monkeypatch):
     monkeypatch.setattr(
-        "app.services.resolution.AliasRepo",
+        "app.services.requirement.resolve.AliasRepo",
         lambda session: FakeAliasRepo(session, {"spindle speed": ("rotational_speed", 0.99, False)}),
     )
     resolved = _resolve(_session(), "spindle speed")
