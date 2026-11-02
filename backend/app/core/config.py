@@ -178,7 +178,6 @@ class Settings(BaseSettings):
 
     # --- scoring policy (defaults are the PRD 8 values, overridable per deployment) ---
     scoring_full_score: float = 1.0
-    scoring_partial_default: float = 0.5
     scoring_missing_score: float = 0.0
     scoring_family_level_cap: float = 0.5
     scoring_weight_mandatory: int = 2
@@ -247,7 +246,6 @@ class Settings(BaseSettings):
     def scoring(self) -> "ScoringPolicy":
         return ScoringPolicy(
             full_score=self.scoring_full_score,
-            partial_default=self.scoring_partial_default,
             missing_score=self.scoring_missing_score,
             family_level_cap=self.scoring_family_level_cap,
             weight_mandatory=self.scoring_weight_mandatory,
@@ -290,7 +288,6 @@ class ScoringPolicy(BaseModel):
     """Scoring constants from PRD 8, kept in one object so a report can snapshot them."""
 
     full_score: float = Field(default=1.0, ge=0.0, le=1.0)
-    partial_default: float = Field(default=0.5, ge=0.0, le=1.0)
     missing_score: float = Field(default=0.0, ge=0.0, le=1.0)
     family_level_cap: float = Field(default=0.5, ge=0.0, le=1.0)
     weight_mandatory: int = Field(default=2, ge=1)

@@ -2713,3 +2713,39 @@ twenty literals, and the next evaluator forgets it.
 *Left:* `scoring_partial_default` is still read by nobody - a partial match's
 score comes from the comparison band. It is listed under Open rather than
 quietly kept.
+
+---
+
+## D-122 - The last knob nothing read is gone, and so is the module nothing called
+
+D-121 wired `SCORING_FULL_SCORE` and `SCORING_MISSING_SCORE` into the
+comparison's entry point and left one behind, listed under its own *Left:*
+rather than quietly kept: `scoring_partial_default` (and
+`ScoringPolicy.partial_default`) was still in config, in `.env.example` and in
+the snapshot a run records, and still read by nothing. A partial match's score
+has come from the comparison band (`comparison_partial_score_min/max`) since
+before either setting existed, so there was no behaviour to wire it to. It is
+deleted rather than wired: a knob that would override a graded comparison with a
+flat number is the abstraction the band already replaces.
+
+`services/tenderslice.py` (198 lines) and its test are deleted. Its only
+reference in the tree was `tests/test_tenderslice.py` - no caller in `app/`, no
+Makefile target, no doc. It was the first vertical slice (FR-12, FR-T6, FR-T7,
+FR-T9, FR-T14), and `tender/ingest.py`, `tender/pipeline.py` and
+`match/match.py` now do those jobs separately and under test.
+
+`README.md` documented `make eval REPORT=report.json GOLD=eval/gold/tender-a.jsonl`.
+That file has never existed. The line is removed rather than repointed at
+`eval/gold/synthetic.example.jsonl`: scoring a report against synthetic labels
+prints a real-looking accuracy number for labels that were invented, which is
+the one thing the gold harness exists to prevent. `make eval-check` against the
+synthetic file stays, because validating a gold file's shape is what that file
+is for.
+
+*Why:* both deletions are the same finding - a name that promised something and
+had no reader. Neither could change a result, which is exactly why neither was
+noticed.
+
+*Not done:* the folder was not reorganised for looking crowded. A file count is
+not evidence; each of the remaining modules has a caller, and the count was
+taken from the import graph before anything was touched (D-123 is the grouping).

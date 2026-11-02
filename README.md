@@ -310,7 +310,6 @@ offline — no database, API or model:
 
 ```bash
 make eval-check GOLD=eval/gold/synthetic.example.jsonl
-make eval REPORT=report.json GOLD=eval/gold/tender-a.jsonl
 ```
 
 `check` validates a gold file on its own; `score` prints status accuracy, a

@@ -2629,3 +2629,29 @@ of reach; all four now have one home.
   inside a database check constraint) and `schemas/models.py`'s unified record -
   are held for the two named decisions, not done here: both are cited by
   `AGENTS.md`, and `CONFLICTING` cannot leave without a migration.
+
+### Step 15 - the last unread knob, and the module nothing called (D-122)
+
+Two names that promised something and had no reader. Neither could change a
+result, which is why neither was noticed.
+
+- `scoring_partial_default` / `ScoringPolicy.partial_default` deleted from
+  `config.py`, `.env.example` and `docs/CONSTANTS.md`. D-121 had wired the full
+  and missing scores into `registry.evaluate()` and listed this one under
+  *Left:*; a partial's score has come from the comparison band
+  (`comparison_partial_score_min/max`) all along, so there was nothing to wire.
+- `services/tenderslice.py` (198 lines) and `tests/test_tenderslice.py`
+  deleted. `rg tenderslice` over the whole tree returned exactly one hit - the
+  test that imported it. No caller, no Makefile target, no doc reference.
+- `README.md` no longer documents `make eval ... GOLD=eval/gold/tender-a.jsonl`.
+  That file has never existed. Not repointed at
+  `eval/gold/synthetic.example.jsonl`: scoring against synthetic labels prints
+  a real-looking accuracy number for labels that were invented.
+
+*Measured:* `test_config`, `test_scoring`, `test_runs` and `test_health` pass
+(54). Full suite run before the commit.
+
+**Open:** the folder was not reorganised because it looked crowded. The file
+count was checked against the import graph first - 32 modules, 31 with a caller
+- and only the one without a caller was removed. Grouping the rest is the next
+step, done as a move and not as a rewrite.

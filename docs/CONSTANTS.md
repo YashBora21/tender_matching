@@ -64,7 +64,7 @@ Policy is the rules a deployment may want to change, so it is in config
 
 | Setting | What it decides |
 | --- | --- |
-| `scoring_*` | The score of each status, the weights, the family-level cap (PRD §8). `full_score` and `missing_score` are applied once, at the comparison's entry point, so an evaluator states its verdict and not what the verdict is worth. |
+| `scoring_*` | The score of a full and a missing verdict, the weights, the family-level cap (PRD §8). `full_score` and `missing_score` are applied once, at the comparison's entry point, so an evaluator states its verdict and not what the verdict is worth. |
 | `comparison_*` | The tolerances and the score bands. A test changes one and the verdict changes with no code edit. |
 | `evidence_priority` | Which document class wins when two disagree. |
 | `alias_confidence_threshold` | How confident an alias has to be before it resolves a name. Below it, the requirement goes to review. |
