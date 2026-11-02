@@ -8,8 +8,19 @@ from app.schemas.enums import RequirementStatus, VerificationOutcome
 from app.services.match.match import build_query, match_requirement
 
 
+class _NoRows:
+    """A result that holds nothing: no product row, no fact, no page."""
+
+    def first(self):
+        return None
+
+    def all(self):
+        return []
+
+
 class FakeSession:
-    """A session that answers nothing, so the retrieval finds nothing.
+    """A session that answers nothing, so the retrieval finds nothing and the
+    fact cache misses - the corpus has no product row for a synthetic model.
 
     It counts commits because the matcher releases the transaction before
     asking the model, and a test can then say that it did.
@@ -20,6 +31,9 @@ class FakeSession:
 
     def commit(self) -> None:
         self.commits += 1
+
+    def execute(self, statement):
+        return _NoRows()
 
 
 class FakeClient:
@@ -941,3 +955,150 @@ def test_the_transaction_is_closed_before_the_model_is_asked(monkeypatch):
 
     # One release before each reading, not one for the whole requirement.
     assert commits_at_call == [1, 2]
+
+
+def _cached_fact_row(**overrides) -> dict:
+    """One `cached_fact` row, as the findings read returns it (synthetic)."""
+    row = {
+        "id": "fact-1",
+        "value": "CF8M",
+        "unit": None,
+        "value_type": "material",
+        "document_id": "d1",
+        "page": 12,
+        "quote": "1 | BODY | A216 WCB, WCC/ A352 LCB, LCC/A351 CF8M",
+        "attribute": "material_grade",
+        "is_family_level": False,
+    }
+    row.update(overrides)
+    return row
+
+
+def _passage_of(model: str, manufacturer: str = "Acme"):
+    from app.services.match.retrieve import Candidate
+
+    return Candidate(
+        chunk_id="c1",
+        document_id="d1",
+        text="1 | BODY | A216 WCB, WCC/ A352 LCB, LCC/A351 CF8M",
+        page=12,
+        manufacturer=manufacturer,
+        model=model,
+    )
+
+
+def test_a_product_whose_attribute_is_already_verified_costs_no_call(monkeypatch):
+    """The reading is the expensive part, and the passage names the product it
+    is about, so the cache is reachable inside a run and not only when the
+    caller knew the model beforehand (FR-21, D-133)."""
+    from app.services.match import match
+    from app.services.match import findings
+
+    monkeypatch.setattr(match, "search", lambda *a, **k: [_passage_of("SYNTHETIC-1")])
+    monkeypatch.setattr(findings, "product_id_for", lambda s, name, model: "prod-1")
+    monkeypatch.setattr(findings, "cached_fact", lambda *a, **k: _cached_fact_row())
+
+    class Refuses(FakeClient):
+        def complete_json(self, system, user, **kwargs):
+            raise AssertionError("the model was asked for a fact already verified")
+
+    result = match_requirement(
+        FakeSession(),
+        "Body shall be SS316",
+        requirement_value="SS316",
+        client=Refuses({}),
+    )
+
+    assert result.llm_calls == 0
+    assert result.status is RequirementStatus.FULL_MATCH
+    assert result.capability_text == "CF8M"
+    assert result.page == 12
+    # The comparison ran on the stored value, so the verdict is the run's own.
+    assert "SS316" in result.reason
+    assert "extract" not in result.stage_seconds
+    assert result.stage_seconds["cached_fact"] >= 0.0
+
+
+def test_the_cache_is_asked_for_the_products_the_passage_names(monkeypatch):
+    """A fact about one product says nothing about another, so the key is the
+    candidate's own manufacturer and model - and a different manufacturer is
+    never answered from it."""
+    from app.services.match import match
+    from app.services.match.facts import FactResult
+
+    keys: list[tuple] = []
+
+    def record(session, text, manufacturer, model):
+        keys.append((manufacturer, model))
+        return None
+
+    monkeypatch.setattr(match, "search", lambda *a, **k: [_passage_of("SYNTHETIC-1")])
+    monkeypatch.setattr(match, "_cached_fact", record)
+    monkeypatch.setattr(match, "_page_text", lambda s, c: c.text)
+    monkeypatch.setattr(
+        match,
+        "extract_fact",
+        lambda *a, **k: FactResult(facts=[]),
+    )
+
+    result = match_requirement(
+        FakeSession(),
+        "Body shall be SS316",
+        client=FakeClient({"requirements": []}),
+    )
+
+    # The first key is the check made before retrieval, when the caller named no
+    # product; the second is this passage's own product.
+    assert keys == [(None, None), ("Acme", "SYNTHETIC-1")]
+    # Nothing cached, so the passage was read: the miss pays as before.
+    assert result.llm_calls == 1
+
+
+def test_a_second_requirement_on_the_same_product_is_read_once(monkeypatch):
+    """Two clauses asking one product for one attribute are a single reading and
+    still two results: the assessments are never merged. The row the first
+    answer writes through `store_match` is placed here, because the writer needs
+    a database."""
+    from app.services.match import match
+    from app.services.match import findings
+
+    stored: dict = {}
+
+    monkeypatch.setattr(match, "search", lambda *a, **k: [_passage_of("SYNTHETIC-1")])
+    monkeypatch.setattr(findings, "product_id_for", lambda s, name, model: "prod-1")
+    monkeypatch.setattr(
+        findings, "cached_fact", lambda s, product_id, term: stored.get(product_id)
+    )
+    monkeypatch.setattr(match, "_page_text", lambda s, c: c.text)
+
+    client = FakeClient(
+        {
+            "requirements": [
+                {
+                    "found": True,
+                    "attribute": "body material",
+                    "value": "CF8M",
+                    "unit": None,
+                    "operator": "eq",
+                    "model": "SYNTHETIC-1",
+                    "quote": "1 | BODY | A216 WCB, WCC/ A352 LCB, LCC/A351 CF8M",
+                }
+            ]
+        }
+    )
+
+    first = match_requirement(
+        FakeSession(), "Body shall be SS316", requirement_value="SS316", client=client
+    )
+    stored["prod-1"] = _cached_fact_row()
+    second = match_requirement(
+        FakeSession(), "Body shall be SS316", requirement_value="SS316", client=client
+    )
+
+    assert first.llm_calls == 1
+    assert "extract" in first.stage_seconds
+    assert second.llm_calls == 0
+    assert "extract" not in second.stage_seconds
+    # The second clause is its own answer, reached the same way.
+    assert second.status is first.status
+    assert second.score == first.score

@@ -199,7 +199,7 @@ def match_requirement(
     with stage(result.stage_seconds, "cached_fact"):
         cached = _cached_fact(session, requirement_text, manufacturer_name, model)
     if cached is not None:
-        return _from_cached_fact(
+        hit = _from_cached_fact(
             cached,
             requirement_text,
             requirement_value=requirement_value,
@@ -208,6 +208,8 @@ def match_requirement(
             manufacturer_name=manufacturer_name,
             model=model,
         )
+        hit.stage_seconds = result.stage_seconds
+        return hit
 
     # The finer scope inside the category: a gate-valve item is not answered
     # by a ball-valve datasheet. The type is read from the item's title, and
@@ -325,6 +327,29 @@ def _match_candidate(
         page=candidate.page,
         document_id=candidate.document_id,
     )
+
+    # The passage names the product it is about, and that is what the fact
+    # cache is keyed on: a verified reading of this product's attribute is the
+    # same reading however many requirements the run answers (FR-21, D-133).
+    # shortcut: a fact is not invalidated when its document is re-fetched, so a
+    # hit is the reading the corpus held when the fact was written; upgrade when
+    # a document row records the version its facts were read from.
+    with stage(result.stage_seconds, "cached_fact"):
+        cached = _cached_fact(
+            session, requirement_text, candidate.manufacturer, candidate.model
+        )
+    if cached is not None:
+        hit = _from_cached_fact(
+            cached,
+            requirement_text,
+            requirement_value=requirement_value,
+            requirement_unit=requirement_unit,
+            requirement_operator=requirement_operator,
+            manufacturer_name=candidate.manufacturer,
+            model=candidate.model,
+        )
+        hit.stage_seconds = result.stage_seconds
+        return hit
 
     # The rows read to reach this point opened a transaction, and it would
     # otherwise hold its connection idle for the seconds the provider takes to

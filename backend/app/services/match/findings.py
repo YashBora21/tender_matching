@@ -111,6 +111,11 @@ def cached_fact(
             attribute.c.canonical_term == canonical_term,
             fact.c.verification_status == FactVerificationStatus.VERIFIED.value,
         )
+        # A product can hold this attribute more than once, from two documents
+        # that do not agree, and a fact row has no timestamp to choose by. The
+        # id is arbitrary but stable, which is what keeps a re-run from
+        # reporting a different value for the same product.
+        .order_by(fact.c.id)
         .limit(1)
     ).first()
     if row is None:

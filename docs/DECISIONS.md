@@ -3225,3 +3225,49 @@ nothing, stores nothing and reports the stored state; the claim's update names t
 states an attempt may start from, so it cannot be an unconditional write. 71 tests
 pass in `test_matching.py` and `test_runs.py`, and the full unit suite passes.
 
+## D-133 - The fact cache is read where the product is known
+
+FR-21's cache was written by every run and read by none of them. `_cached_fact`
+can only answer when it knows which product to ask about, and it was asked at the
+top of `match_requirement`, where the caller's `model` is the only source of that
+name - which the run never has, because a run names a manufacturer and a clause,
+and the product is whatever retrieval brings back. The write side was never the
+missing half: every answered pair stores its fact through `store_match` ->
+`store_fact`, so the facts were accumulating unread. (Step 24 said otherwise; it
+was checked the same day and corrected there.)
+
+The lookup now happens where the product is known: per candidate, on
+`candidate.manufacturer` and `candidate.model`, before the passage is read. A hit
+skips the call and nothing else:
+
+- the comparison runs again, with the same `ComparisonRequest` shape the fresh
+  reading builds, so a clause whose value was never normalised comes back
+  `value_missing` from either path and a pair's verdict does not depend on which
+  way it was reached;
+- the applicability comes from the product row the fact is filed under, so
+  family-level evidence is still capped and flagged;
+- the quote, page and document travel with the answer, and the pair still gets
+  its own fact row and its own result row. Two clauses asking one product for one
+  attribute are one reading and two assessments - never merged (AGENTS).
+
+*What a hit does not re-run:* the four verification layers. The gate is at the
+write: `cached_fact` returns only a row stored as `verification_status = verified`,
+and a fact is written verified only when the layers passed it. The limit of that
+is stated in the code: re-fetching a document does not invalidate the facts read
+from it, so a hit is the reading the corpus held when the fact was written.
+
+*One value, chosen the same way twice.* A product can hold the same attribute from
+two documents that disagree, and a `fact` row has no timestamp to choose by, so
+`cached_fact` now orders by the id. It is an arbitrary choice, but a stable one:
+without it a re-run could answer the same pair from a different value, which is
+the flakiness D-130's resume exists to avoid.
+
+*Verified:* 3 tests added - a product whose attribute is already verified is
+answered with no call at all, the cache is asked with the passage's own
+manufacturer and model, and a second clause on the same product costs no reading
+while still carrying its own status and score. 74 tests pass in
+`test_matching.py` and `test_runs.py`, and the full unit suite passes. What the
+cache saves is measurable on a re-run without a new counter: `run.metrics` reports
+the `extract` seconds and `llm_calls` of the run (D-131), and a run over a tender
+whose products were already read reports fewer of both.
+

@@ -2966,7 +2966,40 @@ the full unit suite passes. No verdict, score or flag changed, so no
 expected-status test moved.
 
 **Left:** P1 next - the candidate-level fact cache. `_cached_fact` needs a
-product, which is only known after retrieval, and nothing on the run path ever
-writes a fact (`store_fact` is reached only from `match --store`), so FR-21's
-cache never hits during a run. A run left `retrieving` by a dead process is still
+product, which is only known after retrieval, so FR-21's cache never reads
+during a run. (Corrected the same day: the write side is not missing - every
+answered pair is stored through `store_match` -> `store_fact`, so the facts
+were accumulating unread.) A run left `retrieving` by a dead process is still
 not resumable, unchanged from before.
+
+### Step 25 - the fact cache is read where the product is known (D-133)
+
+*Date: 2026-11-02. P1 of the user's priority order, and the change that removes
+repeat readings of the same product.*
+
+The lookup moved to where the product is known: per candidate, on the
+passage's own manufacturer and model, before its passage is read. A hit costs no
+call and skips nothing else - the comparison runs on the stored value with the
+same request the fresh reading builds, the family-level cap still comes from the
+product row, the quote and page travel with the answer, and each clause keeps its
+own fact and result row. The gate stays at the write: only a row stored
+`verified` is ever returned, and re-ingesting a document does not invalidate the
+facts read from it - named in the code as the limit.
+
+`cached_fact` now orders by the fact id. A product can hold one attribute from
+two documents that disagree and a fact row has no timestamp, so without a stated
+choice a re-run could answer the same pair from a different value.
+
+**Files:** `services/match/match.py` (`_match_candidate`, and the caller-scope hit
+now keeps its stage times), `services/match/findings.py` (`cached_fact`).
+
+**Verified:** 3 tests added; 74 pass in `test_matching.py` and `test_runs.py` and
+the full unit suite passes. `tests/test_matching.py`'s fake session now answers a
+query with no rows, which is what made four existing passage-reading tests reach
+the product lookup - they pass unchanged in what they assert.
+
+**Left:** no cache-hit counter is stored; the saving is read from `run.metrics`
+on a re-run (D-131). P2 was refused as written (there are no sibling pages in the
+prompt), P3 is the user's to run against the gold rows, and the report still has
+no line saying *read from the cache* - a reviewer sees the same verdict either
+way.
