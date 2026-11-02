@@ -173,6 +173,11 @@ const RUN: RunProgress = {
   expected_results: 4,
   results: 0,
   progress_percent: 0,
+  llm_calls: 0,
+  prompt_tokens: 0,
+  completion_tokens: 0,
+  llm_retries: 0,
+  stage_seconds: {},
   error: null,
 }
 

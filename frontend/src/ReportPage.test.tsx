@@ -128,8 +128,50 @@ describe('RunPage', () => {
     expected_results: 4,
     results: 4,
     progress_percent: 100,
+    llm_calls: 0,
+    prompt_tokens: 0,
+    completion_tokens: 0,
+    llm_retries: 0,
+    stage_seconds: {},
     error: null,
   }
+
+  it('shows where a working run has spent its time, as it reports it', async () => {
+    vi.mocked(getRun).mockResolvedValue({
+      ...finished,
+      status: 'scoring',
+      results: 1,
+      progress_percent: 25,
+      llm_calls: 3,
+      prompt_tokens: 4200,
+      completion_tokens: 180,
+      llm_retries: 1,
+      stage_seconds: { retrieve: 0.412, extract: 26.889, store: 0.02 },
+    })
+
+    render(<RunPage runId="run-1" onNewTender={() => {}} />)
+
+    await screen.findByText('1 of 4 assessments')
+    expect(screen.getByText('26.889 s')).toBeTruthy()
+    expect(screen.getByText('extract')).toBeTruthy()
+    expect(screen.getByText('4200')).toBeTruthy()
+    expect(screen.getByText('Retries')).toBeTruthy()
+  })
+
+  it('says nothing is measured yet instead of a column of zeros', async () => {
+    vi.mocked(getRun).mockResolvedValue({
+      ...finished,
+      status: 'retrieving',
+      results: 0,
+      progress_percent: 0,
+    })
+
+    render(<RunPage runId="run-1" onNewTender={() => {}} />)
+
+    await screen.findByText('Nothing yet: the first pair is still being read.')
+    expect(screen.queryByText('0.000 s')).toBeNull()
+    expect(screen.queryByText('Model calls')).toBeNull()
+  })
 
   it('moves to the report when the run has stopped', async () => {
     vi.mocked(getRun).mockResolvedValue(finished)

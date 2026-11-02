@@ -3003,3 +3003,44 @@ on a re-run (D-131). P2 was refused as written (there are no sibling pages in th
 prompt), P3 is the user's to run against the gold rows, and the report still has
 no line saying *read from the cache* - a reviewer sees the same verdict either
 way.
+
+### Step 26 - a run that is still working reports what it has measured (D-134)
+
+*Date: 2026-11-02. P4 of the user's priority order: show exactly where the
+processing is waiting.*
+
+The figures already existed and arrived only at the end. `_record_costs` was
+written for the paths that stop a run, so `GET /api/runs/{id}` for a run in
+`scoring` carried the count of pairs answered and nothing else, and the page that
+followed it had no answer to the one question a waiting caller asks. It is now
+called for every pair, inside the commit the pair already makes - one more JSONB
+write on the run row, no second transaction, and the terminal paths still rewrite
+the same numbers the way Step 23 arranged.
+
+The run page reads them. It lists the stage names and the seconds the API sends,
+then the model calls and the tokens, adds nothing and works nothing out; the page
+that recomputed a total would be a second answer to disagree with. Where no pair
+has landed it says *Nothing yet: the first pair is still being read* instead of
+filling the column with zeros.
+
+Closed the second half of Step 23's **Left** - the frontend now shows the
+timings. The first half of Step 22's **Left** (a resumed run's `started_at`) and
+the `e2e` command's hand-printed counts are still open.
+
+**Files:** `services/output/runs.py` (`execute_run`, the per-pair `_record_costs`
+call), `frontend/src/types.ts` (`RunProgress` gained the five fields the API was
+already sending), `frontend/src/components/RunPage.tsx`, `frontend/src/UploadPage.test.tsx`
+and `frontend/src/ReportPage.test.tsx` (their fixtures follow the type).
+
+**Verified:** 1 backend test (the first pair's costs are stored before the second
+is asked; `stage_seconds` holds `store` and a positive `total` mid-run) and 2
+frontend tests (a working run prints its own seconds and token count; an
+unmeasured run prints the sentence, not zeros). 44 pass in `test_runs.py`, 31
+frontend tests pass, `tsc --noEmit` is clean and the full unit suite passes. The
+API response shape is unchanged, so no route or report test moved.
+
+**Left:** no per-requirement line in the progress tree - the run does not publish
+which clause it is inside, and guessing one from the counts would fabricate the
+state this step exists to report honestly. P3 (the candidate-cap experiment) and
+P5 (higher API limits) stay with the user, and `make migrate` is still owed
+before a run writes metrics at all.

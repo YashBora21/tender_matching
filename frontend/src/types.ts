@@ -114,6 +114,14 @@ export interface RunProgress {
   expected_results: number
   results: number
   progress_percent: number
+  // What the run measured about itself (D-131, D-134). The API writes these as
+  // each pair lands, so a running job reports its own figures: the page shows
+  // them or says nothing, and never works one out.
+  llm_calls: number
+  prompt_tokens: number
+  completion_tokens: number
+  llm_retries: number
+  stage_seconds: Record<string, number>
   error: string | null
 }
 

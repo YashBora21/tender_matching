@@ -3271,3 +3271,39 @@ cache saves is measurable on a re-run without a new counter: `run.metrics` repor
 the `extract` seconds and `llm_calls` of the run (D-131), and a run over a tender
 whose products were already read reports fewer of both.
 
+## D-134 - A run reports what it has measured while it is still working
+
+D-131 stored the stage times and the spend, and wrote them only when the run
+stopped. So the page that follows a run showed a count and nothing else - the
+complaint the architecture proposal made was accurate about the display even
+where it was wrong about the pipeline: for twenty minutes a working run looked
+like a run that had measured nothing.
+
+`execute_run` now writes the metrics with every pair, in the commit the pair
+already makes: one more JSONB update on the run row, none of them a second
+transaction. What a caller polls is therefore the run's own measurement up to
+that pair - the same figures the report prints when it finishes, because the
+terminal paths rewrite them the way D-131 did.
+
+The run page shows them. It renders the stage names and the numbers the API
+sends, adds nothing, and works nothing out: the seconds, the model calls and the
+tokens are the backend's, and the page that recomputed them would be a second
+answer to disagree with (the rule Step 16 has been applying to every other
+number). Where no pair has landed yet it says so in words - *Nothing yet: the
+first pair is still being read* - rather than a column of zeros, which a reader
+would take for a fast run.
+
+*What it does not do:* the API response is unchanged - these fields were already
+in it and nothing was reading them. There is still no per-requirement line in the
+progress tree: the run does not publish which clause it is inside, and a page
+that guessed one from the counts would be fabricating the state the proposal asked
+to stop fabricating. A resumed run's figures stay the sum of its attempts, because
+the pair loop adds to what the row already held (D-130, D-131).
+
+*Verified:* 1 backend test (the costs of the first pair are stored before the
+second is asked, and `stage_seconds` holds `store` and a positive `total`
+mid-run), 2 frontend tests (a working run prints its own stage seconds and token
+count; an unmeasured run prints the sentence, not zeros). 44 pass in
+`test_runs.py`, 31 frontend tests pass, `tsc --noEmit` is clean, and the full unit
+suite passes.
+

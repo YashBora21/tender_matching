@@ -58,6 +58,8 @@ export function RunPage({
     return <ReportPage runId={runId} onNewTender={onNewTender} />
   }
 
+  const stages = Object.entries(run?.stage_seconds ?? {})
+
   return (
     <div className="stack">
       <Trail stage="match" onBack={onNewTender} />
@@ -123,6 +125,45 @@ export function RunPage({
                 <dd>{run.manufacturers.join(', ')}</dd>
               </div>
             </dl>
+
+            {/* The run's own measurements, written as each pair lands (D-134).
+                The stage names and the figures are the backend's; this page
+                shows them or says they are not there yet. Nothing is shown as a
+                zero, because a run that has answered no pair has recorded no
+                spend either, and a column of zeros reads as a fast run. */}
+            {stages.length === 0 ? (
+              <dl className="summary-grid">
+                <div>
+                  <dt>Measured so far</dt>
+                  <dd>Nothing yet: the first pair is still being read.</dd>
+                </div>
+              </dl>
+            ) : (
+              <dl className="summary-grid">
+                {stages.map(([stage, seconds]) => (
+                  <div key={stage}>
+                    <dt>{stage}</dt>
+                    <dd>{seconds.toFixed(3)} s</dd>
+                  </div>
+                ))}
+                <div>
+                  <dt>Model calls</dt>
+                  <dd>{run.llm_calls}</dd>
+                </div>
+                <div>
+                  <dt>Prompt tokens</dt>
+                  <dd>{run.prompt_tokens}</dd>
+                </div>
+                <div>
+                  <dt>Completion tokens</dt>
+                  <dd>{run.completion_tokens}</dd>
+                </div>
+                <div>
+                  <dt>Retries</dt>
+                  <dd>{run.llm_retries}</dd>
+                </div>
+              </dl>
+            )}
 
             {run.error && (
               <Notice variant="error" title="The run stopped with an error">

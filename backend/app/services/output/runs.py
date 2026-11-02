@@ -410,6 +410,10 @@ def execute_run(
                         manufacturer_id=identifier,
                     )
                 progress.results += 1
+                # The costs travel with the pair, so a caller polling a run that
+                # is still working sees where it has got to instead of an empty
+                # column (D-134). One more JSONB write, in the same commit.
+                _record_costs(progress, run_repo, run_id, client, prior, timings, started)
                 # The result is committed as it is found: a run that dies
                 # halfway leaves the answers it already has, and the count
                 # a caller polls is the count that exists.

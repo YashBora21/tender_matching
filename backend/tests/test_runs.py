@@ -642,6 +642,47 @@ def test_a_resumed_run_adds_its_cost_to_the_attempt_before_it():
     assert repo.run["metrics"]["prompt_tokens"] == 600
 
 
+def test_a_running_run_records_its_costs_as_each_pair_lands():
+    """A caller polling a run that is still working is shown where it has got
+    to, not an empty column it has to wait for (D-134)."""
+    repo = FakeRunRepo()
+    writes: list[int] = []
+
+    def match(session, text, **kwargs):
+        writes.append(len(repo.metrics_writes))
+        return _match()
+
+    requirements = [
+        {
+            "id": "r1",
+            "item_id": "1",
+            "text": "Body shall be SS316",
+            "type": "technical",
+            "mandatory": True,
+            "value": None,
+            "unit": None,
+        },
+        {
+            "id": "r2",
+            "item_id": "1",
+            "text": "Rated pressure 150 bar",
+            "type": "technical",
+            "mandatory": True,
+            "value": "150",
+            "unit": "bar",
+        },
+    ]
+
+    _execute(repo, FakeTenderRepo(requirements, ITEMS), match, _recording_store(repo, {}))
+
+    # The first pair was asked with nothing stored yet; the second was asked
+    # after the first pair's costs had been written.
+    assert writes == [0, 1]
+    last = repo.metrics_writes[-1]
+    assert last["stage_seconds"]["store"] >= 0.0
+    assert last["stage_seconds"]["total"] > 0.0
+
+
 def test_polling_a_finished_run_reports_what_it_cost(monkeypatch):
     """The attempt's figures stay readable after it is gone (D-131)."""
     repo = FakeRunRepo(status="done")
