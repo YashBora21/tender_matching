@@ -251,10 +251,17 @@ def create_run(
 
     names = _manufacturer_names(session, manufacturers)
     run_repo = repo or RunRepo(session)
+    snapshot = config_snapshot()
+    # A run that a limit stopped is continued, not duplicated: it already paid
+    # for the pairs it stored, and the command the caller runs again is the
+    # same command - as long as it would ask the same questions (D-130).
+    resumable = run_repo.resumable(tender_id, names, snapshot)
+    if resumable is not None:
+        return resumable
     return run_repo.create(
         tender_id,
         manufacturers=names,
-        config_snapshot=config_snapshot(),
+        config_snapshot=snapshot,
         corpus_hash=corpus_hash(session),
     )
 
@@ -317,11 +324,12 @@ def execute_run(
     )
 
     # A finished run is not run again: the results it holds are the answer,
-    # and re-running would double them.
+    # and re-running would double them. A run stopped by the provider's limit
+    # is not finished: its stored answers are skipped and only the missing
+    # pairs are asked about, so it continues instead of starting over (D-130).
     if run["status"] in (
         RunStatus.DONE.value,
         RunStatus.FAILED.value,
-        RunStatus.RATE_LIMITED.value,
     ):
         return progress
 

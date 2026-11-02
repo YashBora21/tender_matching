@@ -3089,3 +3089,42 @@ a stored result, and an audit test that the session is rolled back when the
 pipeline raises. Against the real failing tender, inside a transaction that was
 then rolled back: 7 results removed, the 31 requirements deleted without an
 error, and the rows intact after the rollback.
+
+---
+
+## D-130 - A run stopped by a limit is continued, not paid for twice
+
+`execute_run` returned at once for a `rate_limited` run, while the loop below it
+skipped the pairs already stored (`answered`), and `create_run` always wrote a
+new run. D-110's promise - "a resumed run pays only for the pairs that are
+missing" - was therefore unreachable from every entry point: `make e2e`,
+`POST /api/runs`, and the report routes all went through `create_run`.
+
+That is wasteful on any tier and fatal on a metered one. The first real attempt
+on `2bc8f917` spent 9 calls and about 20k tokens before the provider's
+per-minute limit stopped it, stored 0 results, and the next attempt would have
+started from zero.
+
+Two changes:
+
+- `execute_run` runs a `rate_limited` run again. `done` and `failed` still
+  return at once: the results they hold are the answer.
+- `create_run` returns the newest `rate_limited` run of that tender with that
+  manufacturer set, when the new attempt would ask the same questions.
+  `_answers_alike` compares the stored `config_snapshot` with the one this
+  attempt would write, ignoring the two spend limits: a budget changes how far a
+  run gets, not what it answers. A run read by another model, or with a
+  different candidate cap, is not continued - one report would then hold answers
+  from two configurations and state a single one.
+
+*Why the same run id and not a new one:* the report route, the CSV export and
+the frontend all address a run by id. Reusing it is what makes "run the same
+command again" cheap instead of merely free-looking, and it keeps one report per
+attempt rather than one report per fragment.
+
+*Verified:* the test that asserted a `rate_limited` run is *not* run again now
+asserts the opposite and measures it - the stored pair is not asked about, the
+missing one is, and the run ends `done`. Plus a test that a stopped run is
+returned instead of created, one that a fresh run is created when nothing
+matches, and a unit test of `_answers_alike`: a changed spend limit still
+resumes, a changed model or candidate cap does not.

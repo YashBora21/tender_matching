@@ -22,6 +22,19 @@ from app.repositories.schema import document, fact, manufacturer, result, run
 from app.schemas.enums import RunStatus
 
 
+# What an attempt may spend, as opposed to what it answers. Two runs that
+# differ only here produce the same answers, so one can continue the other.
+_SPEND_ONLY = ("llm_call_budget", "llm_token_budget")
+
+
+def _answers_alike(stored: dict, current: dict) -> bool:
+    """Do these two snapshots describe the same answering configuration?"""
+    def comparable(snapshot: dict) -> dict:
+        return {key: value for key, value in (snapshot or {}).items() if key not in _SPEND_ONLY}
+
+    return comparable(stored) == comparable(current)
+
+
 class RunRepo:
     """The runs, and what each of them found."""
 
@@ -48,6 +61,42 @@ class RunRepo:
             )
         )
         return str(run_id)
+
+    def resumable(
+        self,
+        tender_id: str,
+        manufacturers: list[str],
+        snapshot: Optional[dict] = None,
+    ) -> Optional[str]:
+        """The run this attempt continues, when a limit stopped one (D-110).
+
+        A run that stopped at the provider's limit kept every answer it had
+        already found, so starting a second run for the same tender and the
+        same manufacturers pays for them twice. The newest such run is
+        returned; an answer that was never given is the only thing a resumed
+        run still owes.
+
+        `snapshot` is what the new attempt would be scored with. A run read by
+        another model, or with a different candidate cap, is not continued:
+        one report would then hold answers from two configurations and state a
+        single one. What the attempt may spend is not part of that: a budget is
+        a limit on a run, not an input to its answer.
+        """
+        rows = self.session.execute(
+            select(run.c.id, run.c.config_snapshot)
+            .where(run.c.tender_id == tender_id)
+            .where(run.c.status == RunStatus.RATE_LIMITED.value)
+            .order_by(run.c.started_at.desc())
+        ).all()
+        wanted = sorted(manufacturers)
+        for row in rows:
+            stored = row[1] or {}
+            if sorted(stored.get("manufacturers") or []) != wanted:
+                continue
+            if snapshot is not None and not _answers_alike(stored, snapshot):
+                continue
+            return str(row[0])
+        return None
 
     def get(self, run_id: str) -> Optional[dict]:
         row = self.session.execute(

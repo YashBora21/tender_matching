@@ -2875,3 +2875,26 @@ The staged run itself is still blocked on the provider: the key in `.env` is a
 free Groq tier at 8,000 TPM, which is ~3 calls a minute for this prompt, and
 `execute_run` refuses to resume a `rate_limited` run even though its loop already
 skips the pairs it has (`answered`). Both need a decision before the paid pass.
+
+### Step 22 - the second attempt continues the first (D-130)
+
+The paid pass is blocked on the provider's per-minute limit, and on a free tier
+every stop is expensive: the first attempt on `2bc8f917` spent 9 calls and about
+20k tokens, stored nothing, and the next attempt would have paid for it again.
+
+- `execute_run` no longer returns early for a `rate_limited` run. The loop below
+  it already skipped the pairs the run had answered.
+- `create_run` hands back the newest stopped run for the same tender and
+  manufacturer set when `_answers_alike` says the new attempt would ask the same
+  questions. The spend limits are excluded from that comparison; the model, the
+  candidate cap and everything else are not.
+
+*Verified:* 4 tests changed or added - the resume test now asserts the stored
+pair is not re-asked and the run ends `done`, plus the create-run reuse, the
+fresh-run case, and `_answers_alike` for a changed budget versus a changed
+model or cap.
+
+**Left:** a resumed run keeps the `started_at` of its first attempt, and the call
+and token counts are the client's counters for the process, not per run, so a
+report cannot state what a resumed run spent in total. Both need a column; a
+number reconstructed from logs would be a guess.

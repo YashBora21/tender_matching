@@ -57,6 +57,7 @@ class FakeRunRepo:
         self.stored: list[dict] = []
         self.history: list[tuple[str, str | None]] = []
         self.created: dict = {}
+        self.resume_id = None
 
     def create(self, tender_id, *, manufacturers, config_snapshot, corpus_hash=""):
         self.created = {
@@ -67,6 +68,9 @@ class FakeRunRepo:
         }
         self.run["manufacturers"] = list(manufacturers)
         return RUN_ID
+
+    def resumable(self, tender_id, manufacturers, snapshot=None):
+        return self.resume_id
 
     def get(self, run_id):
         return dict(self.run) if run_id == RUN_ID else None
@@ -471,23 +475,44 @@ def test_a_resumed_run_does_not_pay_twice_for_one_requirement():
     assert outcome.results == 2
 
 
-def test_a_rate_limited_run_is_not_run_again():
-    """The results it holds are the answer; a later run resumes from there."""
+def test_a_rate_limited_run_resumes_where_it_stopped():
+    """A run stopped by a limit keeps its answers. Running it again asks only
+    about the pairs it never answered, so the quota already spent is not spent
+    twice (D-110, D-130)."""
     repo = FakeRunRepo(status="rate_limited")
-    repo.stored = [{"requirement_id": "r1"}]
-    tenders = FakeTenderRepo(REQUIREMENTS, ITEMS)
+    repo.stored = [
+        {
+            "requirement_id": "r1",
+            "manufacturer_id": "mfr-Acme",
+            "manufacturer": "Acme",
+            "status": "full_match",
+            "verification_outcome": "passed",
+            "applicability": "model_level",
+            "score": 1.0,
+            "capability_text": "Body material SS316",
+            "confidence": "high",
+            "review_required": False,
+            "review_reason": None,
+            "evidence": None,
+        }
+    ]
     calls: list[dict] = []
+    technical = [
+        dict(REQUIREMENTS[0]),
+        dict(REQUIREMENTS[0], id="r3", text="Seal shall be PTFE"),
+    ]
 
     outcome = _execute(
         repo,
-        tenders,
+        FakeTenderRepo(technical, ITEMS),
         _recording_matcher(calls),
-        _recording_store(repo, {}),
+        _recording_store(repo, {"mfr-Acme": "Acme"}),
     )
 
-    assert calls == []
-    assert len(repo.stored) == 1
-    assert outcome.status == RunStatus.RATE_LIMITED.value
+    # The stored pair is not asked about again; the missing one is.
+    assert [call["text"] for call in calls] == ["Seal shall be PTFE"]
+    assert outcome.results == 2
+    assert outcome.status == RunStatus.DONE.value
 
 
 def test_the_run_reports_what_its_client_spent():
@@ -670,6 +695,59 @@ def test_a_run_without_manufacturers_covers_the_whole_corpus(monkeypatch):
         "embedding_backend",
         "match_max_candidates",
     } <= set(repo.created["config_snapshot"])
+
+
+def test_the_same_command_after_a_limit_continues_that_run(monkeypatch):
+    """`make e2e` again, or a second POST, must not pay for the pairs the
+    stopped run already answered (D-130)."""
+    monkeypatch.setattr(
+        "app.services.output.runs.list_manufacturers",
+        lambda session: [{"name": "Acme"}],
+    )
+    monkeypatch.setattr(
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([])
+    )
+    monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
+    repo = FakeRunRepo(status="rate_limited")
+    repo.resume_id = RUN_ID
+
+    run_id = create_run(FakeSession(), TENDER_ID, repo=repo)
+
+    assert run_id == RUN_ID
+    assert repo.created == {}
+
+
+def test_a_run_is_continued_only_when_it_would_ask_the_same_questions():
+    """A run read by another model, or with a different candidate cap, is not
+    continued: one report would hold answers from two configurations and state
+    a single one (D-130). The spend limit is not such a difference."""
+    from app.repositories.runs import _answers_alike
+
+    base = {
+        "llm_model": "openai/gpt-oss-20b",
+        "match_max_candidates": 3,
+        "llm_call_budget": 300,
+        "manufacturers": ["Acme"],
+    }
+
+    assert _answers_alike(base, {**base, "llm_call_budget": 2000})
+    assert not _answers_alike(base, {**base, "llm_model": "openai/gpt-oss-120b"})
+    assert not _answers_alike(base, {**base, "match_max_candidates": 20})
+
+
+def test_a_new_run_is_created_when_nothing_can_be_continued(monkeypatch):
+    monkeypatch.setattr(
+        "app.services.output.runs.list_manufacturers",
+        lambda session: [{"name": "Acme"}],
+    )
+    monkeypatch.setattr(
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([])
+    )
+    monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
+    repo = FakeRunRepo()
+
+    assert create_run(FakeSession(), TENDER_ID, repo=repo) == RUN_ID
+    assert repo.created["manufacturers"] == ["Acme"]
 
 
 def _no_model(monkeypatch) -> None:
