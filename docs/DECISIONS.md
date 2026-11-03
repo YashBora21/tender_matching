@@ -3486,3 +3486,50 @@ requirements, which is a separate defect and is not touched here.
 *Verified:* 35 tests in `test_pageclassify.py` and `test_retyping.py`, including
 the four shapes above and a specification clause that must stay technical; the
 full unit suite (669), `collect` (15) and `eval` (52) pass.
+
+## D-139 - A manufacturer is a company, not the folder a copy sits in
+
+Two rows of the same company, `bharat_bijlee` and `Bharat Bijlee`, had been
+measured and refused by D-138 rather than guessed at. The refusal was right and the
+data was still split: 10 documents, 1468 chunks, 10 products, 55 facts and 172
+results answered to the catalogue's directory slug while 6 documents and 731 chunks
+answered to the name the manufacturer's own manifest states. A run naming either
+one scored against half a corpus, and the report showed the same company twice.
+
+Migration `0014` joins them on the attested name - what a reader of a report should
+see - and moves `document`, `product` and `result` before dropping the emptied row.
+It does nothing when a database has only one spelling, so it is safe on a fresh
+clone, and it *refuses* when the two rows hold the same file hash or the same model:
+`uq_document_manufacturer_sha256` and `uq_product_manufacturer_model` make a merge
+of those a choice about which chunks, facts and results survive, which is a human
+call. The local database had no such collision, so the merge ran.
+
+The second half is the bug that made rows like this. An unlisted corpus document
+took its manufacturer from `file_path.parent.name`, and a catalogue keeps the copies
+it fetched in `<manufacturer>/raw/` - so those files were attributed to a company
+named **raw**. That row is still in the database with no documents and 128 results,
+because a run was once made against it: 122 clauses it could not type and 6 with
+nothing to read. `parse.py` now names the catalogue's own directory for the file,
+and re-ingesting after this change created no `circor`, `emerson-fisher` or
+`xylem-godwin` row: with the D-138 fold those directory names resolve to CIRCOR,
+Emerson Fisher and Xylem Godwin, so the document joins the manufacturer it belongs
+to instead of founding a new one.
+
+*What it will not claim:* the `raw` row was not deleted, and neither were the 128
+results. They are the record of four runs that were made, and dropping the
+manufacturer means dropping the history that says so - a different decision, asked
+for after the measurement, not before it. Historical runs also keep the name they
+were run under in their own `config_snapshot`, which no migration rewrites: what a
+run was scored against stays what it was.
+
+*Verified:* run against the live database. 20 manufacturers to 19; one `Bharat
+Bijlee` row holding 16 documents, 16 products and 172 results; `manufacturer_id`
+for `bharat_bijlee` now returns that row. A re-ingest read 101 documents, created
+none, failed none, and refreshed 5 rows of metadata - which is why motor-labelled
+documents went from 13 to 18, the CSV's own labels finally reaching the half of the
+company that used to sit under the other spelling. `test_ingestion.py` and
+`test_corpusrestore.py` pass 34; `test_migrations.py` skips without
+`TEST_DATABASE_URL`, so `0014` is covered by this run and not by an automated test.
+
+*Left:* the `raw` row and its 128 results, and four past runs whose reports list a
+manufacturer that owns nothing.

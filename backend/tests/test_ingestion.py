@@ -422,10 +422,13 @@ def test_one_file_named_by_two_manifests_is_ingested_once(tmp_path, monkeypatch)
 
 def test_a_document_on_disk_that_no_manifest_lists_is_still_ingested(tmp_path, monkeypatch):
     """The corpus is the set of files that exist. Leaving the unlisted ones
-    out would make the corpus quietly incomplete."""
+    out would make the corpus quietly incomplete - and the folder a copy was
+    fetched into (`<manufacturer>/raw/`) is not a manufacturer (D-139)."""
     catalogue = tmp_path / "catalogue" / "acme"
     catalogue.mkdir(parents=True)
     _pdf(catalogue / "unlisted.pdf", "Body of body shall be SS316")
+    (catalogue / "raw").mkdir()
+    _pdf(catalogue / "raw" / "nested.pdf", "Head of head shall be 30 m")
 
     calls: list[dict] = []
 
@@ -447,10 +450,10 @@ def test_a_document_on_disk_that_no_manifest_lists_is_still_ingested(tmp_path, m
 
     report = ingest_corpus(tmp_path, FakeSession())
 
-    assert report.documents == 1
+    assert report.documents == 2
     # It is hashed here, because a document without a hash cannot be tracked.
     assert len(calls[0]["sha256"]) == 64
-    assert calls[0]["manufacturer"] == "acme"
+    assert {call["manufacturer"] for call in calls} == {"acme"}
 
 
 def test_every_doc_type_the_corpus_uses_is_in_the_vocabulary():

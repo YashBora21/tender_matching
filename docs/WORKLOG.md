@@ -3198,3 +3198,40 @@ changes what a report counts, so it waits for an explicit yes.
 started; it maps 55432, so the port the `.env` names is correct and the compose
 file's 5432 is an unrelated definition. Alembic moved `0012_run_metrics` ->
 `0013_reason_code_category` (head).
+
+### Step 30 - the corpus has one Bharat Bijlee, and a folder stopped being a company (D-139)
+
+*Date: 2026-11-03. The merge Step 28 refused to guess at, plus the ingest bug that
+made rows like it.*
+
+`0014` was run against the live database after the affected rows were dumped to a
+backup file: 10 documents, 10 products and 172 results moved onto the row named the
+way the manufacturer's own manifest names it, and the emptied slug row was dropped.
+Nothing was deleted, no document changed hands twice, and the merge would have
+refused outright had the two rows shared a file hash or a model - the two unique
+constraints make that a choice about which chunks and facts survive, which this
+migration does not get to make.
+
+Then the cause. An unlisted corpus document took its manufacturer from the folder it
+sat in, and a catalogue keeps fetched copies under `<manufacturer>/raw/`, so eight
+files were attributed to a company called **raw** - which is why the identity table
+held a row with no documents and 128 results. `parse.py` reads the catalogue
+directory now. Re-ingesting proved the pair of fixes working together: no `circor`,
+`emerson-fisher` or `xylem-godwin` row appeared, because the fold from D-138 sends
+those directory names to the manufacturers that already exist, and the documents
+that had been stranded under the slug picked up their `motors` category - 13 motor
+documents to 18, 69 of 101 documents now category-filterable.
+
+**Files:** `alembic/versions/0014_merge_bharat_identity.py`, `services/tender/parse.py`,
+`tests/test_ingestion.py`.
+
+**Verified:** 20 manufacturers to 19; 101 documents read, 0 created, 0 failed, 5
+metadata rows refreshed; `manufacturer_id("bharat_bijlee")` resolves to the kept row
+and a `get_manufacturer_id` on either spelling writes no new row. 34 pass in
+`test_ingestion.py` and `test_corpusrestore.py`; `test_migrations.py` skips without
+`TEST_DATABASE_URL`, so the migration rests on the run above rather than a test.
+
+**Left:** the `raw` row and its 128 results are still there, deliberately - deleting
+them rewrites four past runs, and that is asked, not assumed. Four verified facts are
+still filed with a null attribute (D-136 left them), and the report denominator,
+statuses and scores were not touched by any of this.

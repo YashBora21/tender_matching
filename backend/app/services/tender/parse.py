@@ -632,7 +632,11 @@ def iter_csv_corpus(catalogue_dir: Path) -> Iterable[tuple[Path, dict]]:
 
     for file_path in _unlisted_documents(catalogue_dir):
         yield file_path, {
-            "manufacturer": file_path.parent.name,
+            # The manufacturer is the catalogue's own directory for this file,
+            # not the folder it happens to sit in: a corpus keeps its fetched
+            # copies under `<manufacturer>/raw/`, and naming a manufacturer
+            # "raw" invents one that owns no document (D-139).
+            "manufacturer": file_path.relative_to(catalogue_dir).parts[0],
             "url": "",
             "sha256": sha256_of_file(file_path),
             "doc_type": "",
