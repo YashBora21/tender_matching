@@ -3199,7 +3199,7 @@ started; it maps 55432, so the port the `.env` names is correct and the compose
 file's 5432 is an unrelated definition. Alembic moved `0012_run_metrics` ->
 `0013_reason_code_category` (head).
 
-### Step 30 - the corpus has one Bharat Bijlee, and a folder stopped being a company (D-139)
+### Step 30 - the corpus has one Bharat Bijlee, and a folder stopped being a company (D-140)
 
 *Date: 2026-11-03. The merge Step 28 refused to guess at, plus the ingest bug that
 made rows like it.*

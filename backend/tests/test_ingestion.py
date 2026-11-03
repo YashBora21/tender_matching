@@ -423,7 +423,7 @@ def test_one_file_named_by_two_manifests_is_ingested_once(tmp_path, monkeypatch)
 def test_a_document_on_disk_that_no_manifest_lists_is_still_ingested(tmp_path, monkeypatch):
     """The corpus is the set of files that exist. Leaving the unlisted ones
     out would make the corpus quietly incomplete - and the folder a copy was
-    fetched into (`<manufacturer>/raw/`) is not a manufacturer (D-139)."""
+    fetched into (`<manufacturer>/raw/`) is not a manufacturer (D-140)."""
     catalogue = tmp_path / "catalogue" / "acme"
     catalogue.mkdir(parents=True)
     _pdf(catalogue / "unlisted.pdf", "Body of body shall be SS316")

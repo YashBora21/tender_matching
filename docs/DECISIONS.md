@@ -3487,7 +3487,7 @@ requirements, which is a separate defect and is not touched here.
 the four shapes above and a specification clause that must stay technical; the
 full unit suite (669), `collect` (15) and `eval` (52) pass.
 
-## D-139 - A manufacturer is a company, not the folder a copy sits in
+## D-140 - A manufacturer is a company, not the folder a copy sits in
 
 Two rows of the same company, `bharat_bijlee` and `Bharat Bijlee`, had been
 measured and refused by D-138 rather than guessed at. The refusal was right and the
