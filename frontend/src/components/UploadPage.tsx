@@ -691,7 +691,9 @@ function titleOf(category: string): string {
 function tenderCategory(rows: RequirementRow[]): string | null {
   const counts = new Map<string, number>()
   for (const row of rows) {
-    if (!row.category) continue
+    // `unknown` is what an item stores when its words name no category
+    // (FR-16): it is the absence of an answer, not a category of its own.
+    if (!row.category || row.category === 'unknown') continue
     counts.set(row.category, (counts.get(row.category) ?? 0) + 1)
   }
   let best: string | null = null
