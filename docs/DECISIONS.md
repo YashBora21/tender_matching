@@ -3887,3 +3887,61 @@ privacy policy are named from their words, a document naming no role stays
 unresolved, an unreadable vocabulary file classifies nothing instead of failing, and
 the reviewer's CSV gets one row per undecided document. `test_no_hardcoding` passes:
 no corpus file name or URL is in `app/`. The full unit suite passes.
+
+## D-149 - A document's type is declared only where its category is already known
+
+The pass was run against the dev corpus once the database was back up: 101 documents
+read, 74 given a `doc_role`, 36 products given a `product_type`, all of it marked
+`classification_source = 'rule'` and reversible by that one predicate.
+
+Checking those 36 against what the corpus itself calls each product found a defect in
+D-148's own rule. **20 of the 36 sat on documents whose product names no category at
+all**, so the pass had to invent a category from the same opening pages it read the
+type from. The Delval and DelTorq actuator bulletins are the case: their first page
+describes the valve the actuator mounts, so `infer_category` called the document a
+valve, `infer_type` then called it `butterfly`, and a pneumatic actuator acquired a
+valve type. One stray word on page 1 placed a whole product.
+
+A wrong type costs more than no type. Retrieval drops every chunk of a document that
+*declares* a different type (D-107), and a dropped chunk is not reported as a dropped
+chunk - the pair comes back `no_evidence_found`, which reads like the manufacturer's
+silence and is our own exclusion (D-135 says exactly this about the category rule). So
+the guess was not conservative; it was a quiet false negative.
+
+Two rules fix it, both in the pass rather than in the shared vocabulary:
+
+- `document_type_of` takes a type **only inside a category the corpus row already
+  names**. A blank category is unresolved, not a hole to fill from a 2,000-character
+  excerpt - which is the same reasoning FR-T9 applies to a BOQ item.
+- `classify_corpus` refuses a page-word type that **contradicts the document's own
+  name**. The pages may fill a blank the cover left (`Valtek GS` names no type and is
+  now `control`); they may not overrule it (`Control valves` was coming back `ball`).
+
+The data was repaired rather than layered on: the 36 rule-written types were cleared,
+the pass re-run (21), the guard added, re-run again (20). The actuator bulletins and
+the industry brochures went back into the reviewer's CSV, which is now 80 rows.
+
+*Still wrong, and why it is left:* two products that list several types in their own
+name - "Gate, butterfly and check valves (Series 06/71/820)" and "Valve product
+portfolio (butterfly, ball, gate, ...)" - come out `check`. The vocabulary matches
+"check valve" as a phrase, so a comma list of bare type words matches only the one that
+happens to appear in phrase form, and the longest-match rule then calls that the
+answer. Making the rule refuse those means counting types named in a list, which is a
+new matching job in shared code and is not what an excerpt can settle anyway. They are
+two rows for the reviewer's CSV; `--load` writes them as `human`.
+
+*What this pass changed in a run: nothing yet.* No code reads `product.product_type`
+or `document.doc_role` - `_type_filter` still infers the type from the model, family
+and file name on every run. Measured over the 42 documents under a typed product, that
+name-only check reaches the same answer as the stored type for 17, says nothing at all
+for 24, and disagrees for 1. The 24 are where today's `family_level` cap comes from, so
+wiring the column would convert them to a confirmed type - and would exclude evidence
+wrongly for every mis-typed row, which is why it is its own commit with the Valtek GS
+pair read by hand first, not a follow-on edit here.
+
+*Verified:* 9 tests in `tests/test_classify.py`, one of them rewritten - what used to
+assert "a product with no category is placed from its document's words" now asserts
+the opposite, and that the unknown sentinel is no category either. `test_corpusseed`,
+`test_categories`, `test_retrieval` and `test_no_hardcoding` pass unchanged, and so
+does the full unit suite. `--out` now defaults to the repository's own `eval/` instead
+of a directory created under whatever the working directory happened to be.

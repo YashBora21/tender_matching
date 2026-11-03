@@ -20,11 +20,13 @@ def test_a_type_is_read_from_the_words_of_the_document() -> None:
     assert document_type_of("valves", "gate-valve-datasheet.pdf") == "gate"
 
 
-def test_a_category_is_read_before_the_type_when_the_product_has_none() -> None:
-    """A product seeded from a manifest that left the category blank is still
-    placeable from its document's words - and stays unplaced if they do not
-    name one."""
-    assert document_type_of(None, "gate-valve-datasheet.pdf") == "gate"
+def test_a_product_with_no_category_is_not_placed_by_a_stray_word() -> None:
+    """A manifest that left the category blank leaves the type blank too. The
+    words that would have to supply the category are the same words the type is
+    read from, so a bulletin that only mentions a valve would type a whole
+    product (D-149)."""
+    assert document_type_of(None, "gate-valve-datasheet.pdf") is None
+    assert document_type_of("unknown", "gate-valve-datasheet.pdf") is None
     assert document_type_of("valves", "spares-list.pdf") is None
 
 

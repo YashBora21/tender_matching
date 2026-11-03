@@ -47,6 +47,10 @@ __all__ = [
 
 DEFAULT_DOC_ROLES_PATH = Path(__file__).resolve().parents[3] / "data" / "doc_roles.json"
 
+# The reviewer's worklist lives in the repo's own eval/ beside the gold labels,
+# so it must not depend on which directory the pass was started from.
+DEFAULT_TODO_PATH = Path(__file__).resolve().parents[4] / "eval" / "product_types_todo.csv"
+
 # How much of the opening pages is searched for a role. A certificate says what
 # it is on the first page; reading more would cost the whole corpus for nothing.
 # shortcut: the first pages only, upgrade when a role is ever declared later.
@@ -120,20 +124,24 @@ def doc_role(
 
 
 def document_type_of(category: Optional[str], *parts: Optional[str]) -> Optional[str]:
-    """The product type a document's own words name inside its category.
+    """The product type a document names inside the category the corpus gave it.
 
     The same inference an item title gets, from the same data file, so a
     document and a requirement are placed in one vocabulary (FR-16). A document
-    that names no category is read for one first; a document that then names two
-    types equally stays untyped rather than filtered on a guess.
+    that names two types equally stays untyped rather than filtered on a guess.
+
+    The category is never inferred here. Reading it from the same opening pages
+    the type is read from lets one stray word place a whole product: the corpus
+    holds Delval and DelTorq *actuator* bulletins whose first pages mention the
+    valve they mount, and that route typed them butterfly valves (D-149). A
+    product whose category the manifest left blank is unresolved, not guessed.
     """
-    from app.services.match.category import document_type, infer_category
+    from app.services.match.category import document_type
 
     kind = (category or "").strip()
     if not kind or kind == "unknown":
-        found = infer_category(*parts)
-        kind = found.category if found.known else ""
-    return document_type(kind or None, *parts).product_type
+        return None
+    return document_type(kind, *parts).product_type
 
 
 @dataclass
@@ -246,6 +254,14 @@ def classify_corpus(
 
         if product_id and not product_type and product_id not in decided:
             found_type = document_type_of(doc_category, *words)
+            # The opening pages do not overrule the document's own name. A
+            # control-valve bulletin's first page routinely describes the ball
+            # valve the actuator sits on, and a page-word type then contradicts
+            # the cover it was read from (D-149). Where the name already places
+            # the product and the text disagrees, the row stays unresolved.
+            cover = document_type_of(doc_category, name, model_or_family)
+            if cover and cover != found_type:
+                found_type = None
             if found_type:
                 decided[product_id] = (found_type, name)
 
@@ -359,7 +375,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument(
         "--out",
-        default="eval/product_types_todo.csv",
+        default=str(DEFAULT_TODO_PATH),
         help="where to write the rows the rules could not decide",
     )
     parser.add_argument(
