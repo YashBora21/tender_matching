@@ -504,7 +504,7 @@ def run_pipeline(
         # its own right, and its item is the parent it sits under. Without
         # this the row is stored as an item and no requirement ever points at
         # it: the clause is never assessed, and the report cannot say that it
-        # was skipped (D-140). A clause the specification already stated for
+        # was skipped (D-141). A clause the specification already stated for
         # the same item is not stated twice.
         stated = {
             (requirement.item_id or "", requirement.text.strip().lower())

@@ -3534,7 +3534,7 @@ company that used to sit under the other spelling. `test_ingestion.py` and
 *Left:* the `raw` row and its 128 results, and four past runs whose reports list a
 manufacturer that owns nothing.
 
-## D-140 - A bill of quantities row that states a clause is the clause's item
+## D-141 - A bill of quantities row that states a clause is the clause's item
 
 A buyer can write the obligation into the bill of quantities instead of naming
 a thing there: "The connector shall have LED indication for command ON" is a

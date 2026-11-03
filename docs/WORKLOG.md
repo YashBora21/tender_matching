@@ -3236,7 +3236,7 @@ them rewrites four past runs, and that is asked, not assumed. Four verified fact
 still filed with a null attribute (D-136 left them), and the report denominator,
 statuses and scores were not touched by any of this.
 
-### Step 27 - The clauses stored as items (D-140)
+### Step 27 - The clauses stored as items (D-141)
 
 The GeM tender's bill of quantities holds two rows that are clauses, not item
 names, and no requirement pointed at either of them: 2 items, 77 requirements,
