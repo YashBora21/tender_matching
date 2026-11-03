@@ -1,6 +1,7 @@
 {
   "version": "1",
-  "notes": "The roles a corpus document can play, and the words that name them. A document's role is what it is for: only a product document is evidence about a product. The declared types are the values the collector writes in its manifest; a role is added or mapped here, and no code changes. The words are matched in the document's own file name and opening pages.",
+  "notes": "The roles a corpus document can play, and the words that name them. A document's role is what it is for: only a product document is evidence about a product. The declared types are the values the collector writes in its manifest; a role is added or mapped here, and no code changes. A descriptive role is matched in the document's own file name and its opening pages; a role marked from_name_only is matched in the name alone, because getting it wrong takes a real document out of the evidence. retrieval_excluded lists the roles that are never evidence about a product, and retrieval will not read them.",
+  "retrieval_excluded": ["policy"],
   "declared": {
     "datasheet": "datasheet",
     "data sheet": "datasheet",
@@ -20,6 +21,7 @@
   "roles": [
     {
       "name": "certificate",
+      "from_name_only": true,
       "terms": [
         "iso 9001",
         "iso ce",
@@ -32,8 +34,10 @@
     },
     {
       "name": "policy",
+      "from_name_only": true,
       "terms": [
         "privacy policy",
+        "policy",
         "terms of use",
         "legal notice",
         "disclaimer",

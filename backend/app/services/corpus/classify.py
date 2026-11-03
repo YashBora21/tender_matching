@@ -40,6 +40,7 @@ __all__ = [
     "classify_corpus",
     "doc_role",
     "document_type_of",
+    "excluded_roles",
     "export_unresolved",
     "load_types",
     "main",
@@ -63,19 +64,29 @@ def _normalise(text: Optional[str]) -> str:
 
 @dataclass(frozen=True)
 class DocRole:
-    """One role and the words that name it."""
+    """One role and the words that name it.
+
+    `from_name_only` marks a role that takes a document out of the evidence -
+    a privacy policy, a certificate. It is accepted only from the manifest or
+    from what the document calls itself, never from a paragraph: a valve
+    datasheet whose specification line reads "fire safe certified: api 607" was
+    labelled a certificate by those words, which hides the product it is
+    evidence for (D-153). A descriptive role - datasheet, catalogue - costs
+    little when it is wrong, so the pages may name it.
+    """
 
     name: str
     terms: tuple[str, ...]
+    from_name_only: bool = False
 
 
 @lru_cache(maxsize=4)
-def _load(target: str) -> tuple[dict, tuple[DocRole, ...]]:
+def _load(target: str) -> tuple[dict, tuple[DocRole, ...], tuple[str, ...]]:
     """The role vocabulary. A missing or broken file gives no roles."""
     try:
         data = json.loads(Path(target).read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return {}, ()
+        return {}, (), ()
     declared = {
         _normalise(key): str(value).strip()
         for key, value in (data.get("declared") or {}).items()
@@ -87,15 +98,31 @@ def _load(target: str) -> tuple[dict, tuple[DocRole, ...]]:
             terms=tuple(
                 term for term in (_normalise(t) for t in entry.get("terms", ())) if term
             ),
+            from_name_only=bool(entry.get("from_name_only")),
         )
         for entry in data.get("roles", ())
     )
-    return declared, tuple(entry for entry in roles if entry.name and entry.terms)
+    excluded = tuple(
+        str(role).strip() for role in (data.get("retrieval_excluded") or ()) if str(role).strip()
+    )
+    return declared, tuple(entry for entry in roles if entry.name and entry.terms), excluded
+
+
+def excluded_roles(path: Optional[str] = None) -> tuple[str, ...]:
+    """The roles that mean *this document is not evidence about a product*.
+
+    They come from the same data file as the roles themselves, so deciding that
+    a privacy policy is not evidence is an edit to `data/doc_roles.json` and not
+    a list in retrieval code. A certificate is deliberately absent: it is
+    evidence for a certification requirement (PRD 4).
+    """
+    return _load(path or str(DEFAULT_DOC_ROLES_PATH))[2]
 
 
 def doc_role(
     declared: Optional[str] = None,
     *parts: Optional[str],
+    pages: Optional[str] = None,
     path: Optional[str] = None,
 ) -> Optional[str]:
     """The role a document plays, or None when nothing names it.
@@ -104,17 +131,23 @@ def doc_role(
     the document made by whoever put it in the corpus. Only a document whose
     manifest stayed silent or wrote a word the map does not know is read from
     its own words. Two roles named equally is no answer, not a coin toss.
+
+    `parts` is what the document calls itself - its file name and the model or
+    family the corpus already holds. `pages` is the opening text, which may name
+    a descriptive role but never one that takes the document out of the evidence
+    (`from_name_only`, D-153).
     """
-    mapping, roles = _load(path or str(DEFAULT_DOC_ROLES_PATH))
+    mapping, roles, _ = _load(path or str(DEFAULT_DOC_ROLES_PATH))
     name = mapping.get(_normalise(declared))
     if name:
         return name
-    text = " " + _normalise(" ".join(part or "" for part in parts)) + " "
+    cover = _normalise(" ".join(part or "" for part in parts))
+    body = f"{cover} {_normalise(pages)}"
     hits = [
         (len(term), role.name)
         for role in roles
         for term in role.terms
-        if term in text
+        if term in (cover if role.from_name_only else body)
     ]
     if not hits:
         return None
@@ -207,6 +240,7 @@ def classify_corpus(
             document.c.product_id,
             product.c.model,
             product.c.product_type,
+            product.c.classification_source,
             manufacturer.c.name,
         )
         .join(
@@ -230,6 +264,7 @@ def classify_corpus(
         product_id,
         product_model,
         product_type,
+        product_source,
         maker,
     ) in rows:
         report.documents += 1
@@ -239,10 +274,11 @@ def classify_corpus(
         if not body:
             report.unreadable += 1
         snippet = body[:ROLE_TEXT_CHARS]
-        words = (name, model_or_family, snippet)
+        cover = (name, model_or_family)
+        words = (*cover, snippet)
 
         if not role:
-            found_role = doc_role(declared_type, *words)
+            found_role = doc_role(declared_type, *cover, pages=snippet)
             if found_role:
                 report.roles += 1
                 if apply:
@@ -252,7 +288,16 @@ def classify_corpus(
                         .values(doc_role=found_role)
                     )
 
-        if product_id and not product_type and product_id not in decided:
+        if (
+            product_id
+            and not product_type
+            # A product that already carries a source has been decided, and the
+            # decision may have been *no single type*. An answer of blank is a
+            # reviewer's answer, and a re-run that filled it again would undo
+            # the one correction the CSV exists to make (D-153).
+            and not product_source
+            and product_id not in decided
+        ):
             found_type = document_type_of(doc_category, *words)
             # The opening pages do not overrule the document's own name. A
             # control-valve bulletin's first page routinely describes the ball

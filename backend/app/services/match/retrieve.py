@@ -175,6 +175,26 @@ def _category_filter(category: Optional[str]):
     return or_(document.c.category.is_(None), document.c.category.notin_(others))
 
 
+def _role_filter():
+    """The condition that keeps a document that is not product evidence out.
+
+    A privacy policy is not a datasheet: it answers no requirement, and a page
+    of it that happens to contain the requirement's words would be published as
+    evidence. Which roles mean that comes from `data/doc_roles.json`, so the
+    decision is an edit to the vocabulary and not a list in retrieval code.
+
+    A document whose role was never resolved is kept. Silence is not a policy
+    (PRD 4), and filtering on inequality alone would drop every document the
+    corpus has not read yet.
+    """
+    from app.services.corpus.classify import excluded_roles
+
+    excluded = excluded_roles()
+    if not excluded:
+        return None
+    return or_(document.c.doc_role.is_(None), document.c.doc_role.notin_(excluded))
+
+
 def _document_title(path: Optional[str]) -> Optional[str]:
     """The title a document is known by: its file name without the extension."""
     if not path:
@@ -535,6 +555,9 @@ def keyword_search(
     condition = _category_filter(category)
     if condition is not None:
         statement = statement.where(condition)
+    condition = _role_filter()
+    if condition is not None:
+        statement = statement.where(condition)
     if model:
         statement = statement.where(product.c.model == model)
     # More rows are fetched than are returned: the exact-token boost below
@@ -640,6 +663,9 @@ def semantic_search(
     if manufacturer_name:
         statement = statement.where(manufacturer.c.name == manufacturer_name)
     condition = _category_filter(category)
+    if condition is not None:
+        statement = statement.where(condition)
+    condition = _role_filter()
     if condition is not None:
         statement = statement.where(condition)
     if model:

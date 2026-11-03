@@ -11,6 +11,7 @@ from app.services.corpus.classify import (
     ClassifyReport,
     doc_role,
     document_type_of,
+    excluded_roles,
     export_unresolved,
 )
 
@@ -69,6 +70,34 @@ def test_the_broken_vocabulary_file_gives_no_roles(tmp_path) -> None:
     and nothing is guessed in its place."""
     missing = tmp_path / "doc_roles.json"
     assert doc_role(None, "gate-valve-datasheet.pdf", path=str(missing)) is None
+
+
+def test_a_role_that_only_a_page_proves_is_not_read_from_the_pages() -> None:
+    """A datasheet that quotes a certificate on page three is still a datasheet.
+
+    The roles that describe what a document *is* rather than what it talks
+    about are read from its cover, because the corpus's own page text mentions
+    them: a ball-valve datasheet was labelled a certificate by a word inside it,
+    and the file names itself Series 75/76, a ball valve."""
+    assert (
+        doc_role(
+            None,
+            "gate-valve-datasheet.pdf",
+            pages="our certificate of conformity and our privacy policy",
+        )
+        == "datasheet"
+    )
+    assert doc_role(None, "ISO-9001-Certificate-Audit-2024.pdf", "") == "certificate"
+
+
+def test_the_vocabulary_decides_which_roles_are_not_evidence() -> None:
+    """Retrieval drops what this list says and nothing more.
+
+    A certificate is deliberately absent: it is evidence for a certification
+    requirement, and excluding it would turn a real answer into silence."""
+    assert "policy" in excluded_roles()
+    assert "certificate" not in excluded_roles()
+    assert "datasheet" not in excluded_roles()
 
 
 def test_the_reviewer_gets_one_row_per_undecided_document(tmp_path) -> None:

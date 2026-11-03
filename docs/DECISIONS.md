@@ -4023,3 +4023,49 @@ checkbox list, not a filter on what gets assessed.
 
 *Verified:* `npx tsc --noEmit` and the frontend tests; the change is three lines in one
 function that no backend path reads.
+
+## D-153 - A role that removes evidence is read from the cover, and a policy is not evidence
+
+The corpus holds documents that are not about a product at all - one privacy policy, two
+quality certificates - and retrieval reads any chunk, so a requirement whose words meet a
+policy page gets that page back as evidence. `data/doc_roles.json` now carries the
+decision itself:
+
+- `"retrieval_excluded": ["policy"]`, read by the new `excluded_roles()`, applied by
+  `_role_filter()` in `retrieve.py` to both `keyword_search` and `semantic_search` next to
+  the category filter. It is `doc_role IS NULL OR doc_role NOT IN (…)` because 28 of the
+  101 documents have no role yet: silence is not a policy (PRD 4), and the bare inequality
+  would drop their 3,217 chunks and report the gap as "no evidence found".
+- `"from_name_only": true` on `certificate` and `policy`. A role that takes a document out
+  of the evidence is accepted only from the manifest or from what the document calls
+  itself, never from a paragraph. Measured reason: one valve datasheet has the
+  specification line "fire safe certified: api 607", and that word labelled it a
+  certificate. Descriptive roles - datasheet, catalogue, brochure - cost little when wrong,
+  so their pages still name them.
+
+A certificate stays searchable: it is evidence for a certification requirement (PRD 4), so
+it is deliberately not on the excluded list.
+
+*Data applied to the live corpus* (no rows deleted): 73 of 101 documents carry a role
+(datasheet 31, catalogue 29, brochure 8, policy 1, certificate 2, white paper 2), and the
+two documents that were linked to a product invented from their own file name - the privacy
+policy and an ISO certificate - now have `product_id = NULL`. `raw/PED-Module-H-Ball-Valve.pdf`
+is still linked: its product is a real model name, and unlinking it would have left a
+ball-valve product with no document at all. The `from_name_only` rule changed exactly one
+row, from certificate to no role - a datasheet whose cover names no descriptive word is left
+for the reviewer rather than guessed.
+
+*Durability gate:* `classify_corpus` now writes only a product whose `classification_source`
+is empty. Without it the next run re-typed the two multi-type portfolio products that were
+blanked by hand, because the pass fills any NULL; 18 products carry a type, all of them from
+`rule`. A row blanked without a source is still re-fillable - a reviewer who wants a blank to
+stick records `human` with no type.
+
+*Not added:* no settings entry and no CLI flag for the excluded roles; the vocabulary file
+is already the setting. `product.product_type` is still not wired into `_type_filter` (held
+for the reviewed list, D-150).
+
+*Verified:* `test_classify` (11), `test_retrieval` (24), `test_no_hardcoding` (4) and the
+full unit suite pass. Against the live corpus, `keyword_search("privacy policy data
+processing")` returned the policy's chunks before `_role_filter` and not after, with the
+same 50-candidate budget.

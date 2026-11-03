@@ -110,6 +110,23 @@ def test_a_document_that_declares_no_category_is_kept():
     assert "IS NULL" in sql
 
 
+def test_a_document_that_is_not_product_evidence_is_excluded():
+    """A privacy policy answers no requirement, and a page of it that happens
+    to contain the requirement's words must not be published as evidence.
+
+    The roles come from `data/doc_roles.json`, so this test is the contract
+    between that file and retrieval. A document whose role was never resolved
+    is kept: silence is not a policy (PRD 4)."""
+    from app.services.match.retrieve import _role_filter
+
+    sql = _sql(_role_filter())
+
+    assert "policy" in sql
+    assert "certificate" not in sql
+    assert "datasheet" not in sql
+    assert "IS NULL" in sql
+
+
 def test_a_chunk_that_names_a_different_valve_type_is_dropped(monkeypatch):
     """A gate-valve requirement is not answered by a ball-valve datasheet,
     even though both are `valves` (D-97)."""
