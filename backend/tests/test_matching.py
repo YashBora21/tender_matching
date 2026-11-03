@@ -952,6 +952,52 @@ def test_a_document_that_is_not_on_disk_has_no_page_text(tmp_path, monkeypatch):
     assert match._page_text(_DocumentSession("gone.pdf"), _candidate()) is None
 
 
+def test_a_page_with_no_text_layer_is_read_from_the_text_it_was_chunked_from(
+    tmp_path, monkeypatch
+):
+    """A scanned datasheet page has no text layer at all, so the citation layer
+    compared its quote with an empty string and failed it as "longer than the
+    page" - every OCR page was unverifiable by construction (D-145)."""
+    import pymupdf
+
+    from types import SimpleNamespace
+
+    from app.services.match import match
+
+    path = tmp_path / "catalogue" / "acme" / "raw" / "scan.pdf"
+    path.parent.mkdir(parents=True)
+    document = pymupdf.open()
+    document.new_page()  # an image page: nothing to read from the text layer
+    document.save(path)
+    document.close()
+    monkeypatch.setattr(
+        "app.core.config.get_settings", lambda: SimpleNamespace(data_dir=tmp_path)
+    )
+
+    class _ScannedPageSession:
+        """The document's path, then the OCR text its page's chunks hold."""
+
+        def __init__(self, chunks):
+            self.chunks = chunks
+
+        def execute(self, *args, **kwargs):
+            return self
+
+        def first(self):
+            return (str(path),)
+
+        def all(self):
+            return [(text,) for text in self.chunks]
+
+    session = _ScannedPageSession(["Face to face: 122 mm", "End connection: NPT"])
+
+    text = match._page_text(session, _candidate())
+
+    assert text is not None
+    assert "Face to face: 122 mm" in text
+    assert "End connection: NPT" in text
+
+
 def test_a_matched_pair_records_the_time_of_each_stage(monkeypatch):
     """The seconds are measured where they are spent, not guessed afterwards (D-131)."""
     from app.services.match import match

@@ -3673,3 +3673,40 @@ false-confident row (arithmetic over the frozen report, not a re-run).
 _no_evidence_found` now pins the outcome, the flag and the exact reason;
 `test_a_passage_that_states_nothing_is_no_evidence_found`, the same branch reached
 through a `found: false` extraction), 34 in that file, full unit suite.
+
+## D-145 - An OCR page is checked against the text that page was chunked from
+
+`_page_text` read the PDF's text layer and nothing else. A scanned page has no
+text layer, so the citation layer compared the quote with `""`, reported **the
+quote is longer than the cited page**, and failed. The verdict looked like a
+problem with the quote; it was a hole in the check, and it made **every image-only
+page in the corpus unverifiable by construction** - the Val-Matic datasheets are
+image-only, which is why the whole Val-Matic column came back silent.
+
+Measured over the frozen baseline (D-143): 10 of its 16 distinct claims failed with
+that one reason, all on pages that return 0 characters in PyMuPDF *and* pdfplumber
+alike. Reading the page from the chunks it was cut into fixes 8 of them
+(`the quote appears verbatim on the cited page`), and 2 are now quoted from text
+that the re-ingested corpus does not hold on any page of those documents -
+`150 | 280 | 140` in `Series-58-2022-M2`, `8 | 0.71 | 2.50 | 4.00` in
+`Series-51-53-v5b`. Those two are the run quoting an older version of the corpus,
+not a second failure of this fix; the baseline keeps them as they were measured.
+
+The fallback is **page-level, not passage-level**: it joins every chunk stored for
+that document and page, so a quote still has to appear somewhere on the page and
+not merely inside the passage the model was sent. Verification is not weakened -
+for a page that never had a text layer it is the only form the check could take,
+and it is the same text the corpus was indexed from.
+
+*What it changes in a report:* claims quoted from scanned pages can now pass layer
+1 and be published as full/partial/missing instead of dying as silence. Nothing
+that verified before changes.
+
+*Known limit:* chunks carry no ordinal, so the page is rebuilt in `id` order and a
+quote that spans two chunks will not be found. `eval/harness.py cite` still checks
+the text layer only - it is deliberately database-free, so on a scanned page it is
+stricter than the product, by design.
+
+*Verified:* 1 test in `test_matching.py` (a page with no text layer is read from
+its chunks, both chunk texts present in the page), 35 in that file, and the
+measurement above against the stored corpus - 0 model calls.

@@ -868,9 +868,33 @@ def _page_text(session: Session, candidate: Candidate) -> Optional[str]:
     try:
         if candidate.page is None or candidate.page > document.page_count:
             return None
-        return document[candidate.page - 1].get_text() or ""
+        text = document[candidate.page - 1].get_text() or ""
     finally:
         document.close()
+    if text.strip():
+        return text
+    # The page is an image: it has no text layer, and the only machine-readable
+    # form of it in this project is the OCR text the page was chunked from.
+    # Without this fallback a quote read from an OCR page can never verify, so
+    # every scanned datasheet answers "no evidence" however clear its table is
+    # (D-145). Still page-level, not passage-level: the quote has to appear
+    # somewhere on the page, not merely inside the passage the model was sent.
+    # shortcut: chunks have no ordinal, so they are joined by id and a quote
+    # that spans two of them is not found; upgrade when a page stores its text.
+    return _page_chunk_text(session, candidate)
+
+
+def _page_chunk_text(session: Session, candidate: Candidate) -> str:
+    """The text this page's chunks hold, joined."""
+    from app.repositories.schema import chunk
+
+    rows = session.execute(
+        select(chunk.c.text)
+        .where(chunk.c.document_id == candidate.document_id)
+        .where(chunk.c.page == candidate.page)
+        .order_by(chunk.c.id)
+    ).all()
+    return "\n".join(str(row[0]) for row in rows)
 
 
 def _corpus_file(relative: str) -> Optional[Path]:
