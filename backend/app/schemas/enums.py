@@ -11,6 +11,26 @@ from __future__ import annotations
 from enum import StrEnum
 
 
+class ClassificationSource(StrEnum):
+    """Source of a product or document classification."""
+
+    MANIFEST = "manifest"
+    RULE = "rule"
+    HUMAN = "human"
+
+
+class DocRole(StrEnum):
+    """The role a document plays in the corpus."""
+
+    DATASHEET = "datasheet"
+    CATALOGUE = "catalogue"
+    BROCHURE = "brochure"
+    WHITE_PAPER = "white_paper"
+    CERTIFICATE = "certificate"
+    POLICY = "policy"
+    OTHER = "other"
+
+
 class RequirementStatus(StrEnum):
     """PRD 4 - the business result for one requirement against one manufacturer."""
 

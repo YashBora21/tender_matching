@@ -3945,3 +3945,81 @@ the opposite, and that the unknown sentinel is no category either. `test_corpuss
 `test_categories`, `test_retrieval` and `test_no_hardcoding` pass unchanged, and so
 does the full unit suite. `--out` now defaults to the repository's own `eval/` instead
 of a directory created under whatever the working directory happened to be.
+
+## D-150 - The classification columns land as one reviewed migration
+
+`0015_product_type_doc_role` was written and applied to the dev database by the session
+that planned the corpus pass, but it sat uncommitted while D-148 and D-149 were built on
+top of it. It is committed as it stands, with the schema and the enums that describe it:
+
+- `product.product_type` (varchar 64), `product.classification_source` (varchar 32,
+  CHECK `manifest | rule | human`), `product.confidence` (float);
+- `document.doc_role` (varchar 32, CHECK over the seven roles of D-148).
+
+The three columns are nullable with no default, because a corpus row that has not been
+classified says nothing, and a rule that guessed would be read as evidence.
+`classification_source` is the field that keeps the three ways a value can arrive apart
+- what the collector wrote in the manifest, what `classify.py` read from the document,
+and what a reviewer typed into the CSV - and it is the predicate the repair in D-149
+could be run under. `repositories/schema.py` declares both enum columns through `_enum`,
+so they are VARCHAR + a named CHECK rather than a native Postgres enum, which is what
+the migration actually created.
+
+*Not tested:* the CHECK value lists and the enum members are kept in step by hand, the
+same way 0013 and 0016 do it. A test comparing them would freeze a historical migration
+whose lists are meant to be widened by the next one.
+
+*Verified:* the full unit suite, `test_no_hardcoding`, and `alembic current` on the dev
+database, which was already at `0015_product_type_doc_role` before this commit and is
+unchanged by it.
+
+## D-151 - A product family is entered only from the document that names it
+
+`data/categories.json` gains the families the corpus actually carries, so a page that
+never says "butterfly valve" can still be placed by the family on its cover (D-100):
+the eight Delval butterfly series, the DelVal ball series, the IVC/IVCT wafer check
+valves, the butterfly and check term variants the bulletins use (`bfv`, `hpbfv`,
+"swing check valve", "wafer check valve"), and a `knife_edge` type.
+
+Every entry was checked against the document itself - opened locally, first three pages,
+no model asked. `1692721738-...SERIES-40-41-CENTRIC-BFV.pdf` says "Product Specification
+for Industrial Split Body Centric Butterfly Valves"; `...SERIES-65-72-BLV-R1` says
+"Solid, One-Piece Ball". Two proposed families were **rejected on that evidence**:
+
+- `Series 21pt` was listed under ball valves. The document is the DelTorq bulletin, and
+  its own cover reads "Atuadores Pneumáticos de Pinhão e Cremalheira SÉRIE 21" - a
+  pneumatic rack-and-pinion actuator.
+- `Series 83` was listed under ball valves. The file is
+  `Automation_Series-83-Valve-Position-Monitor.pdf`, and the matching technical bulletin
+  names no valve type at all. It is a monitoring accessory.
+
+Both are the failure D-149 was about, arriving through the data file instead of the code:
+a family entered from a brand's naming scheme rather than from what the document
+declares. A wrong family is worse than a missing one, because `document_type()` trusts
+families exactly as much as terms, and retrieval drops every chunk of a document that
+declares a different type (D-107).
+
+*Not added:* there is no `actuators` category in the vocabulary, so DelTorq's actuator
+bulletins stay unplaced by type. That is a category to add with its own terms and its own
+evidence, not a place to park the two families removed here.
+
+*Verified:* `test_categories`, `test_classify`, `test_corpusseed`, `test_retrieval`,
+`test_no_hardcoding` and the full unit suite pass; the JSON parses and the trailing
+newline the editor dropped is restored.
+
+## D-152 - `unknown` is not a vote in the frontend's category pick
+
+`tenderCategory()` in `frontend/src/components/UploadPage.tsx` counts the categories the
+extracted requirements carry and takes the most common one to decide which manufacturers
+to pre-select. An item whose words named no category stores the sentinel `unknown`
+(FR-16), and the vote counted it as if it were a category of its own: a tender of mostly
+unclassifiable items could pre-select on `unknown`, which matches no manufacturer. It is
+skipped now, the same way an empty category is skipped.
+
+The backend is unchanged and stays that way: a run still answers every selected
+manufacturer, and a pair the category rule excluded is reported with
+`ReasonCode.category_mismatch` (D-135) rather than dropped. This is a default in a
+checkbox list, not a filter on what gets assessed.
+
+*Verified:* `npx tsc --noEmit` and the frontend tests; the change is three lines in one
+function that no backend path reads.

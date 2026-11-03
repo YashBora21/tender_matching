@@ -39,7 +39,9 @@ from sqlalchemy.dialects.postgresql import JSONB, TSVECTOR
 from app.schemas.enums import (
     AliasSource,
     Applicability,
+    ClassificationSource,
     ConfidenceLevel,
+    DocRole,
     ExtractionMethod,
     FactVerificationStatus,
     LedgerStatus,
@@ -99,6 +101,9 @@ product = Table(
     # model. A fact about a family is family-level evidence: uncertain
     # applicability, capped and flagged for review (PRD 4).
     Column("is_family_level", Boolean, nullable=False, server_default="false"),
+    Column("product_type", String(64)),
+    Column("classification_source", _enum(ClassificationSource, "classification_source")),
+    Column("confidence", Float),
     UniqueConstraint("manufacturer_id", "model", name="uq_product_manufacturer_model"),
     # The table cannot be referenced by name while it is being defined.
     Index("ix_product_manufacturer_id", "manufacturer_id"),
@@ -112,6 +117,7 @@ document = Table(
     Column("url", Text),
     Column("sha256", String(64), nullable=False),
     Column("doc_type", String(64)),
+    Column("doc_role", _enum(DocRole, "doc_role")),
     Column("version_date", DateTime(timezone=True)),
     Column("retrieved_at", DateTime(timezone=True)),
     Column("path", Text),
