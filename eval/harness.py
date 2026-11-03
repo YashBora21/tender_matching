@@ -23,9 +23,11 @@ they are reported in their own block so they cannot disappear.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import re
 import sys
+from copy import deepcopy
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -37,6 +39,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from app.services.match.verify import check_citation  # noqa: E402
+from app.services.textnorm import normalise_text  # noqa: E402
 
 # The statuses a technical requirement can be scored on, then the one that is
 # not scored at all. The order is the PRD's.
@@ -243,9 +246,19 @@ def corpus_index(data_dir: Path) -> dict[tuple[str, str], Path]:
     A manifest is what the collector wrote, so it is the honest index of what
     the corpus holds; walking 157 MB of PDFs to rebuild the same map would be
     slow and would still say nothing about files the manifests do not list.
+
+    Three shapes, because two writers filled the corpus: the collector's
+    `manufacturers/<slug>/manifest.json`, the hand-gathered catalogue's one
+    `catalogue/manifest.csv`, and the per-manufacturer `manifest.json` files
+    that sit inside `catalogue/`. An index that reads only the first reports
+    the other documents as "source unavailable" and quietly measures less than
+    the report claimed.
     """
     index: dict[tuple[str, str], Path] = {}
-    for manifest in sorted((data_dir / "manufacturers").glob("*/manifest.json")):
+    manifests = sorted(data_dir.glob("manufacturers/*/manifest.json")) + sorted(
+        data_dir.glob("catalogue/**/manifest.json")
+    )
+    for manifest in manifests:
         try:
             payload = json.loads(manifest.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -258,6 +271,20 @@ def corpus_index(data_dir: Path) -> dict[tuple[str, str], Path]:
                 index[("sha256", str(entry["sha256"]).lower())] = path
             if entry.get("filename"):
                 index[("filename", str(entry["filename"]))] = path
+
+    catalogue_csv = data_dir / "catalogue" / "manifest.csv"
+    if catalogue_csv.is_file():
+        with catalogue_csv.open(encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                path = catalogue_csv.parent / str(row.get("manufacturer") or "") / str(
+                    row.get("filename") or ""
+                )
+                if not path.is_file():
+                    continue
+                if row.get("sha256"):
+                    index[("sha256", str(row["sha256"]).lower())] = path
+                if row.get("filename"):
+                    index[("filename", str(row["filename"]))] = path
     return index
 
 
@@ -313,6 +340,77 @@ def citation(index: dict[tuple[str, str], Path], evidence: dict) -> dict:
     return {
         "outcome": "verified" if verdict.passed else "failed",
         "reason": verdict.reason,
+    }
+
+
+# --- freezing a baseline ----------------------------------------------------
+
+# The two ids every evidence block carries, and what a re-ingest regenerates. A
+# baseline that names them cannot be diffed against a later run: run 4e7ebbc1's
+# fact and document ids point at rows a re-ingest of the same corpus replaces.
+TRANSIENT = ("fact_id", "document_id")
+
+
+def citation_key(evidence: dict) -> tuple:
+    """Which document, which page, which words.
+
+    The three things that let a quote be re-checked after every database id in
+    the report has been regenerated.
+    """
+    return (
+        str(evidence.get("sha256") or "").lower(),
+        evidence.get("page"),
+        normalise_text(str(evidence.get("quote") or "")),
+    )
+
+
+def freeze(report: dict, data_dir: Path) -> dict:
+    """Check every quoted claim in a report and copy it without database ids.
+
+    `score` citation-checks only the labelled pairs, so a six-label baseline
+    reports `claims: 0` about a run that published 27 quotes. This measures
+    every claim the report makes, counted once per distinct document, page and
+    quote so the same sentence cited by five requirements is not five
+    citations.
+    """
+    index = corpus_index(data_dir)
+    claims: dict[tuple, dict] = {}
+    frozen = deepcopy(report)
+    for requirement in frozen.get("requirements") or []:
+        for result in requirement.get("results") or []:
+            evidence = result.get("evidence")
+            if not isinstance(evidence, dict):
+                continue
+            for key in TRANSIENT:
+                evidence.pop(key, None)
+            if not str(evidence.get("quote") or "").strip():
+                continue
+            key = citation_key(evidence)
+            row = claims.get(key)
+            if row is None:
+                check = citation(index, evidence)
+                row = claims[key] = {
+                    "sha256": key[0],
+                    "page": key[1],
+                    "quote": key[2],
+                    "predictions": 0,
+                    "outcome": check["outcome"],
+                    "reason": check["reason"],
+                }
+            row["predictions"] += 1
+    counts = {
+        name: sum(1 for row in claims.values() if row["outcome"] == name)
+        for name in ("verified", "failed", "uncited", "unavailable")
+    }
+    judged = counts["verified"] + counts["failed"] + counts["uncited"]
+    return {
+        "citations": {
+            **counts,
+            "claims": len(claims),
+            "correctness": _ratio(counts["verified"], judged),
+            "checks": [claims[key] for key in sorted(claims, key=lambda k: (k[0], str(k[1])))],
+        },
+        "report": frozen,
     }
 
 
@@ -624,6 +722,20 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--out", type=Path, default=None, help="write the JSON summary here"
     )
 
+    cite_command = commands.add_parser(
+        "cite",
+        help="citation-check every claim in a report and copy it without database ids",
+    )
+    cite_command.add_argument("--report", type=Path, required=True)
+    cite_command.add_argument(
+        "--corpus",
+        type=Path,
+        default=None,
+        help="data directory holding manufacturers/<slug>/manifest.json",
+    )
+    cite_command.add_argument("--out", type=Path, required=True)
+    cite_command.add_argument("--frozen-report", type=Path, required=True)
+
     args = parser.parse_args(argv)
     try:
         if args.command == "check":
@@ -632,6 +744,22 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 0
 
         report = load_report(args.report)
+        if args.command == "cite":
+            frozen = freeze(report, _data_dir(args.corpus))
+            args.out.write_text(
+                json.dumps(frozen["citations"], indent=2) + "\n", encoding="utf-8"
+            )
+            args.frozen_report.write_text(
+                json.dumps(frozen["report"], indent=2) + "\n", encoding="utf-8"
+            )
+            counts = frozen["citations"]
+            print(
+                f"{counts['claims']} distinct claim(s): {counts['verified']} verified, "
+                f"{counts['failed']} failed, {counts['unavailable']} source unavailable"
+                f" (excluded); correctness {_percent(counts['correctness'])}"
+            )
+            return 0
+
         labels = load_gold(args.gold)
         summary = score(report, labels, _data_dir(args.corpus))
     except EvalError as exc:

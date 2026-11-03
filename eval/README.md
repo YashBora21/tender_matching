@@ -29,6 +29,21 @@ A quote counts as verified only if `app.services.match.verify.check_citation` fi
 it on the cited page — the same function that gates publication, so the
 evaluation cannot be more forgiving than the product.
 
+`score` only checks the claims it has labels for, so a report whose labelled pairs
+are all silent reports `claims: 0`. To audit every quoted claim in a report
+instead, and to save a baseline copy with the database ids removed:
+
+```bash
+python eval/harness.py cite --report report.json --out citations.json \
+  --frozen-report report.frozen.json
+```
+
+Claims are keyed by (document sha256, page, normalised quote), so the same quote
+supporting ten results is one claim with `predictions: 10` - a repeated mistake
+cannot inflate or hide the rate. Ids of rows that are re-created on every
+ingestion (`fact_id`, `document_id`, `chunk_id`) are dropped from the frozen copy:
+a baseline that points at a row which no longer exists cannot be diffed later.
+
 Two refusals keep the numbers honest:
 
 - a label naming a requirement × manufacturer pair the report does not contain

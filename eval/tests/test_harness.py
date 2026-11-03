@@ -574,3 +574,66 @@ def test_the_markdown_says_what_the_numbers_are(tmp_path):
     assert "Citation correctness" in text
     assert "Unsupported (excluded from the metrics above)" in text
     assert "no_evidence_found" in text
+
+
+def test_freeze_checks_every_claim_and_drops_the_database_ids(tmp_path):
+    """The baseline is re-checked against the PDF, not against a chunk id.
+
+    A report cites `fact_id` and `document_id`, and a re-ingest regenerates
+    both, so a frozen baseline that names them cannot be diffed later. The
+    citation key is the document hash, the page and the words.
+    """
+    data, digest, name = make_corpus(
+        tmp_path, ["SYNTHETIC DATA - Body: ASTM A351 CF8M", "second page"]
+    )
+
+    def evidence(quote, page, **extra):
+        return {"sha256": digest, "document": name, "page": page, "quote": quote, **extra}
+
+    report = {
+        "requirements": [
+            {"results": [{"evidence": evidence("Body: ASTM A351 CF8M", 1, fact_id="f1", document_id="d1")}]},
+            # The same words on the same page, cited by another requirement.
+            {"results": [{"evidence": evidence("Body: ASTM A351 CF8M", 1, fact_id="f2")}]},
+            {"results": [{"evidence": evidence("a quote that is not there", 3)}]},
+            # A pair that names no quote is not a claim, so it is not counted.
+            {"results": [{"evidence": evidence("", 1)}]},
+        ]
+    }
+
+    frozen = harness.freeze(report, data)
+
+    assert frozen["citations"]["claims"] == 2
+    assert frozen["citations"]["verified"] == 1
+    assert frozen["citations"]["failed"] == 1
+    assert frozen["citations"]["correctness"] == pytest.approx(0.5)
+    assert frozen["citations"]["checks"][0]["predictions"] == 2
+    for requirement in frozen["report"]["requirements"]:
+        for result in requirement["results"]:
+            assert not set(result["evidence"]) & set(harness.TRANSIENT)
+
+
+def test_a_document_listed_only_in_the_catalogue_csv_is_still_indexed(tmp_path):
+    """Two writers fill the corpus: the collector's manifests and the
+    hand-gathered catalogue's one CSV. An index that reads only the first calls
+    the second's claims "source unavailable" and measures less than the report
+    claimed - the excluded rows are invisible in the correctness number.
+    """
+    pymupdf = pytest.importorskip("pymupdf")
+    catalogue = tmp_path / "catalogue" / "delval"
+    catalogue.mkdir(parents=True)
+    pdf = catalogue / "series-7-8.pdf"
+    document = pymupdf.open()
+    document.new_page().insert_text((72, 90), "SYNTHETIC - Body Style flanged")
+    document.save(pdf)
+    document.close()
+    digest = hashlib.sha256(pdf.read_bytes()).hexdigest()
+    (tmp_path / "catalogue" / "manifest.csv").write_text(
+        'manufacturer,filename,sha256\ndelval,"series-7-8.pdf",' + digest + "\n",
+        encoding="utf-8",
+    )
+
+    index = harness.corpus_index(tmp_path)
+
+    assert index[("sha256", digest)] == pdf
+    assert index[("filename", "series-7-8.pdf")] == pdf

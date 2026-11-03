@@ -1,0 +1,138 @@
+{
+  "verified": 6,
+  "failed": 10,
+  "uncited": 0,
+  "unavailable": 0,
+  "claims": 16,
+  "correctness": 0.375,
+  "checks": [
+    {
+      "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+      "page": 13,
+      "quote": "Actuator 1/2\u201c 3/4\u201c 1\u201c - 1 1/2\u201c 2\u201c - 3\u201c 4\u201c - 6\u201c",
+      "predictions": 2,
+      "outcome": "verified",
+      "reason": "the quote appears verbatim on the cited page"
+    },
+    {
+      "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+      "page": 13,
+      "quote": "Class 150 RF",
+      "predictions": 10,
+      "outcome": "verified",
+      "reason": "the quote appears verbatim on the cited page"
+    },
+    {
+      "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+      "page": 13,
+      "quote": "4\u201c - 6\u201c",
+      "predictions": 1,
+      "outcome": "verified",
+      "reason": "the quote appears verbatim on the cited page"
+    },
+    {
+      "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+      "page": 2,
+      "quote": "End Connection Flanged",
+      "predictions": 1,
+      "outcome": "verified",
+      "reason": "the quote appears verbatim on the cited page"
+    },
+    {
+      "sha256": "3ecddc89e03aa4087cb71a0dc0398f88318b7ffc8f3b0a5771bb93ee7ab9fe27",
+      "page": 1,
+      "quote": "Carbon Steel",
+      "predictions": 1,
+      "outcome": "failed",
+      "reason": "the quote is longer than the cited page"
+    },
+    {
+      "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+      "page": 3,
+      "quote": "2 50 6.00 4.25 5.51 3.07 3.54 2.76 4 0.39 0.55 = 0.63",
+      "predictions": 1,
+      "outcome": "failed",
+      "reason": "the quote is longer than the cited page"
+    },
+    {
+      "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+      "page": 3,
+      "quote": "2 50 150 108 140",
+      "predictions": 2,
+      "outcome": "failed",
+      "reason": "the quote is longer than the cited page"
+    },
+    {
+      "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+      "page": 3,
+      "quote": "600 | 3815 | 267 | 495 | 461",
+      "predictions": 1,
+      "outcome": "failed",
+      "reason": "the quote is longer than the cited page"
+    },
+    {
+      "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+      "page": 3,
+      "quote": "26 | 650 | 870 | 292 | 555 | 465 | 300 | 254 | 8 | 18 | -~- | 635 | 102 | 15.88x15.88| 510.0",
+      "predictions": 1,
+      "outcome": "failed",
+      "reason": "the quote is longer than the cited page"
+    },
+    {
+      "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+      "page": 3,
+      "quote": "2 50 6.00 4.25 5.51 3.07 3.54 2.76",
+      "predictions": 1,
+      "outcome": "failed",
+      "reason": "the quote is longer than the cited page"
+    },
+    {
+      "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+      "page": 3,
+      "quote": "222 |406 [347",
+      "predictions": 1,
+      "outcome": "failed",
+      "reason": "the quote is longer than the cited page"
+    },
+    {
+      "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+      "page": 3,
+      "quote": "150 | 280 | 140",
+      "predictions": 1,
+      "outcome": "failed",
+      "reason": "the quote is longer than the cited page"
+    },
+    {
+      "sha256": "c63b4a190f253c7a88d3ec09130ff4a11d42e800d1545737c1193184912ee4d8",
+      "page": 1,
+      "quote": "Two-Piece & Three-Piece construction",
+      "predictions": 1,
+      "outcome": "verified",
+      "reason": "the quote appears verbatim on the cited page"
+    },
+    {
+      "sha256": "c63b4a190f253c7a88d3ec09130ff4a11d42e800d1545737c1193184912ee4d8",
+      "page": 1,
+      "quote": "Valve Type: Series 7/8, Two-Piece & Three-Piece construction",
+      "predictions": 1,
+      "outcome": "verified",
+      "reason": "the quote appears verbatim on the cited page"
+    },
+    {
+      "sha256": "ff92efe41f28df10124a3cf9d08fd0c09e5d637d205880b84871cfb3ed403223",
+      "page": 3,
+      "quote": "8 | 0.71 | 2.50 | 4.00",
+      "predictions": 1,
+      "outcome": "failed",
+      "reason": "the quote is longer than the cited page"
+    },
+    {
+      "sha256": "ff92efe41f28df10124a3cf9d08fd0c09e5d637d205880b84871cfb3ed403223",
+      "page": 6,
+      "quote": "CS = Carbon Steel",
+      "predictions": 1,
+      "outcome": "failed",
+      "reason": "the quote is longer than the cited page"
+    }
+  ]
+}

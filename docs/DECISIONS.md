@@ -3598,3 +3598,36 @@ for answering a question it was never asked.
 `Only valves (1)` selects the valve maker alone; a tender whose items name no
 category keeps the flat list and offers no narrowing), 13 in that file, 33 frontend
 tests, `tsc -b` and `oxlint` clean.
+
+## D-143 - A frozen baseline is checked by document hash, page and quote
+
+The speed-ups are diffed against `eval/baseline/`, so the baseline has to survive
+a re-ingest. It did not: every evidence block in the report names a `fact_id` and
+a `document_id`, and re-reading the same corpus replaces both rows. A diff against
+those ids compares nothing.
+
+`eval/harness.py cite` therefore keys a claim by **(document sha256, page,
+normalised quote)** - the three things that outlive a re-ingest - re-checks it
+with the product's own `check_citation` against the PDF page text on disk, and
+writes a copy of the report with the two ids removed. Claims are deduped by that
+key and counted, so one sentence cited under five requirements is one claim with
+`predictions: 5` and cannot inflate or hide the rate. `score` is left as it was:
+it checks only the labelled pairs, which is the number a gold file can support.
+
+*Measured on the baseline, no model call:* 16 distinct claims over 27 predictions -
+6 verified, 10 failed, **correctness 0.375**. All 10 failures are Val-Matic
+(`VMC-4702AAL-AAW_11-18-14.pdf` p1, `Series-51-53-v5b` p3 and p6,
+`Series-58-2022-M2` p3) and all 10 read `the quote is longer than the cited page`.
+Those pages return **0 characters in PyMuPDF and in pdfplumber alike**; the quoted
+text exists only in chunks stored with `ocr = true`. So this is item-by-item
+evidence, not a wrong answer: the quote is real and the checker is blind to an OCR
+page, which is what the Val-Matic diagnosis now has to fix.
+
+*What it does not change:* no product code and no report contents; the files
+already in `eval/baseline/` were not edited, and `report-4e7ebbc1.json` is kept as
+the pre-freeze original next to the frozen copy.
+
+*Verified:* 2 new tests in `eval/tests/test_harness.py` (every claim checked and
+the ids gone in the frozen copy; a document listed only in `catalogue/manifest.csv`
+is still indexed - before that fix 12 of 16 claims were silently skipped as
+`unavailable`), 19 in that file, and the full unit suite.
