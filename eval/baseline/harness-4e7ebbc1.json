@@ -1,0 +1,117 @@
+{
+  "labelled": 6,
+  "verifiable": 6,
+  "unsupported": 0,
+  "unlabelled_predictions": 57,
+  "accuracy": 0.0,
+  "confusion": {
+    "missing_capability": {
+      "no_evidence_found": 4
+    },
+    "partial_match": {
+      "no_evidence_found": 2
+    }
+  },
+  "per_status": {
+    "full_match": {
+      "support": 0,
+      "precision": null,
+      "recall": null,
+      "f1": null
+    },
+    "partial_match": {
+      "support": 2,
+      "precision": null,
+      "recall": 0.0,
+      "f1": null
+    },
+    "missing_capability": {
+      "support": 4,
+      "precision": null,
+      "recall": 0.0,
+      "f1": null
+    },
+    "no_evidence_found": {
+      "support": 0,
+      "precision": 0.0,
+      "recall": null,
+      "f1": null
+    }
+  },
+  "false_confident": {
+    "count": 1,
+    "rate": 0.1667
+  },
+  "coverage": {
+    "with_evidence": 0,
+    "rate": 0.0
+  },
+  "review": {
+    "flagged": 5,
+    "rate": 0.8333
+  },
+  "citations": {
+    "verified": 0,
+    "failed": 0,
+    "uncited": 0,
+    "unavailable": 0,
+    "claims": 0,
+    "correctness": null,
+    "checks": []
+  },
+  "unsupported_block": {
+    "labelled": 0,
+    "predicted_unsupported": 0,
+    "accuracy": null
+  },
+  "wrong": [
+    {
+      "requirement_id": "6ffe6648-a230-46c0-abbf-279384a77e54",
+      "manufacturer": "delval_flow",
+      "expected": "missing_capability",
+      "predicted": "no_evidence_found",
+      "review_required": true,
+      "review_reason": "the document declares Series 7/8 at family level; attribute_not_mapped: no evaluator is registered for this attribute"
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "manufacturer": "delval_flow",
+      "expected": "missing_capability",
+      "predicted": "no_evidence_found",
+      "review_required": true,
+      "review_reason": "the document declares Series 7/8 at family level; attribute_not_mapped: no evaluator is registered for this attribute"
+    },
+    {
+      "requirement_id": "6ffe6648-a230-46c0-abbf-279384a77e54",
+      "manufacturer": "Flowserve",
+      "expected": "partial_match",
+      "predicted": "no_evidence_found",
+      "review_required": true,
+      "review_reason": "pressure class comparison needs a class on both sides"
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "manufacturer": "Flowserve",
+      "expected": "partial_match",
+      "predicted": "no_evidence_found",
+      "review_required": true,
+      "review_reason": "pressure class comparison needs a class on both sides"
+    },
+    {
+      "requirement_id": "6ffe6648-a230-46c0-abbf-279384a77e54",
+      "manufacturer": "valmatic",
+      "expected": "missing_capability",
+      "predicted": "no_evidence_found",
+      "review_required": false,
+      "review_reason": null
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "manufacturer": "valmatic",
+      "expected": "missing_capability",
+      "predicted": "no_evidence_found",
+      "review_required": true,
+      "review_reason": "the claim could not be verified: the quote is longer than the cited page"
+    }
+  ]
+}

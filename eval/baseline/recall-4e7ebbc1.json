@@ -1,0 +1,81 @@
+{
+  "k_values": [
+    3,
+    20
+  ],
+  "total": 6,
+  "unlabelled": 0,
+  "unconfirmed": 0,
+  "recall": {
+    "3": 0.3333333333333333,
+    "20": 1.0
+  },
+  "hits": {
+    "3": 2,
+    "20": 6
+  },
+  "document_recall": {
+    "3": 0.6666666666666666,
+    "20": 1.0
+  },
+  "document_hits": {
+    "3": 4,
+    "20": 6
+  },
+  "causes": {
+    "corpus_gap": 0,
+    "chunking": 0,
+    "retrieval": 0,
+    "verifier": 6
+  },
+  "misses": [
+    {
+      "requirement_id": "6ffe6648-a230-46c0-abbf-279384a77e54",
+      "manufacturer": "delval_flow",
+      "gold_document": "1692719045-Technical-Bulletin---118-PRODUCT-SPECIFICATION-SERIES-7-8-R1.pdf",
+      "gold_page": 2,
+      "cause": "verifier",
+      "detail": "the gold page was retrieved, but the result is no_evidence_found, not missing_capability"
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "manufacturer": "delval_flow",
+      "gold_document": "1692719045-Technical-Bulletin---118-PRODUCT-SPECIFICATION-SERIES-7-8-R1.pdf",
+      "gold_page": 2,
+      "cause": "verifier",
+      "detail": "the gold page was retrieved, but the result is no_evidence_found, not missing_capability"
+    },
+    {
+      "requirement_id": "6ffe6648-a230-46c0-abbf-279384a77e54",
+      "manufacturer": "Flowserve",
+      "gold_document": "WCENBR0001_EN_AQ.pdf",
+      "gold_page": 4,
+      "cause": "verifier",
+      "detail": "the gold page was retrieved, but the result is no_evidence_found, not partial_match"
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "manufacturer": "Flowserve",
+      "gold_document": "WCENBR0001_EN_AQ.pdf",
+      "gold_page": 4,
+      "cause": "verifier",
+      "detail": "the gold page was retrieved, but the result is no_evidence_found, not partial_match"
+    },
+    {
+      "requirement_id": "6ffe6648-a230-46c0-abbf-279384a77e54",
+      "manufacturer": "valmatic",
+      "gold_document": "VM-4700-S_9-21-20.pdf",
+      "gold_page": 1,
+      "cause": "verifier",
+      "detail": "the gold page was retrieved, but the result is no_evidence_found, not missing_capability"
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "manufacturer": "valmatic",
+      "gold_document": "VM-4700-S_9-21-20.pdf",
+      "gold_page": 1,
+      "cause": "verifier",
+      "detail": "the gold page was retrieved, but the result is no_evidence_found, not missing_capability"
+    }
+  ]
+}

@@ -1,0 +1,2087 @@
+{
+  "run": {
+    "id": "4e7ebbc1-cdc3-442e-b9ee-680d3b30b700",
+    "tender_id": "2bc8f917-262d-4ea8-a1c9-b2997ef1f256",
+    "status": "done",
+    "started_at": "2026-11-03T05:17:08.737133+00:00",
+    "error": null,
+    "manufacturers": [
+      "delval_flow",
+      "Flowserve",
+      "valmatic"
+    ],
+    "corpus_hash": "28ea0d128c3f3d8be31b78baaa85911c7e5229b5f557d9f83123ad222eef6cbf"
+  },
+  "tender": {
+    "id": "2bc8f917-262d-4ea8-a1c9-b2997ef1f256",
+    "filename": "GEM_9671792_Valve.pdf",
+    "sha256": "9752351d63e446f8aa7c0ac719b85cd82fdebd1b3062aa243fa4f040fe408b6f",
+    "page_count": 17,
+    "pages": {
+      "declared": 17,
+      "accounted": 0,
+      "unaccounted": 17,
+      "counts": {},
+      "unresolved": [],
+      "skipped": [],
+      "incomplete_ingestion": true
+    },
+    "extraction": {
+      "status": "rate_limited",
+      "detail": null,
+      "complete": false
+    }
+  },
+  "incomplete_ingestion": true,
+  "config": {
+    "scoring": {
+      "full_score": 1.0,
+      "missing_score": 0.0,
+      "weight_optional": 1,
+      "family_level_cap": 0.5,
+      "weight_mandatory": 2
+    },
+    "llm_model": "openai/gpt-oss-120b",
+    "comparison": {
+      "partial_score_max": 0.75,
+      "partial_score_min": 0.25,
+      "equality_tolerance": 0.05,
+      "family_level_score": 0.5,
+      "approximation_tolerance": 0.2,
+      "numeric_partial_tolerance": 0.1,
+      "pressure_class_higher_covers_lower": false
+    },
+    "app_version": "0.1.0",
+    "llm_base_url": "https://api.groq.com/openai/v1",
+    "manufacturers": [
+      "delval_flow",
+      "Flowserve",
+      "valmatic"
+    ],
+    "prompt_version": "1",
+    "schema_version": "1",
+    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "llm_call_budget": 600,
+    "llm_token_budget": 0,
+    "embedding_backend": "sentence-transformers",
+    "embedding_dimension": 384,
+    "match_max_candidates": 1,
+    "scoring_policy_version": "1"
+  },
+  "metrics": {
+    "llm_calls": 155,
+    "llm_retries": 59,
+    "prompt_tokens": 111098,
+    "stage_seconds": {
+      "store": 0.559,
+      "total": 2164.17,
+      "verify": 0.04,
+      "compare": 0.008,
+      "extract": 2075.719,
+      "retrieve": 78.692,
+      "page_read": 7.895,
+      "summarise": 0.015,
+      "cached_fact": 0.488
+    },
+    "completion_tokens": 42780
+  },
+  "results": {
+    "stored": 63,
+    "expected": 63,
+    "complete": true
+  },
+  "manufacturers": [
+    {
+      "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+      "manufacturer": "Flowserve",
+      "rank": 1,
+      "compatibility_percent": 60.71,
+      "coverage_percent": 33.33,
+      "status_counts": {
+        "full_match": 5,
+        "no_evidence_found": 14,
+        "partial_match": 2
+      },
+      "fails_mandatory": false,
+      "review_count": 11
+    },
+    {
+      "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+      "manufacturer": "valmatic",
+      "rank": 2,
+      "compatibility_percent": 0.0,
+      "coverage_percent": 0.0,
+      "status_counts": {
+        "no_evidence_found": 21
+      },
+      "fails_mandatory": false,
+      "review_count": 1
+    },
+    {
+      "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+      "manufacturer": "delval_flow",
+      "rank": 3,
+      "compatibility_percent": 0.0,
+      "coverage_percent": 0.0,
+      "status_counts": {
+        "no_evidence_found": 21
+      },
+      "fails_mandatory": false,
+      "review_count": 12
+    }
+  ],
+  "requirements": [
+    {
+      "requirement_id": "bcc69c1a-9da7-4c81-a81b-c655ab0e65a0",
+      "item_id": "1",
+      "item_title": "GATE VALVE, SIZE-150 MM, CLASS-150",
+      "category": "valves",
+      "text": "Flanged Gate valve size 6 inches",
+      "source_text": "Flanged Gate valve size 6 inches",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "6",
+      "unit": "inches",
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "full_match",
+          "score": 0.5,
+          "verification_outcome": "family_level",
+          "applicability": "family_level",
+          "capability_text": "6",
+          "confidence": "medium",
+          "review_required": true,
+          "review_reason": "the document does not declare its product type, so this evidence may be for a different product type",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "b07a2d27-207f-40b8-8f9f-55f1202d5d42",
+            "page": 13,
+            "quote": "Actuator 1/2\u201c 3/4\u201c 1\u201c - 1 1/2\u201c 2\u201c - 3\u201c 4\u201c - 6\u201c",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "6.00",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "b0a8f72b-6444-410a-987d-8bc917d09f75",
+            "page": 3,
+            "quote": "2 50 6.00 4.25 5.51 3.07 3.54 2.76 4 0.39 0.55 = 0.63",
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "392d703b-17bc-42f9-8871-2b8732e792a1",
+            "page": 10,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "97fe0eb7-8355-4173-ab53-50fe86254b72",
+      "item_id": "1",
+      "item_title": "GATE VALVE, SIZE-150 MM, CLASS-150",
+      "category": "valves",
+      "text": "Flanged Gate valve class 150",
+      "source_text": "Flanged Gate valve class 150",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "150",
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "full_match",
+          "score": 0.5,
+          "verification_outcome": "family_level",
+          "applicability": "family_level",
+          "capability_text": "150",
+          "confidence": "medium",
+          "review_required": true,
+          "review_reason": "the document does not declare its product type, so this evidence may be for a different product type",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "80f3c4a3-1ca8-4e4c-813e-16ac813ca2a1",
+            "page": 13,
+            "quote": "Class 150 RF",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "150",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "80f18c55-27da-4a50-8571-a2b83933624a",
+            "page": 3,
+            "quote": "2 50 150 108 140",
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "1b5ac026-7d7d-44c4-927e-ac1154945821",
+            "page": 9,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "d1599938-376a-4cbe-bc0b-48acb02a9c72",
+      "item_id": "1",
+      "item_title": "GATE VALVE, SIZE-150 MM, CLASS-150",
+      "category": "valves",
+      "text": "Flanged Gate valve material cast carbon steel",
+      "source_text": "Flanged Gate valve material cast carbon steel",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "cast carbon steel",
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "22ae8c9c-9a88-4721-8d6f-3d37e5f834e6",
+            "page": 13,
+            "quote": null,
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "5bf49d65-ddab-4186-9f35-1ff814387765",
+            "page": 3,
+            "quote": null,
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "dce936eb-5fc8-4724-8b48-b906b9a2488a",
+            "page": 4,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "25d991a4-4a78-45b3-86fd-14f937bfabb6",
+      "item_id": "1",
+      "item_title": "GATE VALVE, SIZE-150 MM, CLASS-150",
+      "category": "valves",
+      "text": "Flanged Gate valve face to face distance 267 mm",
+      "source_text": "Flanged Gate valve face to face distance 267 mm",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "267",
+      "unit": "mm",
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "02a09e68-de02-4738-ab3d-c3a1eccf70a3",
+            "page": 13,
+            "quote": null,
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "267",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "1f1033c2-de2d-46ba-90ce-f47794409049",
+            "page": 3,
+            "quote": "600 | 3815 | 267 | 495 | 461",
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "c6cb6150-454e-4656-997d-98b98012d864",
+            "page": 1,
+            "quote": null,
+            "document_id": "2237c698-efdf-4e91-8ccc-5a003bb19ca8",
+            "document": "VMC-4702AAL-AAW_11-18-14.pdf",
+            "doc_type": "other",
+            "sha256": "3ecddc89e03aa4087cb71a0dc0398f88318b7ffc8f3b0a5771bb93ee7ab9fe27",
+            "url": "https://www.valmatic.com/Portals/0/drawings/VMC-4702AAL-AAW_11-18-14.pdf"
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "1aae411c-40a4-4e0e-804a-2730253c1565",
+      "item_id": "2",
+      "item_title": "CAST STEEL GATE VALVE SIZE-250MM, CLASS-150",
+      "category": "valves",
+      "text": "Flanged Gate valve 10\" Class 150 Cast carbon steel Face to face distance 330mm",
+      "source_text": "Flanged Gate valve 10\" Class 150 Cast carbon steel Face to face distance 330mm",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": null,
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "passed",
+          "applicability": "model_level",
+          "capability_text": "150",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "pressure class comparison needs a class on both sides",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "4eaac71c-79d7-44e3-9aee-ed5ad618ba33",
+            "page": 13,
+            "quote": "Class 150 RF",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "afc47a62-2a3b-4bd4-8519-3f216ede77ef",
+            "page": 3,
+            "quote": null,
+            "document_id": "a87c2219-0951-4f15-9e0d-08ed6695d835",
+            "document": "1659634039-Final-Series-51-53-v5b_04-08-2022.pdf",
+            "doc_type": "other",
+            "sha256": "ff92efe41f28df10124a3cf9d08fd0c09e5d637d205880b84871cfb3ed403223",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1659634039-Final-Series-51-53-v5b_04-08-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "afb86f4f-db65-49de-95b4-2cbd8f587a36",
+            "page": 1,
+            "quote": null,
+            "document_id": "2237c698-efdf-4e91-8ccc-5a003bb19ca8",
+            "document": "VMC-4702AAL-AAW_11-18-14.pdf",
+            "doc_type": "other",
+            "sha256": "3ecddc89e03aa4087cb71a0dc0398f88318b7ffc8f3b0a5771bb93ee7ab9fe27",
+            "url": "https://www.valmatic.com/Portals/0/drawings/VMC-4702AAL-AAW_11-18-14.pdf"
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "7c4c0f38-d7c9-43e5-856f-3a82e2e91ba4",
+      "item_id": "3",
+      "item_title": "CAST STEEL GATE VALVE SIZE 200 MM, CLASS 150",
+      "category": "valves",
+      "text": "Valve size 8 inches",
+      "source_text": "Valve size 8 inches",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "8",
+      "unit": "inches",
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "partial_match",
+          "score": 0.25,
+          "verification_outcome": "passed",
+          "applicability": "model_level",
+          "capability_text": "6",
+          "confidence": "medium",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "48eb0281-eb2e-48e0-a863-e438dbca4970",
+            "page": 13,
+            "quote": "Actuator 1/2\u201c 3/4\u201c 1\u201c - 1 1/2\u201c 2\u201c - 3\u201c 4\u201c - 6\u201c",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "8",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "58314295-7ba7-4c75-a8d7-61495fd0e4f2",
+            "page": 3,
+            "quote": "8 | 0.71 | 2.50 | 4.00",
+            "document_id": "a87c2219-0951-4f15-9e0d-08ed6695d835",
+            "document": "1659634039-Final-Series-51-53-v5b_04-08-2022.pdf",
+            "doc_type": "other",
+            "sha256": "ff92efe41f28df10124a3cf9d08fd0c09e5d637d205880b84871cfb3ed403223",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1659634039-Final-Series-51-53-v5b_04-08-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "976f2f64-c014-4911-9deb-0cc4c1b66ad6",
+            "page": 10,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "6a88f962-822a-4d84-b5fd-a61b33b17176",
+      "item_id": "3",
+      "item_title": "CAST STEEL GATE VALVE SIZE 200 MM, CLASS 150",
+      "category": "valves",
+      "text": "Valve pressure rating Class 150",
+      "source_text": "Valve pressure rating Class 150",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "150",
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "full_match",
+          "score": 1.0,
+          "verification_outcome": "passed",
+          "applicability": "model_level",
+          "capability_text": "150",
+          "confidence": "high",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "96189de9-d735-4bcc-8f39-4a9822ce3950",
+            "page": 13,
+            "quote": "Class 150 RF",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "e29c2c20-1286-4736-92a1-2d3ad507ef8c",
+            "page": 3,
+            "quote": null,
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "a83451e1-ab5c-44a1-bb53-0b5266c7f26d",
+            "page": 9,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "b51d134b-1d50-4203-8d27-76d4448ad091",
+      "item_id": "3",
+      "item_title": "CAST STEEL GATE VALVE SIZE 200 MM, CLASS 150",
+      "category": "valves",
+      "text": "Valve material cast carbon steel",
+      "source_text": "Valve material cast carbon steel",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "cast carbon steel",
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "3bf9c995-4421-425f-853a-6484f90b6b08",
+            "page": 13,
+            "quote": null,
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "3e62634a-6804-4c4b-ba4a-b4fe410e1c0c",
+            "page": 3,
+            "quote": null,
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "5708594f-6858-4682-814b-b3e080f6cdd7",
+            "page": 4,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "aeb61419-dbb8-4a2c-ad3b-58569fd9e187",
+      "item_id": "3",
+      "item_title": "CAST STEEL GATE VALVE SIZE 200 MM, CLASS 150",
+      "category": "valves",
+      "text": "Face to face distance 292 mm",
+      "source_text": "Face to face distance 292 mm",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "292",
+      "unit": "mm",
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "643798c2-b0a7-474b-b66f-74f6ac8fa235",
+            "page": 3,
+            "quote": null,
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "292",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "cc238794-b0ee-46bd-abbc-64caf6bbed53",
+            "page": 3,
+            "quote": "26 | 650 | 870 | 292 | 555 | 465 | 300 | 254 | 8 | 18 | -~- | 635 | 102 | 15.88x15.88| 510.0",
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "9047706a-9cb5-49b1-8c63-9c1b30c3b56b",
+            "page": 11,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "a13b4fc5-de0b-48dc-982a-c1361eb4d5de",
+      "item_id": "4",
+      "item_title": "GLOBE VALVE SIZE 150MM(6''), CLASS-150",
+      "category": "valves",
+      "text": "Flanged Glove valve",
+      "source_text": "Flanged Glove valve",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "flanged glove valve",
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "partial_match",
+          "score": 0.5,
+          "verification_outcome": "family_level",
+          "applicability": "family_level",
+          "capability_text": "flanged",
+          "confidence": "medium",
+          "review_required": true,
+          "review_reason": "the document does not declare its product type, so this evidence may be for a different product type",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "68cf4c4f-9701-4668-8027-6ac146d0927f",
+            "page": 2,
+            "quote": "End Connection Flanged",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "3e0ce7bf-87a4-4f40-b9bd-7cb4d9c5435a",
+            "page": 3,
+            "quote": null,
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "d3d91e72-8ed7-4a61-ad32-7a4d4adb3f8a",
+            "page": 10,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "b0665b75-37a4-4584-a9e7-fb4d0c30a261",
+      "item_id": "4",
+      "item_title": "GLOBE VALVE SIZE 150MM(6''), CLASS-150",
+      "category": "valves",
+      "text": "6\"",
+      "source_text": "6\"",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "6",
+      "unit": "inch",
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "full_match",
+          "score": 0.5,
+          "verification_outcome": "family_level",
+          "applicability": "family_level",
+          "capability_text": "6",
+          "confidence": "medium",
+          "review_required": true,
+          "review_reason": "the document does not declare its product type, so this evidence may be for a different product type",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "70314076-8fe4-4f57-b754-d53de1a2c56e",
+            "page": 13,
+            "quote": "4\u201c - 6\u201c",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "6.00",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "ee071823-8811-4806-a3cc-eb3927d96809",
+            "page": 3,
+            "quote": "2 50 6.00 4.25 5.51 3.07 3.54 2.76",
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "27cde229-e054-48c3-b767-d754022a9656",
+            "page": 10,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "9cf40f13-96a3-4dfb-981d-4d077b9e0ca6",
+      "item_id": "4",
+      "item_title": "GLOBE VALVE SIZE 150MM(6''), CLASS-150",
+      "category": "valves",
+      "text": "Class 150",
+      "source_text": "Class 150",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "150",
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "full_match",
+          "score": 1.0,
+          "verification_outcome": "passed",
+          "applicability": "model_level",
+          "capability_text": "150",
+          "confidence": "high",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "df14ed09-a71e-462c-8844-2aa8e0536213",
+            "page": 13,
+            "quote": "Class 150 RF",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "150",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "55468988-5f7e-4302-a673-618da09d12d7",
+            "page": 3,
+            "quote": "2 50 150 108 140",
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "211e96b2-a3fa-4540-ba25-897565f12243",
+            "page": 9,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "c3097a3f-1e6b-4bf1-a100-6c940fc47658",
+      "item_id": "4",
+      "item_title": "GLOBE VALVE SIZE 150MM(6''), CLASS-150",
+      "category": "valves",
+      "text": "Cast carbon steel",
+      "source_text": "Cast carbon steel",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "cast carbon steel",
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "c0630dc9-62cd-44c3-a8c5-edced021be31",
+            "page": 14,
+            "quote": null,
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "b2afb40a-6e9a-437f-b1bf-41afe4e80417",
+            "page": 3,
+            "quote": null,
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "85933995-9f2a-4684-abae-bc0758d70782",
+            "page": 1,
+            "quote": null,
+            "document_id": "d299ec08-ed7d-4f2f-8207-23e682d4472f",
+            "document": "VMC-4702A1L_11-18-14.pdf",
+            "doc_type": "other",
+            "sha256": "de1fa3e9d15052b448567a15b4ab22db822ab68dcab727c61d0af5244573eeaf",
+            "url": "https://www.valmatic.com/Portals/0/drawings/VMC-4702A1L_11-18-14.pdf"
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "a95cca18-41e5-4325-9e47-66e50b3d97cf",
+      "item_id": "4",
+      "item_title": "GLOBE VALVE SIZE 150MM(6''), CLASS-150",
+      "category": "valves",
+      "text": "406mm",
+      "source_text": "406mm",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": "406",
+      "unit": "mm",
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "56e5b329-a53d-4f99-8e94-f1d3433a4b6f",
+            "page": 13,
+            "quote": null,
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "406",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "c6db6e76-d4c0-4dcc-9a23-97daf3479898",
+            "page": 3,
+            "quote": "222 |406 [347",
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "f1ac938d-0268-4f01-b4db-594c3bdffc1e",
+            "page": 1,
+            "quote": null,
+            "document_id": "2237c698-efdf-4e91-8ccc-5a003bb19ca8",
+            "document": "VMC-4702AAL-AAW_11-18-14.pdf",
+            "doc_type": "other",
+            "sha256": "3ecddc89e03aa4087cb71a0dc0398f88318b7ffc8f3b0a5771bb93ee7ab9fe27",
+            "url": "https://www.valmatic.com/Portals/0/drawings/VMC-4702AAL-AAW_11-18-14.pdf"
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "42ae177b-1280-44b7-9b9d-078a75910dae",
+      "item_id": "5",
+      "item_title": "CAST STEEL GLOBE VALVE DN 200MM",
+      "category": "valves",
+      "text": "Flanged Glove valve 8\" Class 150 Cast carbon steel Face to face distance 495mm",
+      "source_text": "Flanged Glove valve 8\" Class 150 Cast carbon steel Face to face distance 495mm",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": null,
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "passed",
+          "applicability": "model_level",
+          "capability_text": "150",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "pressure class comparison needs a class on both sides",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "b4b0c5e5-5d9f-4ccd-9fd7-f92fa00ae9c6",
+            "page": 13,
+            "quote": "Class 150 RF",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "150",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "e2c35657-c380-48cc-a20f-bac79cfaf84b",
+            "page": 3,
+            "quote": "150 | 280 | 140",
+            "document_id": "fc25d8da-162b-4d54-85c3-3c2c0ff7dd81",
+            "document": "1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf",
+            "doc_type": "other",
+            "sha256": "79e32f46d6601f299e6a24dabb910caae021a48bddee7a64a9150319b4863c10",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1666196897-Final-Series-58-2022-M2_a1_10-10-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "17d0bc09-05a5-49b0-bc69-4dd8890cc053",
+            "page": 1,
+            "quote": null,
+            "document_id": "2237c698-efdf-4e91-8ccc-5a003bb19ca8",
+            "document": "VMC-4702AAL-AAW_11-18-14.pdf",
+            "doc_type": "other",
+            "sha256": "3ecddc89e03aa4087cb71a0dc0398f88318b7ffc8f3b0a5771bb93ee7ab9fe27",
+            "url": "https://www.valmatic.com/Portals/0/drawings/VMC-4702AAL-AAW_11-18-14.pdf"
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "2b883265-f87a-4f01-a3d5-1a3c8bc9cb59",
+      "item_id": "6",
+      "item_title": "C.S. GATE VALVE,DN 80, NON RISING STEM, CLASS300",
+      "category": "valves",
+      "text": "Gate wedged valve non rising stem 3\" (80) Class 300 Cast carbon steel Face to face distance 280mm",
+      "source_text": "Gate wedged valve non rising stem 3\" (80) Class 300 Cast carbon steel Face to face distance 280mm",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": null,
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "passed",
+          "applicability": "model_level",
+          "capability_text": "150",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "pressure class comparison needs a class on both sides",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "75404abd-4716-4709-af3c-4a471b1f506a",
+            "page": 13,
+            "quote": "Class 150 RF",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "6bfab033-352e-40f8-a0e2-cdb3c83f554c",
+            "page": 3,
+            "quote": null,
+            "document_id": "a87c2219-0951-4f15-9e0d-08ed6695d835",
+            "document": "1659634039-Final-Series-51-53-v5b_04-08-2022.pdf",
+            "doc_type": "other",
+            "sha256": "ff92efe41f28df10124a3cf9d08fd0c09e5d637d205880b84871cfb3ed403223",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1659634039-Final-Series-51-53-v5b_04-08-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "46799cc1-5f0e-4b46-a8a6-c2adca428dfc",
+            "page": 1,
+            "quote": null,
+            "document_id": "2237c698-efdf-4e91-8ccc-5a003bb19ca8",
+            "document": "VMC-4702AAL-AAW_11-18-14.pdf",
+            "doc_type": "other",
+            "sha256": "3ecddc89e03aa4087cb71a0dc0398f88318b7ffc8f3b0a5771bb93ee7ab9fe27",
+            "url": "https://www.valmatic.com/Portals/0/drawings/VMC-4702AAL-AAW_11-18-14.pdf"
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "d02d29c1-739b-41ce-afac-33323ab43cfe",
+      "item_id": "7",
+      "item_title": "DOUBLE DOOR CHECK VALVE 6\"",
+      "category": "valves",
+      "text": "Double door check valve 6\" Face to face distance 76 Class 150 Cast carbon steel",
+      "source_text": "Double door check valve 6\" Face to face distance 76 Class 150 Cast carbon steel",
+      "type": "technical",
+      "mandatory": true,
+      "page": 1,
+      "value": null,
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "passed",
+          "applicability": "model_level",
+          "capability_text": "150",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "pressure class comparison needs a class on both sides",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "6763fbed-aee0-44a5-9168-a246b71cbf1c",
+            "page": 13,
+            "quote": "Class 150 RF",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "carbon steel",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "245851f1-9855-47a0-b64c-a0a4b02c9fbc",
+            "page": 6,
+            "quote": "CS = Carbon Steel",
+            "document_id": "a87c2219-0951-4f15-9e0d-08ed6695d835",
+            "document": "1659634039-Final-Series-51-53-v5b_04-08-2022.pdf",
+            "doc_type": "other",
+            "sha256": "ff92efe41f28df10124a3cf9d08fd0c09e5d637d205880b84871cfb3ed403223",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1659634039-Final-Series-51-53-v5b_04-08-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "746a0f8d-bb00-4e9d-b2c1-8405a7b16e01",
+            "page": 1,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "540396fb-8b5f-403d-bae0-077ce29635e9",
+      "item_id": "8",
+      "item_title": "WATER SWING TYPE CHECK VALVE 10\"",
+      "category": "valves",
+      "text": "Wafer swing type check valve 10\" class 150 Face to face distance 79.4 Cast carbon steel Working pressure 8 bar",
+      "source_text": "Wafer swing type check valve 10\" class 150 Face to face distance 79.4 Cast carbon steel Working pressure 8 bar",
+      "type": "technical",
+      "mandatory": true,
+      "page": 2,
+      "value": null,
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "98e188ed-64f3-4d12-b6bc-ce247bcb428d",
+            "page": 13,
+            "quote": null,
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "4e710d2c-f0ca-43e7-b709-0ea05794765f",
+            "page": 3,
+            "quote": null,
+            "document_id": "a87c2219-0951-4f15-9e0d-08ed6695d835",
+            "document": "1659634039-Final-Series-51-53-v5b_04-08-2022.pdf",
+            "doc_type": "other",
+            "sha256": "ff92efe41f28df10124a3cf9d08fd0c09e5d637d205880b84871cfb3ed403223",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1659634039-Final-Series-51-53-v5b_04-08-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "497c5fc2-5491-445b-b0f1-a27d5090fde7",
+            "page": 5,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "600dd253-255c-4bbe-9c44-dc87d2b4275a",
+      "item_id": "9",
+      "item_title": "C.STEEL SWING CHECK VALVE 6 \"",
+      "category": "valves",
+      "text": "Flanged swing check valve 6\" Class 150 Face to face distance 356mm Cast carbon steel",
+      "source_text": "Flanged swing check valve 6\" Class 150 Face to face distance 356mm Cast carbon steel",
+      "type": "technical",
+      "mandatory": true,
+      "page": 2,
+      "value": null,
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "passed",
+          "applicability": "model_level",
+          "capability_text": "150",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "pressure class comparison needs a class on both sides",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "b9ed80cd-2025-4f4d-b2d0-cd86b145e7e7",
+            "page": 13,
+            "quote": "Class 150 RF",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "d341585e-8479-4e9d-ad19-e917bd198937",
+            "page": 3,
+            "quote": null,
+            "document_id": "18d8a93e-c984-4f95-b66e-2a554769d6f3",
+            "document": "1660775902-Final-_Series-5C-5D_2022_v3b_17-08-2022.pdf",
+            "doc_type": "other",
+            "sha256": "399568da72908281dedf7c8d2a0cb66bfd7080e5a41dcb61e5fe0f22a5b768eb",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1660775902-Final-_Series-5C-5D_2022_v3b_17-08-2022.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "56a94de1-8306-41e8-8d14-3213af62e9f8",
+            "page": 5,
+            "quote": null,
+            "document_id": "f625d980-d43b-400c-a88c-0efb99243f92",
+            "document": "DesignSelectionCheckValves.pdf",
+            "doc_type": "other",
+            "sha256": "f63b514059963342c77ff481cb153a290888db0d64ef0e3e6556ca8c121fe6cc",
+            "url": ""
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "6ffe6648-a230-46c0-abbf-279384a77e54",
+      "item_id": "10",
+      "item_title": "C.S. BALL VALVES DN50 THREE PIECE WITH SCREWED END, ASME CLASS 150",
+      "category": "valves",
+      "text": "Three piece ball valves 2\" Screwed end ASME class 150 Cast carbon steel Face to face distance 122mm",
+      "source_text": "Three piece ball valves 2\" Screwed end ASME class 150 Cast carbon steel Face to face distance 122mm",
+      "type": "technical",
+      "mandatory": true,
+      "page": 2,
+      "value": null,
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "passed",
+          "applicability": "model_level",
+          "capability_text": "150",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "pressure class comparison needs a class on both sides",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "4c6e46af-860b-4fea-9405-07443ac63eec",
+            "page": 13,
+            "quote": "Class 150 RF",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "family_level",
+          "capability_text": "three-piece",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the document declares Series 7/8 at family level; attribute_not_mapped: no evaluator is registered for this attribute",
+          "reason_code": "attribute_not_mapped",
+          "evidence": {
+            "fact_id": "80cdaaa9-849d-406f-8ca6-c4c4389cdde4",
+            "page": 1,
+            "quote": "Two-Piece & Three-Piece construction",
+            "document_id": "ca68261b-cb18-4cba-95e5-3231213eefb1",
+            "document": "1692719045-Technical-Bulletin---118-PRODUCT-SPECIFICATION-SERIES-7-8-R1.pdf",
+            "doc_type": "specification",
+            "sha256": "c63b4a190f253c7a88d3ec09130ff4a11d42e800d1545737c1193184912ee4d8",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1692719045-Technical-Bulletin---118-PRODUCT-SPECIFICATION-SERIES-7-8-R1.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "model_level",
+          "capability_text": null,
+          "confidence": "low",
+          "review_required": false,
+          "review_reason": null,
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "76868741-8cb0-4803-a1ad-3482189fd242",
+            "page": 1,
+            "quote": null,
+            "document_id": "2d2afd46-41d5-4214-b9dd-dc3f4fe0b4cb",
+            "document": "VMC-4702ABL-ABW_11-18-14.pdf",
+            "doc_type": "other",
+            "sha256": "5761aeefc67108739f51e84a5b8384fc0f5fc850b696e80d6bcfc77ac212c52b",
+            "url": "https://www.valmatic.com/Portals/0/drawings/VMC-4702ABL-ABW_11-18-14.pdf"
+          }
+        }
+      ]
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "item_id": "11",
+      "item_title": "C.S. BALL VALVE DN50,THREE PIECE SOCKET WELD ENDS, CLASS 600",
+      "category": "valves",
+      "text": "Three piece ball valves 2\" Socket weld ends Face to face distance 122mm ASME class 600 Cast Carbon steel",
+      "source_text": "Three piece ball valves 2\" Socket weld ends Face to face distance 122mm ASME class 600 Cast Carbon steel",
+      "type": "technical",
+      "mandatory": true,
+      "page": 2,
+      "value": null,
+      "unit": null,
+      "results": [
+        {
+          "manufacturer_id": "8d92fa7b-2dd0-4097-b469-04beb34d7392",
+          "manufacturer": "Flowserve",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "passed",
+          "applicability": "model_level",
+          "capability_text": "150",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "pressure class comparison needs a class on both sides",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "83a24de9-eda7-4d5e-bb52-cf515f95ddd3",
+            "page": 13,
+            "quote": "Class 150 RF",
+            "document_id": "8f88104c-4360-48d1-85e1-872a05842d14",
+            "document": "VLENTB0300_EN_A4.pdf",
+            "doc_type": "specification",
+            "sha256": "2e6c2116588b74fa11e89d22baf50f37ece6a6ab133518bfa089b703afd917ee",
+            "url": "https://www.flowserve.com/sites/default/files/dam/documents/VLENTB0300_EN_A4.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "27032f2e-ba7d-4889-823a-a96c9b6d44a4",
+          "manufacturer": "delval_flow",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "not_checked",
+          "applicability": "family_level",
+          "capability_text": "three-piece",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the document declares Series 7/8 at family level; attribute_not_mapped: no evaluator is registered for this attribute",
+          "reason_code": "attribute_not_mapped",
+          "evidence": {
+            "fact_id": "a2c1a0e6-47cd-4665-8580-687c5b64fabd",
+            "page": 1,
+            "quote": "Valve Type: Series 7/8, Two-Piece & Three-Piece construction",
+            "document_id": "ca68261b-cb18-4cba-95e5-3231213eefb1",
+            "document": "1692719045-Technical-Bulletin---118-PRODUCT-SPECIFICATION-SERIES-7-8-R1.pdf",
+            "doc_type": "specification",
+            "sha256": "c63b4a190f253c7a88d3ec09130ff4a11d42e800d1545737c1193184912ee4d8",
+            "url": "https://www.delvalflow.com/media/uploads/brochures/1692719045-Technical-Bulletin---118-PRODUCT-SPECIFICATION-SERIES-7-8-R1.pdf"
+          }
+        },
+        {
+          "manufacturer_id": "d4157401-c52d-4353-83dc-4c89d8644ad7",
+          "manufacturer": "valmatic",
+          "status": "no_evidence_found",
+          "score": 0.0,
+          "verification_outcome": "failed",
+          "applicability": "family_level",
+          "capability_text": "Carbon Steel",
+          "confidence": "low",
+          "review_required": true,
+          "review_reason": "the claim could not be verified: the quote is longer than the cited page",
+          "reason_code": null,
+          "evidence": {
+            "fact_id": "0131cb1d-6711-41d8-b1d9-68daf4cd9b05",
+            "page": 1,
+            "quote": "Carbon Steel",
+            "document_id": "2237c698-efdf-4e91-8ccc-5a003bb19ca8",
+            "document": "VMC-4702AAL-AAW_11-18-14.pdf",
+            "doc_type": "other",
+            "sha256": "3ecddc89e03aa4087cb71a0dc0398f88318b7ffc8f3b0a5771bb93ee7ab9fe27",
+            "url": "https://www.valmatic.com/Portals/0/drawings/VMC-4702AAL-AAW_11-18-14.pdf"
+          }
+        }
+      ]
+    }
+  ],
+  "unsupported_requirements": [],
+  "not_assessed": [],
+  "unknown_requirements": {
+    "unknown": 0,
+    "total": 21,
+    "percent": 0.0,
+    "non_technical_pages": 0,
+    "fragments": 0,
+    "fragments_merged": 0,
+    "unparsed": 0
+  },
+  "review_queue": [
+    {
+      "requirement_id": "bcc69c1a-9da7-4c81-a81b-c655ab0e65a0",
+      "manufacturer": "Flowserve",
+      "status": "full_match",
+      "reason": "the document does not declare its product type, so this evidence may be for a different product type",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "bcc69c1a-9da7-4c81-a81b-c655ab0e65a0",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "97fe0eb7-8355-4173-ab53-50fe86254b72",
+      "manufacturer": "Flowserve",
+      "status": "full_match",
+      "reason": "the document does not declare its product type, so this evidence may be for a different product type",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "97fe0eb7-8355-4173-ab53-50fe86254b72",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "25d991a4-4a78-45b3-86fd-14f937bfabb6",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "1aae411c-40a4-4e0e-804a-2730253c1565",
+      "manufacturer": "Flowserve",
+      "status": "no_evidence_found",
+      "reason": "pressure class comparison needs a class on both sides",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "7c4c0f38-d7c9-43e5-856f-3a82e2e91ba4",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "aeb61419-dbb8-4a2c-ad3b-58569fd9e187",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "a13b4fc5-de0b-48dc-982a-c1361eb4d5de",
+      "manufacturer": "Flowserve",
+      "status": "partial_match",
+      "reason": "the document does not declare its product type, so this evidence may be for a different product type",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "b0665b75-37a4-4584-a9e7-fb4d0c30a261",
+      "manufacturer": "Flowserve",
+      "status": "full_match",
+      "reason": "the document does not declare its product type, so this evidence may be for a different product type",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "b0665b75-37a4-4584-a9e7-fb4d0c30a261",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "9cf40f13-96a3-4dfb-981d-4d077b9e0ca6",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "a95cca18-41e5-4325-9e47-66e50b3d97cf",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "42ae177b-1280-44b7-9b9d-078a75910dae",
+      "manufacturer": "Flowserve",
+      "status": "no_evidence_found",
+      "reason": "pressure class comparison needs a class on both sides",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "42ae177b-1280-44b7-9b9d-078a75910dae",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "2b883265-f87a-4f01-a3d5-1a3c8bc9cb59",
+      "manufacturer": "Flowserve",
+      "status": "no_evidence_found",
+      "reason": "pressure class comparison needs a class on both sides",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "d02d29c1-739b-41ce-afac-33323ab43cfe",
+      "manufacturer": "Flowserve",
+      "status": "no_evidence_found",
+      "reason": "pressure class comparison needs a class on both sides",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "d02d29c1-739b-41ce-afac-33323ab43cfe",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "600dd253-255c-4bbe-9c44-dc87d2b4275a",
+      "manufacturer": "Flowserve",
+      "status": "no_evidence_found",
+      "reason": "pressure class comparison needs a class on both sides",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "6ffe6648-a230-46c0-abbf-279384a77e54",
+      "manufacturer": "Flowserve",
+      "status": "no_evidence_found",
+      "reason": "pressure class comparison needs a class on both sides",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "6ffe6648-a230-46c0-abbf-279384a77e54",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the document declares Series 7/8 at family level; attribute_not_mapped: no evaluator is registered for this attribute",
+      "reason_code": "attribute_not_mapped"
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "manufacturer": "Flowserve",
+      "status": "no_evidence_found",
+      "reason": "pressure class comparison needs a class on both sides",
+      "reason_code": null
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "manufacturer": "delval_flow",
+      "status": "no_evidence_found",
+      "reason": "the document declares Series 7/8 at family level; attribute_not_mapped: no evaluator is registered for this attribute",
+      "reason_code": "attribute_not_mapped"
+    },
+    {
+      "requirement_id": "5c07614c-46a7-4d3c-a736-4b6c63aca0f4",
+      "manufacturer": "valmatic",
+      "status": "no_evidence_found",
+      "reason": "the claim could not be verified: the quote is longer than the cited page",
+      "reason_code": null
+    }
+  ],
+  "status_meanings": {
+    "full_match": "The documented capability meets or exceeds the requirement, with a verified quote.",
+    "partial_match": "Close but not meeting it, met only through an optional feature or condition, or only part of a compound requirement.",
+    "missing_capability": "The documents state that the capability exists with a failing value, or state that it is not offered.",
+    "unsupported_requirement": "Not technically verifiable (commercial, legal, financial, warranty or vague). Excluded from the score and listed separately.",
+    "no_evidence_found": "Technical and verifiable, but the corpus is silent. Neither a pass nor a fail: it counts towards coverage and is flagged for review."
+  }
+}
