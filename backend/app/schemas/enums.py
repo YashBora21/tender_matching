@@ -63,6 +63,11 @@ class ReasonCode(StrEnum):
     # compared, and the corpus's own labels are why - which is not the same
     # statement as "the catalogue is silent about this capability" (D-135).
     CATEGORY_MISMATCH = "category_mismatch"
+    # The clause was typed technical and nothing in it was read as an attribute,
+    # so there was nothing to compare it with. The comparison never started, and
+    # the reason is ours: a requirement we did not parse is not a capability the
+    # corpus does not document (D-147).
+    REQUIREMENT_NOT_PARSED = "requirement_not_parsed"
 
 
 class LedgerStatus(StrEnum):

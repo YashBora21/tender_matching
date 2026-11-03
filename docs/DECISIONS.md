@@ -3773,3 +3773,62 @@ that file. Three tests in `test_fragments.py` failed first, because their fixtur
 built every clause with `RequirementRecord`'s default method, which is `table`: the
 prose cases now say `text`, which is what they test. Production always names the
 method from the row it read, so nothing there was mislabelled.
+
+## D-147 - A clause that parsed no attribute says so instead of looking silent
+
+`assessable()` already keeps an *unknown-type* clause out of a run: a row for it
+would read as a result and turn "we could not read this" into "we checked and found
+nothing" (D-92). The clause this decision is about is different - it **was** typed
+technical, and nothing in it became an attribute. After D-146 a specification cell
+like `Cast carbon steel` reaches the run as its own requirement: technical, real,
+and with no canonical attribute to compare.
+
+Such a pair ran, retrieved what it could, and was stored as *no evidence found* with
+no reason code. A row with no code is what the report reads as a finding about the
+product - "the catalogue is silent about this" (that is exactly what D-101 built the
+code column to keep apart). It is not a finding about the product. Nothing was
+compared, because the tender side of the comparison was empty. So `_assess` names it:
+
+    reason_code = requirement_not_parsed, verification_outcome = not_checked,
+    review_required = true, review_reason = "requirement_not_parsed: the clause
+    named no attribute to compare"
+
+The status stays *no evidence found*, because the product was never checked - that is
+PRD 4's definition, and AGENTS #4 forbids reading absence of evidence as absence of
+capability. The code goes in its own column, which is what the code column exists for
+(D-86, D-101). Nothing that reached a verdict is touched: the gate only fires on a row
+that is already *no evidence found*, and it never overwrites a code the comparison
+earned, because a clause that did name an attribute is not this case.
+
+It is not the same as `attribute_not_mapped`. That code comes out of the registry
+when a canonical attribute **was** named and no evaluator is registered for it - the
+comparison was asked and could not run. This one fires before that: no attribute, so
+no evaluator was ever chosen. And it is not `unsupported_requirement`, which PRD 4
+reserves for a clause no document could answer; a material clause could be answered,
+by us and by a datasheet, if only the clause had been parsed.
+
+*Measured (read-only, 0 model calls):* 25 of the 285 *no evidence found* rows stored
+in the dev database belong to a technical or certification clause whose `attribute`
+is empty. Each of them currently publishes as "the corpus is silent".
+
+*Schema:* `reason_code` is a named CHECK on `result`, and 0013 is the pattern for
+widening it - drop the constraint, recreate it with the longer list. `0016_
+requirement_not_parsed` does that. `app/repositories/schema.py` needs no edit: it
+declares the column as `_enum(ReasonCode, "reason_code")`, so the list it builds comes
+from the enum this change adds the member to. The migration chains on `0015`, which
+was head when it was written.
+
+*What it changes in a report:* the count under each reason code gains a column value,
+and 25 rows of the dev database's history would read differently on a re-run - still
+*no evidence found*, still excluded from coverage as an unchecked pair, but now filed
+as "we did not parse the clause" instead of "the documents do not state it". A report
+of a tender whose specification is a ruled table therefore stops attributing our
+parse gaps to the manufacturers. **The code is inert until the migration is applied**
+- on a database still holding 0013's constraint, storing the new value fails the
+CHECK, so the migration must land before a run writes this code.
+
+*Verified:* 2 new tests in `test_runs.py` - a technical clause with no attribute
+stores `requirement_not_parsed`, is flagged for review and keeps the *no evidence
+found* status, and a clause that did parse an attribute keeps the `category_mismatch`
+code it earned - and the fake store now records `reason_code`, which it did not
+before, so no test could see that column at all. The full unit suite passes.

@@ -13,6 +13,7 @@ from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.schemas.enums import (
     Applicability,
     ConfidenceLevel,
+    ReasonCode,
     RequirementStatus,
     RunStatus,
     VerificationOutcome,
@@ -198,6 +199,9 @@ def _recording_store(repo, names):
                 "confidence": outcome.confidence.value if outcome.confidence else None,
                 "review_required": outcome.review_required,
                 "review_reason": outcome.review_reason,
+                "reason_code": (
+                    outcome.reason_code.value if outcome.reason_code else None
+                ),
                 "evidence": None,
             }
         )
@@ -327,6 +331,60 @@ def test_a_requirement_with_no_item_is_searched_unfiltered_and_flagged():
     assert calls[0]["category"] is None
     assert repo.stored[0]["review_required"] is True
     assert "was not found" in (repo.stored[0]["review_reason"] or "")
+
+
+def test_a_technical_clause_that_parsed_no_attribute_names_its_own_reason():
+    """A clause that states a material and no canonical attribute has nothing
+    to compare. Its row must not read as *the catalogue is silent*, which is a
+    finding about the manufacturer, when the clause is what we never read
+    (D-147)."""
+    repo = FakeRunRepo()
+    silent = _match(
+        status=RequirementStatus.NO_EVIDENCE_FOUND,
+        score=0.0,
+        verification_outcome=VerificationOutcome.NOT_CHECKED,
+        capability_text=None,
+        confidence=ConfidenceLevel.LOW,
+    )
+    tenders = FakeTenderRepo([dict(REQUIREMENTS[0], attribute=None)], ITEMS)
+
+    _execute(
+        repo,
+        tenders,
+        _recording_matcher([], result=silent),
+        _recording_store(repo, {"mfr-Acme": "Acme"}),
+    )
+
+    row = repo.stored[0]
+    assert row["status"] == "no_evidence_found"
+    assert row["reason_code"] == "requirement_not_parsed"
+    assert row["review_required"] is True
+    assert "requirement_not_parsed" in (row["review_reason"] or "")
+
+
+def test_a_clause_that_did_parse_an_attribute_keeps_the_code_it_earned():
+    """The new code names an unparsed clause, so it must not overwrite the more
+    specific reason a comparison reached: a clause with an attribute excluded
+    by the category rule still says so (D-147)."""
+    repo = FakeRunRepo()
+    excluded = _match(
+        status=RequirementStatus.NO_EVIDENCE_FOUND,
+        score=0.0,
+        verification_outcome=VerificationOutcome.NOT_CHECKED,
+        capability_text=None,
+        confidence=ConfidenceLevel.LOW,
+        reason_code=ReasonCode.CATEGORY_MISMATCH,
+    )
+    tenders = FakeTenderRepo([dict(REQUIREMENTS[0], attribute="body_material")], ITEMS)
+
+    _execute(
+        repo,
+        tenders,
+        _recording_matcher([], result=excluded),
+        _recording_store(repo, {"mfr-Acme": "Acme"}),
+    )
+
+    assert repo.stored[0]["reason_code"] == "category_mismatch"
 
 
 def test_an_unknown_clause_is_not_assessed_and_writes_no_row():

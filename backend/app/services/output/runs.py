@@ -40,6 +40,7 @@ from app.repositories.tender import TenderRepo
 from app.schemas.enums import (
     Applicability,
     ConfidenceLevel,
+    ReasonCode,
     RequirementStatus,
     RequirementType,
     RunStatus,
@@ -568,6 +569,28 @@ def _assess(
             for part in (outcome.review_reason, f"{reason}; retrieved without a category filter")
             if part
         )
+    if (
+        outcome.status is RequirementStatus.NO_EVIDENCE_FOUND
+        and not (requirement.get("attribute") or "").strip()
+    ):
+        # The clause was typed technical but nothing in it was ever read as an
+        # attribute - "Cast carbon steel" states a material and no canonical
+        # term. The row would otherwise read as *the catalogue is silent*, which
+        # is a finding about the manufacturer, when the truth is that we had
+        # nothing to compare (D-147). The status stays *no evidence found*: the
+        # product was not checked. The code names whose limit stopped it, and
+        # the pair goes to review like every other unconfirmed claim.
+        outcome.reason_code = ReasonCode.REQUIREMENT_NOT_PARSED
+        outcome.review_required = True
+        outcome.review_reason = "; ".join(
+            part
+            for part in (
+                outcome.review_reason,
+                "requirement_not_parsed: the clause named no attribute to compare",
+            )
+            if part
+        )
+        outcome.reason = outcome.review_reason
     return outcome, category
 
 
