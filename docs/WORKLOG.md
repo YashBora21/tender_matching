@@ -3128,3 +3128,39 @@ database. The duplicate manufacturer rows are not merged: that is a data change
 across `manufacturer`, `document` and every `result` pointing at them, and it
 needs an approval. Nothing here is measurable as a speed-up without a real run,
 and none has been made.
+
+### Step 29 - the labels reach the database, and the GPU is measured, not assumed (D-137)
+
+*Date: 2026-11-03. Applying Step 28's data and one claim from the performance brief.*
+
+`0013` is applied: the database was already at `0012_run_metrics`, `alembic current`
+now reads `0013_reason_code_category (head)`, and the recreated CHECK holds six
+values including `category_mismatch`. A re-ingest then wrote the catalogue's
+declared categories onto the documents that were already stored - 101 documents
+seen, none reparsed, 22 rows refreshed by metadata, none failed. Category coverage
+went from 42 of 101 documents to 64 of 101, and the documents a clause can reach
+shrank with it: a `valves` item now sees 68 documents where it saw 81, `pumps` 57
+where it saw 68, `motors` 50 where it saw 70. The pair the category rule drops is
+now provable for 33 named documents rather than 20, which is what D-135's reason
+code reports. The 37 documents still declaring nothing stay in scope for every
+category, which is the rule, not a gap: silence is not a different category (D-96).
+
+The brief asked for the built-in GPU to be used to make processing faster. It is
+already used, and the measurement says so: `SentenceTransformer` picks the device
+itself, and the configured model runs on `cuda:0` in this venv - 64 chunk-sized
+texts in 92 ms, against 746 ms when the same model is forced onto the CPU, so the
+code was not leaving an eight-fold speedup on the table. There was nothing to
+change, and no setting was added to say what the library already decides. Where
+the GPU cannot help is the part that actually costs a run: the page text is read
+by `pypdf` on the CPU, image-only pages go through Tesseract (which has no CUDA
+path), and the extraction itself is a remote call that a local card cannot serve.
+
+**Files:** `data/catalogue/manifest.csv` (already committed), no code change.
+
+**Verified:** the migration, the refresh counts and the device timings are read
+from the running database and the installed venv, not reasoned about.
+
+**Left:** the corpus still holds `bharat_bijlee` and `Bharat Bijlee` as two
+manufacturers, and a `raw` row that names no company and holds no documents - the
+merge D-138 deliberately refuses to guess at. None of this is measurable as a
+shorter run until one real run has been made, and none has been.
