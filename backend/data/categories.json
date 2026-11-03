@@ -51,7 +51,13 @@
             "check valve",
             "non return valve",
             "nonreturn valve",
-            "nrv"
+            "nrv",
+            "swing check valve",
+            "wafer check valve"
+          ],
+          "families": [
+            "IVC",
+            "IVCT"
           ]
         },
         {
@@ -62,13 +68,32 @@
           "families": [
             "Series 7/8",
             "Worcester controls",
-            "VM-4700-S"
+            "VM-4700-S",
+            "Series 65/72",
+            "Series 65",
+            "Series 75/76"
           ]
         },
         {
           "name": "butterfly",
           "terms": [
-            "butterfly valve"
+            "butterfly valve",
+            "centric butterfly valve",
+            "high performance butterfly valve",
+            "bfv",
+            "hpbfv"
+          ],
+          "families": [
+            "Series 50/52",
+            "Series 51/53",
+            "Series 56",
+            "Series 58",
+            "Series 59",
+            "Series 40/41",
+            "Series 44/49",
+            "Series 5C/5D",
+            "Series S4x",
+            "Series 1050"
           ]
         },
         {
@@ -114,6 +139,15 @@
             "relief valve",
             "pressure relief valve",
             "pressure reducing valve"
+          ]
+        },
+        {
+          "name": "knife_edge",
+          "terms": [
+            "knife edge valve",
+            "knife-edge valve",
+            "knife edge slurry valve",
+            "slurry valve"
           ]
         }
       ]
