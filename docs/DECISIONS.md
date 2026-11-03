@@ -3485,7 +3485,7 @@ requirements, which is a separate defect and is not touched here.
 
 *Verified:* 35 tests in `test_pageclassify.py` and `test_retyping.py`, including
 the four shapes above and a specification clause that must stay technical; the
-full unit suite (669), `collect` (15) and `eval` (52) pass.
+full unit suite (664), `collect` (15) and `eval` (52) pass.
 
 ## D-140 - A manufacturer is a company, not the folder a copy sits in
 
@@ -3533,3 +3533,37 @@ company that used to sit under the other spelling. `test_ingestion.py` and
 
 *Left:* the `raw` row and its 128 results, and four past runs whose reports list a
 manufacturer that owns nothing.
+
+## D-140 - A bill of quantities row that states a clause is the clause's item
+
+A buyer can write the obligation into the bill of quantities instead of naming
+a thing there: "The connector shall have LED indication for command ON" is a
+row of the BOQ, not a sentence of the specification. The ingestion stored such
+a row as a `tender_item` and nothing else, so no requirement pointed at it, no
+comparison could run, and the report could not even say it had been skipped -
+the clause was simply absent from the count. Measured on the GeM tender: 2
+items, 77 requirements, and **0 requirements linked to any item**.
+
+The requirements stage now asks each item whether its own words state an
+obligation (`shall`, `should`, `must`) and, when they do, emits one requirement
+pointing at that item, before the atomizer sees the list. A clause the
+specification already stated for the same item is not stated twice. The type is
+left `unknown` on purpose: the wording proves it is a clause, not that it is
+technical, and the reader decides that.
+
+*What it changes in a report:* two rows that were invisible now appear - and
+appear as what they are. On the GeM tender the warranty clause is left
+unmatched (commercial, PRD 4), and the LED-indication clause is left
+`attribute_not_mapped`, because no attribute in the vocabulary describes an
+indication. **The pair count does not move: it was 0 and it stays 0.** The
+change is that the report now names two requirements it had silently dropped,
+which is the difference between "nothing to assess" and "we did not look".
+
+*What it does not claim:* it does not make this tender matchable. A compliance
+document has no capability for a manufacturer to meet, and inventing an
+attribute for one would be inventing a fact.
+
+*Verified:* 3 tests in `test_tenderingest.py` (a clause row becomes a
+requirement of itself, a bare item name stays an item, `should` counts as an
+obligation), 56 in that file and `test_pipeline.py`, and the full unit suite
+(667) passes.

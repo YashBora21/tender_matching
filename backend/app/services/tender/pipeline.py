@@ -49,6 +49,7 @@ from app.services.tender.ingest import (
     is_mangled,
     read_boq_items,
     read_specification,
+    requirements_from_items,
 )
 
 logger = get_logger(__name__)
@@ -499,6 +500,23 @@ def run_pipeline(
                 fragments.dropped,
                 fragments.merged,
             )
+        # A bill of quantities row that states an obligation is a clause in
+        # its own right, and its item is the parent it sits under. Without
+        # this the row is stored as an item and no requirement ever points at
+        # it: the clause is never assessed, and the report cannot say that it
+        # was skipped (D-140). A clause the specification already stated for
+        # the same item is not stated twice.
+        stated = {
+            (requirement.item_id or "", requirement.text.strip().lower())
+            for requirement in result.requirements
+        }
+        for requirement in requirements_from_items(result.items):
+            key = (requirement.item_id, requirement.text.lower())
+            if key in stated:
+                continue
+            stated.add(key)
+            result.requirements.append(requirement)
+
         # A compound clause becomes one requirement per fact before the model
         # reads it: the atomizer is part of the requirements stage, so each
         # atom is extracted and compared on its own (FR-13, FR-T8, D-105).

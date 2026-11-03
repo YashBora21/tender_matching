@@ -1188,3 +1188,36 @@ def drop_fragments(
             continue
         report.dropped += 1
     return kept, report
+
+# The wording that makes an item a clause. A bill of quantities usually names
+# a thing ("Solenoid valve, 4 pin connector"); a buyer who writes the
+# obligation into the row ("... shall have LED indication") has stated a
+# requirement there instead, and the row is then the requirement's item.
+_OBLIGATION = re.compile(r"\b(?:shall|should|must)\b", re.IGNORECASE)
+
+
+def item_states_a_requirement(item: TenderItem) -> bool:
+    """True when the item's own words state an obligation, not a name."""
+    return bool(_OBLIGATION.search(item.title or ""))
+
+
+def requirements_from_items(items: list[TenderItem]) -> list[RequirementRecord]:
+    """The clauses a bill of quantities states as item descriptions.
+
+    The item is kept as the parent: the requirement points at it, so the
+    comparison is scoped to the item's own category (FR-16) and the report can
+    say which item the clause sits under. Nothing is guessed from the wording -
+    only the rows that state an obligation become a clause, and the rest stay
+    what they are, item names.
+    """
+    return [
+        RequirementRecord(
+            text=item.title.strip(),
+            item_id=item.item_id,
+            requirement_type=RequirementType.UNKNOWN,
+            extraction_method="item",
+            source_section=item.title.strip() or None,
+        )
+        for item in items
+        if item_states_a_requirement(item)
+    ]

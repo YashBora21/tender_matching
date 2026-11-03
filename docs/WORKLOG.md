@@ -3235,3 +3235,18 @@ and a `get_manufacturer_id` on either spelling writes no new row. 34 pass in
 them rewrites four past runs, and that is asked, not assumed. Four verified facts are
 still filed with a null attribute (D-136 left them), and the report denominator,
 statuses and scores were not touched by any of this.
+
+### Step 27 - The clauses stored as items (D-140)
+
+The GeM tender's bill of quantities holds two rows that are clauses, not item
+names, and no requirement pointed at either of them: 2 items, 77 requirements,
+0 links. The clause rows are now read as requirements of their own item, before
+atomizing, and the report lists them.
+
+**Verified:** 3 new tests, 56 in the two files, 667 unit tests, exit 0.
+
+**Measured, and not what I expected when I proposed it:** both clauses stay
+unmatched. The warranty is commercial (PRD 4 excludes it), and the LED
+indication has no attribute in the vocabulary, so it lands
+`attribute_not_mapped`. The pair count is 0 before and after; what changes is
+that the report names the two requirements instead of omitting them.

@@ -14,9 +14,11 @@ from app.services.tender.ingest import (
     english_half,
     is_mangled,
     item_id_for,
+    item_states_a_requirement,
     read_boq_csv,
     read_boq_table,
     read_specification,
+    requirements_from_items,
 )
 
 
@@ -439,3 +441,38 @@ def test_a_single_item_tender_takes_its_prose_clauses(tmp_path):
     assert not unassigned
     assert assigned[0].item_id == "1"
     assert assigned[0].extraction_method == ExtractionMethod.TEXT.value
+
+
+def test_an_item_that_states_a_clause_becomes_a_requirement_of_itself():
+    """A bill of quantities row can carry the obligation instead of naming a
+    thing. The clause is then the item's own requirement, not a row nothing
+    points at."""
+    items = [
+        TenderItem(
+            item_id="t:1",
+            title="The connector shall have LED indication for command ON",
+        ),
+        TenderItem(item_id="t:2", title="SOLENOID VALVE, 4 PIN CONNECTOR"),
+    ]
+
+    clauses = requirements_from_items(items)
+
+    assert len(clauses) == 1
+    assert clauses[0].item_id == "t:1"
+    assert clauses[0].text.startswith("The connector shall")
+    # The type is a proposal: the clause is not technical until it is read.
+    assert clauses[0].requirement_type is RequirementType.UNKNOWN
+    assert clauses[0].extraction_method == "item"
+
+
+def test_an_item_that_names_a_thing_states_no_requirement():
+    items = [TenderItem(item_id="t:1", title="SUBMERSIBLE PUMP, 5 HP")]
+
+    assert requirements_from_items(items) == []
+    assert item_states_a_requirement(items[0]) is False
+
+
+def test_a_should_clause_in_an_item_is_read_as_an_obligation():
+    item = TenderItem(item_id="t:1", title="The body should be corrosion resistant")
+
+    assert item_states_a_requirement(item) is True
