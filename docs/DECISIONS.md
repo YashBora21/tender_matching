@@ -3832,3 +3832,58 @@ stores `requirement_not_parsed`, is flagged for review and keeps the *no evidenc
 found* status, and a clause that did parse an attribute keeps the `category_mismatch`
 code it earned - and the fake store now records `reason_code`, which it did not
 before, so no test could see that column at all. The full unit suite passes.
+
+## D-148 - The corpus declares each document's role and type, from data
+
+`_type_filter` compares the product type a requirement needs with the type the
+candidate's product declares, and when the document never said, the evidence is
+family-level: the score is capped and the pair is flagged for review (PRD 4,
+D-100). **The type column has never been written.** Measured in the dev database:
+`product.product_type` is set on 0 of 99 products, `product.classification_source`
+is NULL on 99, and `document.doc_role` is NULL on 101 documents - so the filter had
+nothing to compare, and every pair in every run was answered as if its datasheet were
+a family brochure. That is the shape the pasted corpus audit reported for the Valtek
+pairs - `is_family_level` false on the product, `family_level` on the result - which
+is what a missing declaration looks like from the report side.
+
+`app/services/corpus/classify.py` fills the declaration from data, and asks no model.
+It writes no vocabulary of its own:
+
+- the **type** comes from the file the item side already uses. `document_type_of`
+  calls `match.category.document_type` (and `infer_category` when the product has no
+  category), so a document and a requirement are placed in one vocabulary
+  (`data/categories.json`) and adding a type stays a data edit (FR-6);
+- the **role** comes from a new `data/doc_roles.json`, read the same way
+  `categories.json` is: a declared name and the terms that name it. A manifest's own
+  `doc_type` is honoured first (`specification` -> `datasheet`,
+  `compliance_schedule` -> `certificate`); only a document whose manifest stayed
+  silent or wrote `other` is read from its words. Of the 121 manifest rows the corpus
+  carries, 41 declare `other`, which is where the words matter.
+
+What is read is the file name, the declared model or family, and the first two pages
+(`--pages`). A rule never overwrites a value that is already there, because it may be
+a person's decision - the update is `WHERE product_type IS NULL`. A document whose
+words name two roles equally, or two types equally, is **left unresolved rather than
+coin-flipped** (FR-T9), and unresolved rows are exported to
+`eval/product_types_todo.csv` with the manufacturer, the product, the document, a
+snippet of the evidence the rules saw, and the answer column blank. `--load` reads a
+filled CSV back and records `classification_source = 'human'`, which is the third
+value of the enum the schema declares: `manifest` for what the collector said, `rule`
+for what this module read, `human` for what a reviewer typed.
+
+*Deliberately not in this change:* it does **not** write `product.category` (54 of 99
+products have none, and a category is what makes a type reachable by retrieval - that
+is D-92's ground and another session's Commit 2), it does **not** unlink the
+certificate and privacy-policy documents from their products, and it does not exclude
+any document from retrieval. Those change which pairs exist and what a report counts;
+they are separate commits so each can be kept or reverted on its own. The pass has not
+been run: the dev database's container stopped while this was written, so no count of
+how many products get a type is claimed here.
+
+*Verified:* 9 tests in `tests/test_classify.py` - the type is read from a document's
+own words, a product with no category is placed from them, a document that names two
+types equally is not guessed, the declared `doc_type` wins, a certificate and a
+privacy policy are named from their words, a document naming no role stays
+unresolved, an unreadable vocabulary file classifies nothing instead of failing, and
+the reviewer's CSV gets one row per undecided document. `test_no_hardcoding` passes:
+no corpus file name or URL is in `app/`. The full unit suite passes.

@@ -1,0 +1,68 @@
+{
+  "version": "1",
+  "notes": "The roles a corpus document can play, and the words that name them. A document's role is what it is for: only a product document is evidence about a product. The declared types are the values the collector writes in its manifest; a role is added or mapped here, and no code changes. The words are matched in the document's own file name and opening pages.",
+  "declared": {
+    "datasheet": "datasheet",
+    "data sheet": "datasheet",
+    "spec sheet": "datasheet",
+    "specification": "datasheet",
+    "catalogue": "catalogue",
+    "catalog": "catalogue",
+    "brochure": "brochure",
+    "white_paper": "white_paper",
+    "whitepaper": "white_paper",
+    "certificate": "certificate",
+    "certification": "certificate",
+    "compliance_schedule": "certificate",
+    "policy": "policy",
+    "privacy_policy": "policy"
+  },
+  "roles": [
+    {
+      "name": "certificate",
+      "terms": [
+        "iso 9001",
+        "iso ce",
+        "certificate",
+        "certification",
+        "type approval",
+        "audit report",
+        "conformity"
+      ]
+    },
+    {
+      "name": "policy",
+      "terms": [
+        "privacy policy",
+        "terms of use",
+        "legal notice",
+        "disclaimer",
+        "cookie policy",
+        "refund policy"
+      ]
+    },
+    {
+      "name": "white_paper",
+      "terms": ["white paper", "whitepaper", "technical article"]
+    },
+    {
+      "name": "catalogue",
+      "terms": ["catalogue", "catalog", "price list", "selection guide"]
+    },
+    {
+      "name": "brochure",
+      "terms": ["brochure", "bulletin", "flyer", "pamphlet", "leaflet"]
+    },
+    {
+      "name": "datasheet",
+      "terms": [
+        "datasheet",
+        "data sheet",
+        "spec sheet",
+        "technical data",
+        "installation manual",
+        "operating manual"
+      ]
+    }
+  ]
+}
