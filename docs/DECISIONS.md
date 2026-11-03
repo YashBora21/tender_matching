@@ -3448,3 +3448,41 @@ a rival.
 "Delval Flow" and writes no new row; a fold that lands on two rows returns None).
 67 pass across the three ingestion, resolution and run files. The database-backed
 `test_ingestion_db.py` is not run here - it needs `TEST_DATABASE_URL`.
+
+## D-139 - A clause on a mixed page is read on its own words
+
+A `mixed` page is read as a whole, so its page tag cannot separate the buyer's
+specification from the forms stapled to it. The re-typing step only asked
+"was this page a specification?", which is true for the whole page - and a
+GeM tender with no specification in it at all produced four `technical`
+requirements, every one of them an undertaking to be signed on company
+letterhead.
+
+The clause is now read on its own words. `classify.reads_as_legal_clause`
+scores the clause with the same weighted term lists that classify a page, and
+requires two weighted non-technical hits before it calls a clause an
+obligation - one incidental commercial word ("contract", "warranty") is a rider
+on a specification, not a commercial clause. A tie goes to the obligation,
+because the words that tie are the ones the two families share: "head" is a
+pump's head and a letter head, and `head` is weight 2 in the technical list.
+Two terms were added for the forms themselves - `letter head`/`letterhead` to
+the boilerplate list, `undertaking`, `eligibility criteria` and `tenderer` to
+the commercial list.
+
+*What it changes in a report:* a pair built on such a clause no longer exists.
+On the tender that exposed this, the four clauses it re-typed were the only
+four requirements it assessed, so the run reported 8 results (4 x 2
+manufacturers) over four legal sentences; it now reports none, and the clauses
+are recorded as unread. That is the honest count: the tender states no
+capability for a manufacturer to meet. The page is still read, and a real
+specification on the same page is still re-typed - only the clause-level gate
+is new.
+
+*What it does not claim:* it does not decide that the tender is not technical.
+It only refuses to call an obligation a specification. The two specification
+lines this tender does state were captured as BOQ items rather than as
+requirements, which is a separate defect and is not touched here.
+
+*Verified:* 35 tests in `test_pageclassify.py` and `test_retyping.py`, including
+the four shapes above and a specification clause that must stay technical; the
+full unit suite (669), `collect` (15) and `eval` (52) pass.

@@ -15,6 +15,7 @@ from app.services.tender.classify import (
     TECHNICAL,
     classify_page,
     is_non_technical,
+    reads_as_legal_clause,
 )
 
 # Synthetic: a safety annex, written to look like one.
@@ -140,3 +141,41 @@ def test_a_single_incidental_word_does_not_make_a_legal_page_technical() -> None
 )
 def test_only_the_non_technical_kinds_skip_the_model(kind: str, expected: bool) -> None:
     assert is_non_technical(kind) is expected
+
+
+# Synthetic: the two shapes that reach a mixed page from its legal half. The
+# words are the forms' own, not any tender's.
+LETTERHEAD_CLAUSE = (
+    "To be submitted on the company's letter head, signed by the authorised "
+    "signatory of the bidder."
+)
+ELIGIBILITY_CLAUSE = (
+    "Eligibility criteria: details of the documents to be submitted by the "
+    "tenderer in support of the offer."
+)
+
+
+@pytest.mark.parametrize("clause", [LETTERHEAD_CLAUSE, ELIGIBILITY_CLAUSE])
+def test_a_letterhead_clause_reads_as_an_obligation(clause: str) -> None:
+    assert reads_as_legal_clause(clause) is True
+
+
+def test_a_specification_clause_does_not_read_as_an_obligation() -> None:
+    assert (
+        reads_as_legal_clause(
+            "Body material shall be cast steel and the wall thickness shall be "
+            "minimum 10 mm."
+        )
+        is False
+    )
+
+
+def test_one_incidental_commercial_word_does_not_make_a_clause_legal() -> None:
+    """A commercial rider on a specification is still a specification."""
+    assert (
+        reads_as_legal_clause(
+            "The valve body material shall be CF8M as per the contract, with "
+            "a pressure rating of 20 bar."
+        )
+        is False
+    )

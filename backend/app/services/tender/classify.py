@@ -64,6 +64,9 @@ COMMERCIAL_LEGAL_TERMS: dict[str, int] = {
     "disqualification": 2,
     "conflict of interest": 2,
     "code of conduct": 2,
+    "undertaking": 2,
+    "eligibility criteria": 2,
+    "tenderer": 1,
     "contract": 1,
     "agreement": 1,
     "bidder": 1,
@@ -121,6 +124,8 @@ BOILERPLATE_TERMS: dict[str, int] = {
     "copyright": 2,
     "disclaimer": 2,
     "this page intentionally": 2,
+    "letter head": 2,
+    "letterhead": 2,
     "annexure": 1,
     "index": 1,
     "seal": 1,
@@ -290,3 +295,36 @@ def _numeric_fallback(text: str) -> str:
 def is_non_technical(kind: str) -> bool:
     """True when the page's clauses must not be sent to the model."""
     return kind in NON_TECHNICAL
+
+
+# How many weighted non-technical hits make a *clause* an obligation. A page
+# carries hundreds of words, so dominance is enough there; a clause carries
+# twenty, and one incidental word ("contract", "warranty") is as likely to be
+# a commercial rider on a specification as a purely commercial clause.
+CLAUSE_LEGAL_MIN = 2
+
+
+def reads_as_legal_clause(text: str) -> bool:
+    """True when a clause states an obligation, not a specification.
+
+    A `mixed` page is read as a whole, so the page tag cannot separate the two
+    halves: "to be submitted on the company's letter head by the authorised
+    signatory" sits on the same page as a size table. This reads the clause on
+    its own words, with the same weighted terms, and answers the one question
+    the re-typing needs: is there a capability in here at all?
+
+    A tie goes to the obligation. The words that tie are words the two
+    families share - "head" is both a pump's head and a letter head - and the
+    cost of reading a letterhead as a specification is a comparison nobody
+    asked for, while the cost of the other error is a clause that is still
+    reported as unread and reviewed.
+    """
+    legal = (
+        _score(text, COMMERCIAL_LEGAL_TERMS)[0]
+        + _score(text, SAFETY_HSE_TERMS)[0]
+        + _score(text, BOILERPLATE_TERMS)[0]
+    )
+    if legal < CLAUSE_LEGAL_MIN:
+        return False
+    technical = _score(text, TECHNICAL_TERMS)[0]
+    return legal >= technical

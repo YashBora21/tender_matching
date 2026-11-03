@@ -3164,3 +3164,37 @@ from the running database and the installed venv, not reasoned about.
 manufacturers, and a `raw` row that names no company and holds no documents - the
 merge D-138 deliberately refuses to guess at. None of this is measurable as a
 shorter run until one real run has been made, and none has been.
+
+### Step 26 - The clauses that were never specifications (D-139)
+
+The 77 requirements of the GeM tender were read back from the database, not
+reasoned about: 73 were typed `unknown`, 4 were typed `technical`, and all 4 of
+those carried the attribute `total_head` with no value and no unit. Their text
+is an undertaking to be signed on company letterhead, a list of documents for
+eligibility, a note about verification, and the fragment "(On Company Letter
+Head". The word `head` is weight 2 in the technical term list, so a legal form
+held a page's technical score up, the page stayed `mixed`, and the re-typing
+step - which only asked whether the *page* was a specification - called all four
+clauses technical. They were the only four matchable requirements, so the run's
+8 results were 4 legal sentences assessed against 2 manufacturers.
+
+`reads_as_legal_clause` now scores the clause itself with the same term lists
+and requires two weighted non-technical hits; ties go to the obligation,
+because the tied words are the ones both families share. Two terms were added
+for the forms (`letter head`/`letterhead`, `undertaking`, `eligibility
+criteria`, `tenderer`).
+
+**Verified:** the four real clauses now return `False` from `retype` and keep
+`unknown` with no attribute (checked against the database text, not a fixture);
+35 tests in the two files, the full unit suite (669), `collect` (15) and `eval`
+(52).
+
+**Left:** `tender_item` holds the two lines the tender really does specify
+(an LED indication and a warranty) while no requirement links to any item, so
+those two still never reach comparison. That is a separate defect and it
+changes what a report counts, so it waits for an explicit yes.
+
+**Also done:** the project container `tender-pg-phase12` was stopped and was
+started; it maps 55432, so the port the `.env` names is correct and the compose
+file's 5432 is an unrelated definition. Alembic moved `0012_run_metrics` ->
+`0013_reason_code_category` (head).

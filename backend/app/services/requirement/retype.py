@@ -24,7 +24,7 @@ import re
 from typing import Optional
 
 from app.schemas.enums import Operator, RequirementType
-from app.services.tender.classify import is_non_technical
+from app.services.tender.classify import is_non_technical, reads_as_legal_clause
 from app.services.tender.ingest import RequirementRecord
 
 # The attribute a clause names, and the canonical name it is stored under.
@@ -196,6 +196,12 @@ def retype(requirement: RequirementRecord) -> bool:
         return False
 
     text = requirement.text or ""
+    # A mixed page is read as a whole, so the page tag cannot separate its
+    # halves: a letterhead clause on a page that also carries a size table
+    # would be re-typed as a size requirement on the strength of the word
+    # "head". The clause's own words decide (D-139).
+    if reads_as_legal_clause(text):
+        return False
     attribute = _attribute(text)
     value, unit = _value(text)
     operator = _operator(text)

@@ -117,6 +117,20 @@ def test_a_safety_page_is_never_re_typed():
     assert requirement.requirement_type is RequirementType.UNKNOWN
 
 
+def test_a_letterhead_clause_on_a_mixed_page_is_not_re_typed():
+    """A mixed page is read whole, so its legal half must not become a
+    specification. "Head" in "letter head" is not a pump's head."""
+    requirement = _unknown(
+        "To be submitted on the company's letter head, signed by the "
+        "authorised signatory of the bidder.",
+        page_tag="mixed",
+    )
+
+    assert retype(requirement) is False
+    assert requirement.requirement_type is RequirementType.UNKNOWN
+    assert requirement.attribute is None
+
+
 def test_a_type_the_model_gave_is_not_overridden():
     """Re-typing only ever moves a clause out of unknown."""
     requirement = RequirementRecord(
