@@ -3251,7 +3251,7 @@ indication has no attribute in the vocabulary, so it lands
 `attribute_not_mapped`. The pair count is 0 before and after; what changes is
 that the report names the two requirements instead of omitting them.
 
-### Step 28 - The picker, grouped by category (D-141)
+### Step 28 - The picker, grouped by category (D-142)
 
 The upload screen offered all 19 manufacturers in one grid whatever the tender was
 about: a valve specification still listed motors and pumps side by side with the

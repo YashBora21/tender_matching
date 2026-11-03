@@ -3568,7 +3568,7 @@ requirement of itself, a bare item name stays an item, `should` counts as an
 obligation), 56 in that file and `test_pipeline.py`, and the full unit suite
 (667) passes.
 
-## D-141 - The manufacturer picker is grouped by the category the tender's items name
+## D-142 - The manufacturer picker is grouped by the category the tender's items name
 
 Uploading a valve specification listed all 19 manufacturers of the corpus as one
 undifferentiated grid, with motors and pumps mixed in among the valve makers, and
