@@ -417,6 +417,11 @@ def _match_candidate(
                 )
             return result
         result.reason = "the passage does not state this capability"
+        # Silence is a claim the verifier did not confirm, so it is flagged like
+        # every other exit from this function (PRD 4: *no evidence found* goes to
+        # review). An unflagged silence is the one result a reader believes.
+        result.review_required = True
+        result.review_reason = result.reason
         return result
 
     with stage(result.stage_seconds, "verify"):

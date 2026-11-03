@@ -3631,3 +3631,45 @@ the pre-freeze original next to the frozen copy.
 the ids gone in the frozen copy; a document listed only in `catalogue/manifest.csv`
 is still indexed - before that fix 12 of 16 claims were silently skipped as
 `unavailable`), 19 in that file, and the full unit suite.
+
+## D-144 - A claim the verifier did not confirm is never published unflagged
+
+The baseline's single false-confident pair is `6ffe6648…` (Three piece ball valves
+2" Screwed end ASME class 150, face to face 122mm) × valmatic: gold says
+`missing_capability`, the run published `no_evidence_found` with
+**`review_required = false`, no `review_reason`, and `verification_outcome =
+not_checked`**. A reader sees a finished answer where the system gave up.
+
+Measured on run `4e7ebbc1`: **36 of its 63 results have that exact shape** -
+silence, nothing checked, nothing flagged. They are all one branch.
+`_match_candidate` has five ways to end a pair as silence and four of them flag it
+(no candidates, no passage stated a capability, the extraction failed, the
+verifier rejected the quote). The fifth - the model proposed no fact *and* the
+deterministic listed-set check had nothing citable - set only `reason`, and
+`reason` has no column: the stored row carried no flag and no reason at all. It
+even wrote the placeholder fact with `verification_status = needs_review`
+(`match.py:741`), so the corpus said "review this" while the result said
+"answered".
+
+Why that pair took the branch is the same story as D-143: the cited Val-Matic page
+1 (`VMC-4702ABL-ABW_11-18-14.pdf`) has no text layer, so `check_citation` cannot
+confirm a quote read from its OCR chunk, and an unconfirmed set-exclusion falls
+through to silence.
+
+The branch now flags, with the reason its siblings use
+(`the passage does not state this capability`). PRD 4 already says what
+*no evidence found* is: "neither pass nor fail, **flagged for review**, reported
+as coverage". An unflagged silence is the one result a reader believes.
+
+*What it changes in a report:* the flag, nothing else. On the baseline run,
+flagged results go from 24 of 63 to 60; the 3 left unflagged are quotes the
+verifier passed. Statuses, scores, the denominator and the coverage count do not
+move, and the review queue and `review_count` grow accordingly - that is the cost,
+and it is the price of the PRD's own definition. The baseline's one
+wrong-and-unflagged pair is this path, so closing it removes its only
+false-confident row (arithmetic over the frozen report, not a re-run).
+
+*Verified:* 2 assertions added to `test_matching.py` (`test_a_silent_passage_stays
+_no_evidence_found` now pins the outcome, the flag and the exact reason;
+`test_a_passage_that_states_nothing_is_no_evidence_found`, the same branch reached
+through a `found: false` extraction), 34 in that file, full unit suite.

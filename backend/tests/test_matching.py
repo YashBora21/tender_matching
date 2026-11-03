@@ -134,7 +134,8 @@ def test_a_listed_set_that_excludes_the_requirement_is_missing_capability(monkey
 
 def test_a_silent_passage_stays_no_evidence_found(monkeypatch):
     """A page that does not mention the attribute is silent. It is never
-    turned into a missing capability (AGENTS #4)."""
+    turned into a missing capability (AGENTS #4), and it is never published
+    unflagged: silence is a claim the verifier did not confirm (PRD 4)."""
     from app.services.match import match
     from app.services.match.facts import FactResult
 
@@ -154,6 +155,9 @@ def test_a_silent_passage_stays_no_evidence_found(monkeypatch):
     )
 
     assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.verification_outcome is VerificationOutcome.NOT_CHECKED
+    assert result.review_required is True
+    assert result.review_reason == "the passage does not state this capability"
 
 
 # --- the retrieval query (D-96) --------------------------------------------
@@ -284,6 +288,7 @@ def test_a_passage_that_states_nothing_is_no_evidence_found(monkeypatch):
     result = match_requirement(FakeSession(), "Body shall be SS316", client=client)
 
     assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.review_required is True
 
 
 def test_a_quote_that_is_not_on_the_page_fails_the_citation_layer(monkeypatch):
