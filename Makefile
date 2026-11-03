@@ -9,7 +9,7 @@ COMPOSE := docker compose
 .DEFAULT_GOAL := help
 .PHONY: help install install-dev migrate downgrade run test test-unit test-integration \
         test-collect collect corpus-restore ingest embed match report tenders tenders-audit e2e eval eval-check \
-        eval-audit recall \
+        eval-audit eval-facts recall \
         docker-build docker-up docker-down \
         docker-logs clean
 
@@ -86,6 +86,9 @@ eval-audit: ## Grade a filled audit sheet: make eval-audit SHEET=eval/audit/x.cs
 
 recall: ## Measure retrieval recall@k: make recall GOLD=eval/gold/x.csv ARGS="--k 3 20"
 	$(VENV)/Scripts/python.exe eval/recall.py --gold "$(GOLD)" $(ARGS)
+
+eval-facts: ## Answer gold pairs from stored facts only, no model call: make eval-facts GOLD=eval/baseline/gold-items-10-11.jsonl ARGS="--out eval/replay/facts-only.json"
+	$(VENV)/Scripts/python.exe eval/facts_replay.py --gold "$(GOLD)" $(ARGS)
 
 docker-build: ## Build the backend and frontend images
 	$(COMPOSE) build backend frontend

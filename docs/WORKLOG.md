@@ -3286,3 +3286,42 @@ read it as a valve size. Layer 1 passes because the text really is on page 13;
 what fails is the subject of the fact. Two of the three carry no review flag.
 The pressure-class matches (`Class 150 RF`) look right on their face. No accuracy
 claim is made until the audit sheet is filled in.
+
+### Step 31 - the six gold pairs, answered from stored facts alone (D-155)
+
+*Date: 2026-11-03. Item 6 of the speed-up plan: the guard-rail that costs nothing.*
+
+The cache-first change (D-133) was only ever measured in seconds. `eval/facts_replay.py`
+answers the six frozen gold pairs from the `fact` table alone - no retrieval, no
+extraction, no database write - and hands the rows to `harness.py`'s own scorer, so the
+speed-up is diffed against the baseline on the same six labels rather than argued about.
+
+| | baseline run `4e7ebbc1` | stored-facts replay |
+| --- | --- | --- |
+| status accuracy | 0.0 | 0.0 |
+| false-confident rate | 0.1667 | 0.0 |
+| coverage | 0.0 | 0.0 |
+| citation correctness (six pairs) | null | null |
+| model calls | 155 for the run's 63 pairs | 0 |
+
+What it found is that the cache is reachable and nearly empty: 24 of the 237 stored facts
+are verified *and* carry an attribute, across 5 products, so 2 of the 6 pairs have nothing
+to answer from. The other 4 are answered from a stored fact and all 4 die on the same
+sentence - *pressure class comparison needs a class on both sides* - because the resolver
+hands the comparison `ASMECLASS150`, which the class rule cannot read. That is named in
+D-155 and deliberately not fixed here: this item was to measure and stop.
+
+**Files:** `eval/facts_replay.py`, `eval/tests/test_facts_replay.py`, `Makefile`
+(`eval-facts`), `eval/replay/facts-only.json` (the scored summary).
+
+**Verified:** 3 new tests, 57 pass in `pytest eval`, the full unit suite passes, and the
+six rows are identical on two reads taken around another writer's inserts. No status,
+denominator or cache rule moved; no model call was made at any point.
+
+**Left:** the resolver's whitespace-stripped class value (D-155 names the branch), the 4
+verified facts still filed with a null attribute (D-136), and the fact table's coverage -
+24 usable readings is not enough for the cache to be a speed-up on any tender but this one.
+Whether the replay's cross-product scope (Series 75/76 answering a Series 7/8 clause) is
+acceptable waits on `product.product_type` reaching the type filter, which is held for the
+reviewed list.
+

@@ -4126,3 +4126,81 @@ or to any status meaning.
 *Verified:* `test_comparison` (39), `test_verifier` (21), `test_matching`,
 `test_normalizer`, `test_resolution` and the full unit suite pass; the counts above are a
 direct read of the live corpus, not a run.
+
+## D-155 - The gold pairs are answered from stored facts alone, and the cache has nothing to say
+
+The speed-up was that a verified fact is read instead of a passage (D-133). Whether that
+changes what the system *says* about a pair was untested, because testing it meant another
+run - 63 pairs, and the calls to make them. `eval/facts_replay.py` tests it at no cost: it
+answers the six frozen gold pairs (D-143) from the fact table only, makes no model call and
+writes no row.
+
+*How the no-call claim is proved, not promised.* The replay first reads the clause with the
+deterministic resolver and looks for a product of that manufacturer holding a **verified**
+fact for the attribute named - the same three lookups `_cached_fact` makes. Only then does
+it call `match_requirement`, so the comparison, the family-level cap and the review flag are
+the ones a run reaches, and the matcher returns before it retrieves. It is handed a client
+whose `complete_json` raises, and `MatchResult.llm_calls` is checked after every pair.
+
+| Metric | Baseline run `4e7ebbc1` | This replay |
+| --- | --- | --- |
+| Status accuracy (6 verifiable labels) | 0.0 | 0.0 |
+| Confusion | 4 × missing → no evidence, 2 × partial → no evidence | the same six |
+| False-confident rate | 0.1667 | 0.0 |
+| Coverage | 0.0 | 0.0 |
+| Review rate | 0.8333 | 1.0 |
+| Citation correctness, six pairs | null (0 claims) | null (0 claims) |
+| Model calls | 155 for the 63 pairs that run made | 0 |
+
+*What the replay says about the cache.* Read from the local database on 2026-11-03: 237
+facts, 28 verified, **24 of those carrying an attribute** - which is all the cache can
+ever read, because `findings.cached_fact` joins `attribute` - across **5 products**. The
+other 209 facts are `needs_review`, and a fact waiting for review is not an answer, which
+is D-136's null-attribute problem still on the books (4 verified facts, still 4). So of
+the six gold pairs, two (valmatic) have no verified fact for the clause's attribute at all,
+and four are answered from a stored fact. The speed-up is real in the only sense it can be
+until a run is paid for: the pair is settled with no reading of a page. It is not yet a
+speed-up anyone can measure in seconds, because the cache answers 4 of 6 pairs and gets
+none of them right.
+
+*The four that die, and why.* All four come back `no_evidence_found` with the same sentence
+the baseline recorded for Flowserve: *pressure class comparison needs a class on both
+sides*. The cause was read, not reasoned about - `_categorical_value`'s pressure-class
+branch uppercases the match and strips its spaces, so the requirement side arrives as
+`ASMECLASS150`, and the ordered-class rule reads `Class 150`, `150` and `ASME class 150`
+but not that. Measured against a stored `150` fact: those three forms give `full_match`,
+`600` gives `missing_capability`, `ASMECLASS150` gives `no_evidence_found`. **Not fixed
+here** - the instruction for this item was to measure and stop, and the fix belongs to
+whoever decides whether the resolver or the class rule gives way.
+
+*What the 0.0 false-confident rate does not mean.* The replay's silence rows are built by
+copying the three fields the matcher sets when no passage answered, so no pair here can
+come back confidently wrong by construction. The baseline's 0.1667 went to 0 because D-144
+now flags every silence; this replay shows the cache path adds no confident wrongness, and
+nothing more.
+
+*Scope, printed with the row.* Retrieval does not run, so a pair is answered from the first
+product of that manufacturer holding the attribute: `Series 75/76` answers a clause the gold
+took from `Series 7/8`, and Valtek GS answers one from the Worcester document. That is not a
+new sloppiness - the frozen baseline's own Flowserve row quotes `Class 150 RF` from
+`VLENTB0300_EN_A4.pdf` page 13, which is Valtek GS - but it is why the table names the
+model each answer came from. It closes when `product.product_type` reaches the type filter
+(held for review, D-150).
+
+*Six pairs is a spot check.* That is the whole labelled set the baseline has: two
+requirements × three manufacturers, hand-confirmed. Nothing was tuned against it, and no
+accuracy claim is made from it. The finer labels stay where they were, marked unconfirmed:
+`eval/gold/proposed-GEM_9671792-items-10-11-atomic.csv` splits the same two cells into 22
+rows (`valve_type`, `nominal_size`, `pressure_class`, `face_to_face` × 3 manufacturers),
+every one `label_state=proposed, confirmed=no`. It does not yet contain the two attributes
+the confirmed labels turn on - the end connection and the body material.
+
+*Not added:* no report JSON is written (the scored summary is), no flag to fall through to
+extraction, no second scoring path - the replay calls `harness.score` - and no status,
+denominator, cache rule or retrieval filter moved.
+
+*Verified:* 3 new tests in `eval/tests/test_facts_replay.py` (row shape with no database
+ids, silence stays flagged, the refused client raises); `pytest eval` 57 pass; the full unit
+suite passes. The counts above are read from the live database while another writer was
+adding facts to it (221 facts at the first read, 237 at the last), so they are a snapshot of
+2026-11-03, and the six-pair outcome did not change between the two reads.
