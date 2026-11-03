@@ -60,6 +60,10 @@ class Vocabulary:
     attributes: tuple[AttributeSpec, ...] = ()
     material_groups: dict[str, frozenset[str]] = field(default_factory=dict)
     material_parents: dict[str, str] = field(default_factory=dict)
+    # The categorical values that are one thing written two ways: a "threaded"
+    # end and a "screwed" end. The alloy groups compare grades; these compare
+    # the words a specification line uses for a shape or a connection.
+    value_groups: dict[str, frozenset[str]] = field(default_factory=dict)
     # Regex sources for the value shapes, kept in the data file so they can be
     # extended without touching the code.
     material_pattern: str = ""
@@ -145,6 +149,12 @@ def load_vocabulary(path: Optional[str] = None) -> Vocabulary:
         for group, members in data.get("material_groups", {}).items()
     }
 
+    value_groups = {
+        group: frozenset(normalise_token(member) for member in members)
+        for group, members in data.get("value_groups", {}).items()
+        if isinstance(members, (list, tuple))
+    }
+
     language = data.get("requirement_language", {})
     boolean = data.get("boolean_words", {})
 
@@ -152,6 +162,7 @@ def load_vocabulary(path: Optional[str] = None) -> Vocabulary:
         attributes=attributes,
         material_groups=material_groups,
         material_parents=dict(data.get("material_parents", {})),
+        value_groups=value_groups,
         material_pattern=data.get("material_pattern", ""),
         certification_pattern=data.get("certification_pattern", ""),
         ip_pattern=data.get("ip_pattern", ""),

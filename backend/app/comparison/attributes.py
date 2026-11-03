@@ -44,6 +44,9 @@ __all__ = [
     "normalise_token",
     "optional_markers",
     "pressure_class_pattern",
+    "same_value",
+    "split_values",
+    "value_group",
 ]
 
 # Mandatory and optional wording. The lists live in the vocabulary file, so
@@ -98,6 +101,78 @@ def _normalised_members(vocabulary_path: Optional[str]) -> dict[str, frozenset[s
         group: frozenset(normalise_token(member) for member in members)
         for group, members in vocabulary.material_groups.items()
     }
+
+
+@lru_cache(maxsize=4)
+def _value_members(vocabulary_path: Optional[str]) -> dict[str, str]:
+    """Each categorical alias to its group, already normalised."""
+    vocabulary = load_vocabulary(vocabulary_path)
+    return {
+        member: group
+        for group, members in vocabulary.value_groups.items()
+        for member in members
+    }
+
+
+def value_group(value: Optional[str]) -> Optional[str]:
+    """The group a categorical value's word belongs to, or None.
+
+    The group is looked up by the value's own word, and a value that merely
+    contains a grouped word is not that value: a "gear operated" actuator is
+    not a "threaded" one. The data lists every form a document writes, so
+    adding a spelling is an edit to the file (FR-20).
+    """
+    token = normalise_token(value) if value else ""
+    if not token:
+        return None
+    return _value_members(vocabulary_path()).get(token)
+
+
+def same_value(required: Optional[str], offered: Optional[str]) -> bool:
+    """True when both sides name one value: equal, grouped, or one said fuller.
+
+    A required "screwed end" is not offered again as "screwed end" alone, but as
+    "Threaded end" - another word for the same connection - so the alias group
+    has to answer before the substring rule does. The substring is kept for the
+    value that names itself more fully ("flanged" inside "flanged end"), and
+    normalising first makes "SS 316" and "ss316" one value.
+    """
+    if not required or not offered:
+        return False
+    req_key = normalise_token(required)
+    off_key = normalise_token(offered)
+    if req_key == off_key:
+        return True
+    group = value_group(req_key)
+    if group is not None and group == value_group(off_key):
+        return True
+    return req_key in off_key or off_key in req_key
+
+
+_LIST_SEPARATOR = re.compile(r"\s*(?:/|;|\||,|\bor\b|\band\b)\s*", re.IGNORECASE)
+# A list value is a short name, not a sentence. This keeps a prose line that
+# happens to contain "body style:" from being read as an availability list.
+_MAX_LIST_VALUE_CHARS = 60
+
+
+def split_values(text: Optional[str]) -> tuple[str, ...]:
+    """The values a text lists, or () when it names one value or is prose.
+
+    A long part is a sentence, not a value, and its presence means the whole
+    text is not a list: dropping the long parts would leave the short words of
+    a paragraph standing as the values a document offers.
+    """
+    if not text:
+        return ()
+    parts = [part.strip(" .") for part in _LIST_SEPARATOR.split(text) if part.strip(" .")]
+    if len(parts) < 2:
+        return ()
+    if any(len(part) > _MAX_LIST_VALUE_CHARS for part in parts):
+        return ()
+    # A dotted leader is a contents entry running to a page number, not a value.
+    if any("..." in part for part in parts):
+        return ()
+    return tuple(parts)
 
 
 def attribute_by_term(canonical_term: Optional[str]) -> Optional[AttributeSpec]:

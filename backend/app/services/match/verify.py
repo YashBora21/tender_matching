@@ -320,13 +320,6 @@ class ListedSet:
     reason: str
 
 
-# A value list: "Flanged end / Butt weld end", "150, 300 or 600".
-_LIST_SEPARATOR = re.compile(r"\s*(?:/|;|\||,|\bor\b|\band\b)\s*", re.IGNORECASE)
-# A list value is a short name, not a sentence. This keeps a prose line that
-# happens to contain "body style:" from being read as an availability list.
-_MAX_LIST_VALUE_CHARS = 60
-
-
 def _requirement_value(text: str, synonyms: tuple[str, ...]) -> Optional[str]:
     """The longest name of an attribute that the requirement uses."""
     lowered = text.casefold()
@@ -336,41 +329,35 @@ def _requirement_value(text: str, synonyms: tuple[str, ...]) -> Optional[str]:
     return None
 
 
+# A specification line that lists values is short: the label, the values and a
+# unit. A whole table or a contents entry is longer than any single clause, and
+# its list is not a statement about one product attribute.
+_MAX_LIST_LINE_CHARS = 160
+
+
 def _listed_values(line: str, synonyms: tuple[str, ...]) -> Optional[tuple[str, ...]]:
-    """The values a line lists after an attribute name, if it lists any.
+    """The values a specification line lists, if it lists any.
 
-    The attribute has to be followed by `:` or `=`, and the remainder has to
-    be at least two short values. A single value is left to the extractor: a
-    prose sentence is not an availability list.
+    The attribute name has to be the label of the line - what comes before its
+    first `:` or `=` - and the rest of the line has to be at least two short
+    values. Measured reason: a dense page chunked without line breaks is one
+    long line, and a reader that took the attribute word wherever it appeared
+    turned everything after it into the values the document offers, and
+    published the whole page as the quote of that claim.
     """
-    lowered = line.casefold()
+    label, separator, tail = line.partition(":")
+    if not separator:
+        label, separator, tail = line.partition("=")
+    if not separator:
+        return None
+    lowered = label.casefold()
     for synonym in sorted(synonyms, key=len, reverse=True):
-        match = re.search(rf"\b{re.escape(synonym.casefold())}\b", lowered)
-        if match is None:
+        if not re.search(rf"\b{re.escape(synonym.casefold())}\b", lowered):
             continue
-        tail = line[match.end() :]
-        separator = re.search(r"[:=]", tail)
-        if separator is None:
-            continue
-        text = tail[separator.end() :].strip()
-        if not text:
-            continue
-        parts = [
-            part.strip(" .")
-            for part in _LIST_SEPARATOR.split(text)
-            if part.strip(" .")
-        ]
-        parts = [part for part in parts if len(part) <= _MAX_LIST_VALUE_CHARS]
-        if len(parts) >= 2:
-            return tuple(parts)
+        values = attrs.split_values(tail)
+        if values:
+            return values
     return None
-
-
-def _listed_matches(required: str, offered: str) -> bool:
-    """True when a listed value is the required one, or names it more fully."""
-    if not required or not offered:
-        return False
-    return required == offered or required in offered or offered in required
 
 
 def listed_set_exclusion(
@@ -384,6 +371,12 @@ def listed_set_exclusion(
     silent, and returns None: silence is No evidence found, never Missing
     capability (PRD 4, AGENTS #4). Only categorical attributes are read this
     way; a material or a number is compared by its own evaluator.
+
+    shortcut: a page that fits the line limit is the only thing this can cite -
+    no corpus chunk carries line breaks yet, so a whole dense page is one long
+    line and is left silent rather than quoted as a list. Upgrade when
+    ingestion keeps a specification's line breaks, and the real spec lines
+    become short.
     """
     if not passage or not requirement_text:
         return None
@@ -396,11 +389,12 @@ def listed_set_exclusion(
         if not required:
             continue
         for line in passage.splitlines():
+            if len(line) > _MAX_LIST_LINE_CHARS:
+                continue
             values = _listed_values(line, spec.synonyms)
             if values is None:
                 continue
-            required_key = attrs.normalise_token(required)
-            if any(_listed_matches(required_key, attrs.normalise_token(value)) for value in values):
+            if any(attrs.same_value(required, value) for value in values):
                 continue
             return ListedSet(
                 status=RequirementStatus.MISSING_CAPABILITY,

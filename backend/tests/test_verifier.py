@@ -152,6 +152,39 @@ def test_a_silent_document_is_not_a_listed_set() -> None:
     assert finding is None
 
 
+def test_a_whole_dense_page_is_not_read_as_a_list_of_values() -> None:
+    """A corpus chunk has no line breaks yet, so a page *is* one long line.
+
+    A reader that took the attribute word wherever it appeared turned the rest
+    of a specification page into "the values the document offers" and quoted the
+    whole page as that claim. A line this long is a page, and a page is silent.
+    """
+    page = "Body Style: " + ", ".join(f"Item {n}" for n in range(40))
+
+    assert len(page) > 160
+    assert listed_set_exclusion(page, 'Three piece ball valves 2" Screwed end') is None
+
+
+def test_a_contents_entry_is_not_a_list_of_values() -> None:
+    """A dotted leader runs to a page number, not to a value."""
+    finding = listed_set_exclusion(
+        "8.5.4.2 Connections: Plug-to-Stem, Ball-to-Shaft, Disk-to-Shaft.........186",
+        'Three piece ball valves 2" Screwed end ASME class 150',
+    )
+
+    assert finding is None
+
+
+def test_a_listed_value_written_another_way_is_not_an_exclusion() -> None:
+    """"Threaded end" is the corpus's name for a screwed end (FR-20)."""
+    finding = listed_set_exclusion(
+        "Body Style: Flanged end / Threaded end",
+        'Three piece ball valves 2" Screwed end ASME class 150',
+    )
+
+    assert finding is None
+
+
 def test_a_failed_layer_makes_the_whole_verification_fail() -> None:
     report = verify(
         quote="The valve is rated at 250 degC.",

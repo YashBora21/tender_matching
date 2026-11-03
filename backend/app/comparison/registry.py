@@ -392,6 +392,17 @@ def evaluate_categorical(request: ComparisonRequest) -> Evaluation:
     if req_key == off_key:
         return Evaluation(RequirementStatus.FULL_MATCH, 1.0, f"{offered} matches the required {required}")
 
+    # The corpus writes one connection two ways: a requirement that says
+    # "screwed end" is answered by a document that says "Threaded". Only the
+    # alias group answers this - a substring would read "dn50" inside "dn500".
+    group = attrs.value_group(req_key)
+    if group is not None and group == attrs.value_group(off_key):
+        return Evaluation(
+            RequirementStatus.FULL_MATCH,
+            1.0,
+            f"{offered} is the required {required} under another name",
+        )
+
     # IP rating: a higher protection level covers a lower one (IP68 covers IP67).
     if required and offered and _ip_level(required) and _ip_level(offered):
         req_digits = _ip_level(required)
@@ -406,6 +417,25 @@ def evaluate_categorical(request: ComparisonRequest) -> Evaluation:
                 request.rules.family_level_score,
                 f"{offered} is one level below the required {required}",
             )
+
+    # A specification line that lists the values a product is offered in is a
+    # statement of what exists. The required value being absent from that list
+    # is a failing value - Missing capability - and not an absence of evidence
+    # (PRD 4, D-103). Membership reads the alias group, so a list of "Threaded"
+    # answers a requirement of "Screwed end".
+    listed = attrs.split_values(offered)
+    if listed:
+        if any(attrs.same_value(required, value) for value in listed):
+            return Evaluation(
+                RequirementStatus.FULL_MATCH,
+                1.0,
+                f"{offered} lists the required {required}",
+            )
+        return Evaluation(
+            RequirementStatus.MISSING_CAPABILITY,
+            0.0,
+            f"{offered} lists {', '.join(listed)}, which excludes the required {required}",
+        )
 
     # A required value that appears in the capability text is still a match -
     # but a token that ends in a number is an identifier, and one identifier

@@ -4069,3 +4069,60 @@ for the reviewed list, D-150).
 full unit suite pass. Against the live corpus, `keyword_search("privacy policy data
 processing")` returned the policy's chunks before `_role_filter` and not after, with the
 same 50-candidate budget.
+
+## D-154 - A listed set is decided in the comparison layer, and a dense page is left silent
+
+The rule "the document lists the values it offers, and the required one is not among
+them" existed in one place only: `verifier.listed_set_exclusion`, a fallback that reads a
+*page* when the extractor returned no claim (D-103). Two things were wrong with that, and
+both were measured before this change.
+
+*The page is not line-structured.* No corpus chunk carries a line break: 0 of 4,000
+sampled chunks contain one, so a page arrives as a single line of 2,012 characters. The
+old reader searched for the attribute word wherever it appeared, took everything after the
+next `:` as the list, and dropped any part longer than 60 characters - so a dense
+specification page became "the values the document offers", the whole page became the
+quote, and the answer was a confident `missing_capability`. It fired on 2 of those 4,000
+chunks against the stored requirements: a contents entry (`8.5.4.2 Connections:
+Plug-to-Stem, Ball-to-Shaft.....186`) and a temperature table. It now fires on none: the
+attribute name has to be the *label* of the line (what precedes its first `:` or `=`), the
+line has to fit `_MAX_LIST_LINE_CHARS` (160), and a dotted leader is refused as contents
+rather than as a value.
+
+*The value is where the list is real.* An extracted value does carry the list, so the
+decision moved to `evaluate_categorical`: the offered text is split by
+`attrs.split_values`, membership decides Full, and an absent required value returns
+`missing_capability` naming the values it read. `attrs.split_values` is the one splitter -
+the page reader and the comparison now use the same rule for what a list is, and the
+verifier's own copy is gone.
+
+*Alias data, not alias code.* A new `value_groups` block in
+`data/attribute_vocabulary.json` lists the categorical values that are one thing written
+two ways - `threaded` holds "threaded", "screwed", "thread" and each with and without
+"end" - because the corpus writes "Threaded" (97 times across the chunks) where the tender
+writes "Screwed end". The group is consulted *before* the substring rule in the
+comparison: a substring would read "dn50" inside "dn500", which is the mistake D-97 exists
+to prevent, and the list branch sits *after* the IP rule so a list of IP values keeps its
+coverage semantics. `attrs.value_group` answers by the value's whole normalised word, so
+"gear operated" is never read as "threaded".
+
+NPT and BSP are deliberately not in one group. They are two thread forms, not two names
+for one connection, and grouping them would print a full match on a connection that cannot
+be screwed into the pipework the tender describes.
+`test_two_thread_forms_are_not_one_value` says so in the suite.
+
+*Consequence for a reviewer:* the page-level fallback is now inert on this corpus - 35
+sampled chunks name a connection with `:` and none of them put the label at the head of a
+line - so a listed set is only ever decided from an extracted value. Silence from a dense
+page is `no_evidence_found`, which is the honest reading (PRD 4); the D-103 true positive
+(the page that lists "Flanged end / Butt weld end" mid-page) is unreachable until chunking
+keeps line breaks, and is marked `shortcut:` where the guard is.
+
+*Not added:* no value groups for attributes other than the connections named in this
+item; no set on the *requirement* side ("flanged or threaded" as one clause); no new
+`ValueType` and no registry key for one; no change to chunking, to the report denominator
+or to any status meaning.
+
+*Verified:* `test_comparison` (39), `test_verifier` (21), `test_matching`,
+`test_normalizer`, `test_resolution` and the full unit suite pass; the counts above are a
+direct read of the live corpus, not a run.

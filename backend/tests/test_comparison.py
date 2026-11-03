@@ -326,6 +326,67 @@ def test_free_text_still_matches_by_substring() -> None:
         assert result.status is RequirementStatus.FULL_MATCH
 
 
+def test_a_value_written_another_way_meets_the_requirement() -> None:
+    """The corpus writes "Threaded end" where the tender writes "Screwed end".
+
+    One thing, two names (FR-20). The alias group answers it; a substring never
+    would, because "screwedend" is not inside "threadedend".
+    """
+    result = evaluate(categorical("Screwed end", "Threaded end"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.FULL_MATCH
+
+
+def test_a_value_that_merely_contains_a_grouped_word_is_not_that_value() -> None:
+    """The alias group answers by the value's whole word.
+
+    "Gear operated" is not a screwed end, and a lookup that read the word
+    inside a longer value would say otherwise.
+    """
+    result = evaluate(categorical("Screwed", "Gear operated"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.MISSING_CAPABILITY
+
+
+def test_a_listed_set_that_excludes_the_required_value_is_missing() -> None:
+    """A specification line that lists the ends it offers has stated a value.
+
+    The required one not being among them is Missing capability - the document
+    says what exists - and not an absence of evidence (PRD 4).
+    """
+    result = evaluate(
+        categorical("Screwed end", "Flanged end / Butt weld end"), ValueType.CATEGORICAL
+    )
+    assert result.status is RequirementStatus.MISSING_CAPABILITY
+    assert "Flanged end" in result.reason
+    assert "Butt weld end" in result.reason
+
+
+def test_a_listed_set_that_names_the_value_another_way_is_a_full_match() -> None:
+    result = evaluate(
+        categorical("Screwed end", "Flanged end / Threaded end"), ValueType.CATEGORICAL
+    )
+    assert result.status is RequirementStatus.FULL_MATCH
+
+
+def test_two_thread_forms_are_not_one_value() -> None:
+    """NPT and BSP are different threads, so they are not one alias group.
+
+    Grouping them would print a full match on a connection that cannot be
+    screwed into the pipework the tender describes.
+    """
+    result = evaluate(categorical("NPT", "BSP"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.MISSING_CAPABILITY
+
+
+def test_a_value_that_lists_nothing_keeps_the_size_rule() -> None:
+    """A single identifier is not a list, so DN50 against DN500 stays wrong.
+
+    The list branch reads membership by substring, which is exactly what the
+    size-family rule exists to stop (D-97).
+    """
+    result = evaluate(categorical("DN50", "DN500"), ValueType.CATEGORICAL)
+    assert result.status is RequirementStatus.MISSING_CAPABILITY
+
+
 def test_equivalent_material_grades_match() -> None:
     # SS316 and AISI 316 are the same alloy (FR-20).
     request = ComparisonRequest(

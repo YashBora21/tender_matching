@@ -705,6 +705,12 @@
       "unavailable"
     ]
   },
+  "value_groups": {
+    "_comment": "Categorical values that are one thing written two ways, so a requirement of 'Screwed end' is answered by a document that says 'Threaded end'. Only names for the same part are grouped: NPT and BSP are two thread forms, not two names for one, so they stay apart. Each member is written as a requirement or a specification line writes it, singular and plural, with and without the word 'end'.",
+    "threaded": ["threaded", "screwed", "thread", "threaded end", "screwed end", "threaded ends", "screwed ends"],
+    "butt_weld": ["butt weld", "butt welded", "butt weld end", "butt weld ends", "bwe"],
+    "socket_weld": ["socket weld", "socket welded", "socket weld end", "socket weld ends"]
+  },
   "value_shapes": {
     "_comment": "Which value shape identifies which attribute. A code that names one of these shapes reads the shape from here, so renaming an attribute in the vocabulary does not break the code that recognises it.",
     "certification": "certification",
