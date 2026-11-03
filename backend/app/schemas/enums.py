@@ -116,6 +116,10 @@ class ExtractionMethod(StrEnum):
     # The atomizer's split of a compound clause.
     PROSE = "prose"
     OCR = "ocr"
+    # A clause the bill of quantities states in an item's own words. It is not
+    # a table row: a row that is already one parameter is never split, and this
+    # one may state two facts, so it has to go through the atomizer.
+    ITEM = "item"
 
 
 class Operator(StrEnum):
