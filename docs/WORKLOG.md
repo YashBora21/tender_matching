@@ -3266,3 +3266,23 @@ items name no category, or two equally, is left exactly as it was.
 
 **Verified:** 2 new tests, 13 in the file, 33 frontend tests, `tsc -b` and
 `oxlint` clean.
+
+### Step 29 - The gold tender, run to the end
+
+`GEM_9671792_Valve.pdf` (21 requirements) against `delval_flow`, `Flowserve`,
+`valmatic`, at `MATCH_MAX_CANDIDATES=1`, finished `done`: **63 of 63 pairs, 155
+calls, 153,878 tokens, no errors**.
+
+| manufacturer | full | partial | no evidence |
+| --- | --- | --- | --- |
+| Flowserve | 5 | 2 | 14 |
+| delval_flow | 0 | 0 | 21 |
+| valmatic | 0 | 0 | 21 |
+
+**Open, and the reason this is not a quality number:** three of Flowserve's
+matches (`size 6 inches`, `6"`, `Valve size 8 inches`) quote a line from an
+**actuator** size table - `Actuator 1/2" 3/4" 1" - 1 1/2" 2" - 3" 4" - 6"` - and
+read it as a valve size. Layer 1 passes because the text really is on page 13;
+what fails is the subject of the fact. Two of the three carry no review flag.
+The pressure-class matches (`Class 150 RF`) look right on their face. No accuracy
+claim is made until the audit sheet is filled in.
