@@ -11,6 +11,7 @@ from app.services.tender.ingest import (
     RequirementRecord,
     TenderItem,
     assign_to_items,
+    drop_fragments,
     english_half,
     is_mangled,
     item_id_for,
@@ -282,6 +283,50 @@ def _table_pdf(path: Path, rows: list[list[str]]) -> None:
     document.close()
 
 
+def _multiline_table_pdf(path: Path, rows: list[list[str]]) -> None:
+    """A ruled table whose cells hold the several lines the buyer wrote.
+
+    Each row band is as tall as its tallest cell, so the lines stay inside the
+    cell instead of falling into the next row.
+    """
+    import pymupdf
+
+    line_height, pad = 8, 4
+    document = pymupdf.open()
+    page = document.new_page()
+    columns = (55, 95, 235, 430, 465, 510)
+    bounds = [40]
+    top = 40
+    for row in rows:
+        lines = max(len(str(cell).splitlines()) for cell in row)
+        for index, cell in enumerate(row):
+            for offset, line in enumerate(str(cell).splitlines()):
+                page.insert_text(
+                    (columns[index], top + pad + line_height * (offset + 1)),
+                    line,
+                    fontsize=6,
+                )
+        top += lines * line_height + 2 * pad
+        bounds.append(top)
+    for index in range(len(columns) - 1):
+        page.draw_line(
+            pymupdf.Point(columns[index], 40),
+            pymupdf.Point(columns[index], top),
+            width=0.5,
+        )
+    page.draw_line(
+        pymupdf.Point(columns[-1], 40), pymupdf.Point(columns[-1], top), width=0.5
+    )
+    for boundary in bounds:
+        page.draw_line(
+            pymupdf.Point(columns[0], boundary),
+            pymupdf.Point(columns[-1], boundary),
+            width=0.5,
+        )
+    document.save(path)
+    document.close()
+
+
 def test_a_prose_page_is_read_as_clauses_not_as_lines(tmp_path):
     """A line break in a PDF is a wrap. The wrapped lines are joined before
     anything is split, so a clause is never cut in half."""
@@ -368,6 +413,71 @@ def test_a_ruled_table_is_read_as_a_table(tmp_path):
     assert read.rows[0]["description"] == "Cast carbon steel body"
     assert read.pages[0].method == ExtractionMethod.TABLE.value
     assert read.pages[0].status == LedgerStatus.PARSED.value
+
+
+def test_a_cell_written_over_several_lines_becomes_one_row_each(tmp_path):
+    """Inside a specification cell a line break ends one parameter and starts
+    the next. Flattening the cell joined them into one clause that names no
+    attribute at all, so the whole row was unreadable (D-146)."""
+    path = tmp_path / "spec.pdf"
+    _multiline_table_pdf(
+        path,
+        [
+            ["Sr. No.", "Item", "Descriptions", "Qty", "Unit"],
+            [
+                "10",
+                "BALL VALVE",
+                "Three piece ball valves 2 inch\nScrewed end\nCast carbon steel",
+                "4",
+                "Nos.",
+            ],
+            ["11", "GATE VALVE", "Flanged gate valve", "2", "Nos."],
+        ],
+    )
+
+    read = read_specification(path)
+
+    assert [row["description"] for row in read.rows] == [
+        "Three piece ball valves 2 inch",
+        "Screwed end",
+        "Cast carbon steel",
+        "Flanged gate valve",
+    ]
+    # The lines are one row: the item number, the page and the section the
+    # buyer wrote them under are shared, so each stays the same requirement's
+    # parameter.
+    assert [row["number"] for row in read.rows[:3]] == ["10", "10", "10"]
+    assert {row["page"] for row in read.rows} == {1}
+    assert {row["extraction_method"] for row in read.rows} == {
+        ExtractionMethod.TABLE.value
+    }
+
+
+def test_a_line_of_a_table_cell_is_not_dropped_as_a_fragment():
+    """A line that states a material and no number is what the prose rules
+    catch as a fragment. In a table cell it is the parameter the buyer wrote,
+    and dropping it loses a requirement the report would never mention
+    (D-146)."""
+    requirements = [
+        RequirementRecord(
+            text="Three piece ball valves 2 inch", item_id="10", page=1
+        ),
+        RequirementRecord(text="Cast carbon steel", item_id="10", page=1),
+        RequirementRecord(
+            text="5.2",
+            item_id="10",
+            page=1,
+            extraction_method=ExtractionMethod.TEXT.value,
+        ),
+    ]
+
+    kept, report = drop_fragments(requirements)
+
+    assert [requirement.text for requirement in kept] == [
+        "Three piece ball valves 2 inch",
+        "Cast carbon steel",
+    ]
+    assert (report.dropped, report.merged) == (1, 0)
 
 
 def test_a_page_that_is_mostly_a_picture_is_ocred(monkeypatch, tmp_path):

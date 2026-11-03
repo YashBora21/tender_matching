@@ -161,6 +161,20 @@ def _clean_cell(value: Optional[str]) -> str:
     return " ".join(str(value).split())
 
 
+def _clean_lines(value: Optional[str]) -> str:
+    """A specification cell with the lines the buyer wrote kept apart.
+
+    Inside a table cell a line break ends one parameter and starts the next,
+    while in a prose page it is only a wrap (D-88). Blank lines and the spaces
+    around each line go; the break itself stays, because it is the split.
+    """
+    if not value:
+        return ""
+    return "\n".join(
+        line for line in (" ".join(raw.split()) for raw in str(value).splitlines()) if line
+    )
+
+
 def read_boq_csv(path: Path, tender_id: str, category: str = "unknown") -> list[TenderItem]:
     """The items of a bill of quantities, from its CSV.
 
@@ -800,30 +814,43 @@ def _read_tables(
     for table, header_row, found in accepted:
         start = header_row + 1 if found else 0
         for index, row in enumerate(table[start:], start=start):
-            description = _clean_cell(_cell(row, found_columns.get("description")))
+            description = _clean_lines(_cell(row, found_columns.get("description")))
             if not description:
                 # Some buyers name the row in the item column and describe it
                 # in the description column; a row with only the first is
                 # still a requirement.
-                description = _clean_cell(_cell(row, found_columns.get("title")))
+                description = _clean_lines(_cell(row, found_columns.get("title")))
             if not description:
                 continue
-            rows.append(
-                {
-                    "row": index,
-                    "page": page_number,
-                    "number": _clean_cell(_cell(row, found_columns.get("number"))),
-                    "title": _clean_cell(_cell(row, found_columns.get("title"))),
-                    "description": description,
-                    "quantity": _clean_cell(_cell(row, found_columns.get("quantity"))),
-                    "unit": _clean_cell(_cell(row, found_columns.get("unit"))),
-                    "row_text": " ".join(
-                        _clean_cell(cell) for cell in row if _clean_cell(cell)
-                    ),
-                    "extraction_method": ExtractionMethod.TABLE.value,
-                    "page_tag": tag,
-                }
+            number = _clean_cell(_cell(row, found_columns.get("number")))
+            title = _clean_cell(_cell(row, found_columns.get("title")))
+            quantity = _clean_cell(_cell(row, found_columns.get("quantity")))
+            unit = _clean_cell(_cell(row, found_columns.get("unit")))
+            row_text = " ".join(
+                _clean_cell(cell) for cell in row if _clean_cell(cell)
             )
+            # A specification cell states one parameter per line, and the buyer
+            # wrote it that way. Flattening the cell joined those parameters into
+            # one clause no parser can read: the gold clause "Three piece ball
+            # valves 2" Screwed end ASME class 150 Cast carbon steel Face to face
+            # distance 122mm" is four, and as one it parsed no attribute at all
+            # (D-146). Each line is a row of its own, with the row's own
+            # provenance - page, item number and section are unchanged.
+            for line in description.split("\n"):
+                rows.append(
+                    {
+                        "row": index,
+                        "page": page_number,
+                        "number": number,
+                        "title": title,
+                        "description": line,
+                        "quantity": quantity,
+                        "unit": unit,
+                        "row_text": row_text,
+                        "extraction_method": ExtractionMethod.TABLE.value,
+                        "page_tag": tag,
+                    }
+                )
     return rows, found_columns
 
 
@@ -1151,6 +1178,11 @@ def _continues(previous: str, fragment: str) -> bool:
     return not previous.rstrip().endswith((".", "!", "?", ";", ":"))
 
 
+# How a clause was read, for the rows that come out of a grid rather than out
+# of a paragraph: a table cell and a bill-of-quantities row.
+_CELL_METHODS = (ExtractionMethod.TABLE.value, ExtractionMethod.ITEM.value)
+
+
 def drop_fragments(
     requirements: list[RequirementRecord],
 ) -> tuple[list[RequirementRecord], FragmentReport]:
@@ -1159,7 +1191,8 @@ def drop_fragments(
     A fragment is never guessed at: it is either the rest of the clause
     before it, in which case it is joined to it, or it is dropped and
     counted. The count is what a report needs to say how much of a tender was
-    noise instead of requirements.
+    noise instead of requirements. A row of a table or of the bill of
+    quantities is never dropped - its lines are the parameters (D-146).
     """
     kept: list[RequirementRecord] = []
     report = FragmentReport()
@@ -1185,6 +1218,14 @@ def drop_fragments(
             # The span pointed into the old text, which no longer exists.
             previous.source_span = None
             report.merged += 1
+            continue
+        if requirement.extraction_method in _CELL_METHODS:
+            # A line of a table cell or a bill-of-quantities row is a parameter
+            # the buyer wrote, not a wrap of the line above. "Cast carbon steel"
+            # states a material and no number, so the prose rules call it a
+            # fragment - and dropping it loses a mandatory requirement the report
+            # would then never mention (D-146).
+            kept.append(requirement)
             continue
         report.dropped += 1
     return kept, report

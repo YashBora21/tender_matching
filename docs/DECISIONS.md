@@ -3710,3 +3710,66 @@ stricter than the product, by design.
 *Verified:* 1 test in `test_matching.py` (a page with no text layer is read from
 its chunks, both chunk texts present in the page), 35 in that file, and the
 measurement above against the stored corpus - 0 model calls.
+
+## D-146 - A specification cell is read as the lines the buyer wrote
+
+A table cell in a GeM specification states one parameter per line:
+
+    Three piece ball valves 2"
+    Screwed end
+    ASME class 150
+    Cast carbon steel
+    Face to face distance 122mm
+
+`_table_rows` flattened each cell with `" ".join(...)`, so the five parameters
+became one 120-character clause. As one clause it parsed no attribute at all - the
+atomizer sees a string naming a product, a thread, a pressure class, a material and
+a dimension, and none of them is a sentence. `_clean_cell` stayed for the cells that
+are genuinely one line (number, quantity, unit); a new `_clean_lines` keeps the
+breaks, and `_table_rows` emits **one requirement row per line of the description
+cell**, each carrying the row's own provenance - same page, same item number, same
+section - so `item_id` is still preserved end to end.
+
+A line break inside a cell is not the same thing as a line break in prose, which is
+why this does not contradict D-88. In a prose page a break is a wrap, and the lines
+that do not end a sentence are joined before anything is split. In a ruled cell the
+buyer chose where the line ended; the grid is what tells the two apart, and
+`extraction_method` carries that choice downstream.
+
+The second half of the fix is in `drop_fragments`. Splitting the cell exposed lines
+like `Cast carbon steel` - a material, no number, no verb - and the prose rules
+called them fragments and dropped them. A dropped requirement is not reported as
+unverified; it is reported as absent from the tender, which is a different claim
+than the one the document makes. So a clause whose method is `table` or `item` is
+never dropped: it came out of a grid, and its lines *are* the parameters. The merge
+attempt still runs first, so a cell whose text wrapped mid-phrase (pdfplumber can
+break `Gate wedged valve non rising stem` after `rising`) still rejoins.
+
+*Measured on the gold tender's specification (0 model calls):* 48 requirement rows
+from the 2 table pages where the flattened read gave 11 - 37 clauses that had been
+buried inside a cell. Assigned 48, unassigned 0, merged 3, kept 45, **dropped 0
+where the same read before this change dropped 15**, and all 15 were real
+parameters (`Cast carbon steel`, `ASME class 150`, `Face to face distance 76`). Item
+10 now reads as the five clauses above instead of one unparseable string.
+
+*What it changes in a report:* the requirement count for a tender whose
+specification is a ruled table goes up - on the gold tender, 11 rows of table
+clauses become 45 - so every denominator, coverage percentage and per-item count in
+a re-run report moves. That is the intended effect: the clauses were always in the
+document, and the earlier report understated the tender. A run before this change
+and a run after it are not comparable row-for-row, and no stored run was rewritten
+to pretend otherwise.
+
+*Known limit:* the split trusts the grid. A cell whose lines were set by the
+typesetter rather than the buyer (a wrapped sentence inside a wide cell) becomes two
+clauses, and the merge attempt only rejoins them when the second starts in lowercase
+and the first does not end a sentence. *Upgrade when:* the page stores the cell's
+own box width, so a line that fills it can be recognized as a wrap.
+
+*Verified:* 2 new tests in `test_tenderingest.py` - a cell written over three lines
+becomes three rows sharing number, page and method, and a table-method line that the
+prose rules call a fragment is kept while a clause number is still dropped - 26 in
+that file. Three tests in `test_fragments.py` failed first, because their fixture
+built every clause with `RequirementRecord`'s default method, which is `table`: the
+prose cases now say `text`, which is what they test. Production always names the
+method from the row it read, so nothing there was mislabelled.

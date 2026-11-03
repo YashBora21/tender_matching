@@ -5,6 +5,7 @@ Every clause below is synthetic. None of it is taken from a real tender.
 
 from __future__ import annotations
 
+from app.schemas.enums import ExtractionMethod
 from app.services.tender.ingest import (
     FragmentReport,
     RequirementRecord,
@@ -13,8 +14,18 @@ from app.services.tender.ingest import (
 )
 
 
-def _record(text: str, *, page: int = 1, item_id: str = "1") -> RequirementRecord:
-    return RequirementRecord(text=text, item_id=item_id, page=page)
+def _record(
+    text: str,
+    *,
+    page: int = 1,
+    item_id: str = "1",
+    extraction_method: str = ExtractionMethod.TEXT.value,
+) -> RequirementRecord:
+    # Prose, unless the test says otherwise: a line of a table cell is a
+    # parameter the buyer wrote and is never dropped (D-146).
+    return RequirementRecord(
+        text=text, item_id=item_id, page=page, extraction_method=extraction_method
+    )
 
 
 def test_a_clause_number_on_its_own_is_a_fragment() -> None:
