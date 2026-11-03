@@ -3567,3 +3567,34 @@ attribute for one would be inventing a fact.
 requirement of itself, a bare item name stays an item, `should` counts as an
 obligation), 56 in that file and `test_pipeline.py`, and the full unit suite
 (667) passes.
+
+## D-141 - The manufacturer picker is grouped by the category the tender's items name
+
+Uploading a valve specification listed all 19 manufacturers of the corpus as one
+undifferentiated grid, with motors and pumps mixed in among the valve makers, and
+nothing on the screen said which ones the tender was about. The `tender` row does
+carry a `category`, but every tender in the database stores it as `unknown`, so it
+cannot drive anything; the real category is on the **items**, which is where FR-16
+puts it.
+
+The page already holds the requirement list, and each requirement ships with its
+item's category. So the grouping is read from what has been read, not stored a
+second time and not asked of a model: the majority category of the tender's
+requirements is the tender's category; items that name none, or two equally, leave
+the picker exactly as it was. When there is one, the list is grouped - the tender's
+own category first, the other declared categories alphabetically, and "No category
+recorded" last - with an `Only valves (8)` link that selects that group and nothing
+else.
+
+*What it does not change:* nothing is hidden (every manufacturer is still on
+screen, in a group), the default selection is still the whole corpus, and no
+comparison uses the category. The grouping is a way to find the vendors a tender
+is likely to be about, not a claim that the rest cannot supply it, and it is not
+the per-item category the matcher filters on. `delval_flow`, whose 25 documents
+declare no category, stays visible under its own heading rather than being dropped
+for answering a question it was never asked.
+
+*Verified:* 2 tests in `UploadPage.test.tsx` (a valves tender groups the corpus and
+`Only valves (1)` selects the valve maker alone; a tender whose items name no
+category keeps the flat list and offers no narrowing), 13 in that file, 33 frontend
+tests, `tsc -b` and `oxlint` clean.

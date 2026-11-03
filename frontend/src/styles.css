@@ -527,6 +527,25 @@ ul {
   display: grid;
 }
 
+/* One category of the corpus: the tender's own category is listed first, so
+   the manufacturer the item is about is not buried under the rest. */
+.picker-group {
+  margin-top: 1rem;
+}
+
+.picker-group h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.picker-group h3 .muted {
+  margin-left: 0.35rem;
+  font-weight: 400;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;

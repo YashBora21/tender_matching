@@ -15,6 +15,7 @@ import type {
   AttachmentRow,
   ManufacturerRow,
   Manufacturers,
+  RequirementRow,
   TenderAttachments,
   TenderRequirements,
 } from '../types'
@@ -448,6 +449,7 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
                 <ManufacturerPicker
                   rows={corpus.manufacturers}
                   selected={selected}
+                  focus={tender ? tenderCategory(tender.requirements) : null}
                   onChange={setSelected}
                 />
               )}
@@ -672,13 +674,75 @@ function LiveRequirements({ tender }: { tender: TenderRequirements }) {
   )
 }
 
+/** A category name as a heading: `valves` is a stored key, not a sentence. */
+function titleOf(category: string): string {
+  return category.charAt(0).toUpperCase() + category.slice(1)
+}
+
+/**
+ * The category the tender's own items name (FR-16).
+ *
+ * The tender row carries a coarse category, and it is stored empty in practice,
+ * so the answer comes from the items the tender was read into - each
+ * requirement already ships with its item's category. Only a majority counts:
+ * items that name no category, or two equally, leave the picker as it was
+ * rather than narrowing it on a guess.
+ */
+function tenderCategory(rows: RequirementRow[]): string | null {
+  const counts = new Map<string, number>()
+  for (const row of rows) {
+    if (!row.category) continue
+    counts.set(row.category, (counts.get(row.category) ?? 0) + 1)
+  }
+  let best: string | null = null
+  let top = 0
+  let tied = false
+  for (const [name, count] of counts) {
+    if (count > top) {
+      best = name
+      top = count
+      tied = false
+    } else if (count === top) {
+      tied = true
+    }
+  }
+  return tied ? null : best
+}
+
+/** The rows of the picker, under the category each one is grouped by. */
+function groupByCategory(
+  rows: ManufacturerRow[],
+  focus: string | null,
+): { key: string; rows: ManufacturerRow[] }[] {
+  const groups = new Map<string, ManufacturerRow[]>()
+  for (const row of rows) {
+    // A manufacturer that covers the tender's category is listed there even
+    // when its documents name others too: that is the group the user is
+    // looking for. The rest go under the first category they declare.
+    const key = focus && row.categories.includes(focus) ? focus : (row.categories[0] ?? '')
+    const list = groups.get(key) ?? []
+    list.push(row)
+    groups.set(key, list)
+  }
+  const keys = [...groups.keys()].sort((left, right) => {
+    if (left === focus) return -1
+    if (right === focus) return 1
+    if (left === '') return 1
+    if (right === '') return -1
+    return left.localeCompare(right)
+  })
+  return keys.map((key) => ({ key, rows: groups.get(key) ?? [] }))
+}
+
 function ManufacturerPicker({
   rows,
   selected,
+  focus,
   onChange,
 }: {
   rows: ManufacturerRow[]
   selected: string[]
+  focus: string | null
   onChange: (names: string[]) => void
 }) {
   function toggle(name: string) {
@@ -689,22 +753,13 @@ function ManufacturerPicker({
     )
   }
 
-  return (
-    <div className="picker">
-      <div className="picker-actions">
-        <button
-          type="button"
-          className="link"
-          onClick={() => onChange(rows.map((row) => row.name))}
-        >
-          Select all
-        </button>
-        <button type="button" className="link" onClick={() => onChange([])}>
-          Clear
-        </button>
-      </div>
+  const groups = focus ? groupByCategory(rows, focus) : []
+  const matching = focus ? (groups.find((group) => group.key === focus)?.rows ?? []) : []
+
+  function checklist(list: ManufacturerRow[]) {
+    return (
       <ul className="checklist">
-        {rows.map((row) => (
+        {list.map((row) => (
           <li key={row.id}>
             <label>
               <input
@@ -723,6 +778,50 @@ function ManufacturerPicker({
           </li>
         ))}
       </ul>
+    )
+  }
+
+  return (
+    <div className="picker">
+      {focus && (
+        <p className="muted">
+          {`This tender's items are ${focus}, and ${plural(matching.length, 'manufacturer has', 'manufacturers have')} documents in that category. The list is grouped by the category each manufacturer's documents declare.`}
+        </p>
+      )}
+      <div className="picker-actions">
+        <button
+          type="button"
+          className="link"
+          onClick={() => onChange(rows.map((row) => row.name))}
+        >
+          Select all
+        </button>
+        <button type="button" className="link" onClick={() => onChange([])}>
+          Clear
+        </button>
+        {focus && matching.length > 0 && (
+          <button
+            type="button"
+            className="link"
+            onClick={() => onChange(matching.map((row) => row.name))}
+          >
+            {`Only ${focus} (${matching.length})`}
+          </button>
+        )}
+      </div>
+      {focus ? (
+        groups.map((group) => (
+          <section key={group.key} className="picker-group">
+            <h3>
+              {group.key === '' ? 'No category recorded' : titleOf(group.key)}{' '}
+              <span className="muted">{group.rows.length}</span>
+            </h3>
+            {checklist(group.rows)}
+          </section>
+        ))
+      ) : (
+        checklist(rows)
+      )}
     </div>
   )
 }

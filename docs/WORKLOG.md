@@ -3250,3 +3250,19 @@ unmatched. The warranty is commercial (PRD 4 excludes it), and the LED
 indication has no attribute in the vocabulary, so it lands
 `attribute_not_mapped`. The pair count is 0 before and after; what changes is
 that the report names the two requirements instead of omitting them.
+
+### Step 28 - The picker, grouped by category (D-141)
+
+The upload screen offered all 19 manufacturers in one grid whatever the tender was
+about: a valve specification still listed motors and pumps side by side with the
+valve makers. The tender row's own category is `unknown` in every stored row, so
+the grouping reads the category of the tender's items, which every requirement
+already carries (FR-16).
+
+The list is now grouped - the tender's category first, other categories after it,
+"no category recorded" last - and a one-click `Only valves (8)` link selects that
+group. Nothing is hidden and the default selection is unchanged; a tender whose
+items name no category, or two equally, is left exactly as it was.
+
+**Verified:** 2 new tests, 13 in the file, 33 frontend tests, `tsc -b` and
+`oxlint` clean.

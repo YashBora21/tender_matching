@@ -234,6 +234,40 @@ describe('UploadPage', () => {
     expect(vi.mocked(startRun)).toHaveBeenCalledWith('t1', ['Acme', 'Beta'])
   })
 
+  it('groups the corpus by category and offers only the one this tender asks about', async () => {
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+
+    chooseFile(container)
+
+    await screen.findByText('Choose manufacturers')
+    // The tender's requirements sit under items whose category is `valves`
+    // (FR-16), so the valve manufacturers are their own group, listed first.
+    expect(screen.getByRole('heading', { name: /Valves/ })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /Pumps/ })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Only valves (1)' }))
+
+    const acme = screen.getByRole('checkbox', { name: /Acme/ }) as HTMLInputElement
+    const beta = screen.getByRole('checkbox', { name: /Beta/ }) as HTMLInputElement
+    expect(acme.checked).toBe(true)
+    expect(beta.checked).toBe(false)
+  })
+
+  it('leaves the corpus flat when the tender names no category', async () => {
+    vi.mocked(getRequirements).mockResolvedValue(
+      read({ requirements: [requirementRow({ category: null })] }),
+    )
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+
+    chooseFile(container)
+
+    await screen.findByText('Choose manufacturers')
+    // No category, no narrowing: an item that names none is not guessed at.
+    expect(screen.queryByRole('button', { name: /^Only / })).toBeNull()
+    expect(screen.queryByRole('heading', { name: /Valves/ })).toBeNull()
+    expect(screen.getByRole('checkbox', { name: /Beta/ })).toBeTruthy()
+  })
+
   it('will not ask the server to run when no manufacturer is chosen', async () => {
     const { container } = render(<UploadPage onStarted={() => {}} />)
     chooseFile(container)
