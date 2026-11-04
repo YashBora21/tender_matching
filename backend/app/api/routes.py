@@ -65,6 +65,17 @@ def health(response: Response) -> HealthResponse:
     )
 
 
+# A liveness probe - a container healthcheck, a load balancer - asks `/health`
+# at the root, not under `/api`. The same function answers both so an external
+# check does not get a 404 for a service that is up. It is hidden from the
+# OpenAPI schema so the documented endpoint stays the single `/api/health`.
+root_router = APIRouter(tags=["health"])
+root_router.add_api_route(
+    "/health", health, methods=["GET"], response_model=HealthResponse,
+    include_in_schema=False,
+)
+
+
 @router.get("/preflight")
 def preflight_route(
     session: Session = Depends(get_session),
