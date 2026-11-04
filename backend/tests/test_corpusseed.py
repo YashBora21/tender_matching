@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from app.services.corpus.seed import SeedReport, _family_of, _title_of
+from app.services.corpus.seed import (
+    SeedReport,
+    _family_of,
+    _keep_category,
+    _title_of,
+)
 
 
 def test_a_title_is_read_from_the_file_name():
@@ -32,6 +37,17 @@ def test_a_year_in_the_title_is_a_date_and_not_a_series():
 
 def test_a_title_with_no_series_is_the_family_on_its_own():
     assert _family_of("raw/motors-flyer.pdf") == "motors-flyer"
+
+
+def test_a_document_category_survives_only_if_the_vocabulary_names_it():
+    """A product's category comes from its document, but a document is
+    sometimes tagged with its manufacturer's slug instead of a family. Only a
+    name the vocabulary knows is kept; a slug and a blank both become None."""
+    valid = frozenset({"motors", "pumps", "valves"})
+
+    assert _keep_category("pumps", valid) == "pumps"
+    assert _keep_category("acme-rotors", valid) is None
+    assert _keep_category(None, valid) is None
 
 
 def test_the_summary_lists_what_a_reviewer_needs_to_see():

@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from app.core.logging import get_logger
 from app.repositories.schema import document, fact, manufacturer, product
+from app.services.match.category import category_names
 
 logger = get_logger(__name__)
 
@@ -246,7 +247,10 @@ def seed_corpus(session: Session) -> SeedReport:
         )
     ).all()
 
+    valid_categories = category_names()
+
     for document_id, manufacturer_id, path, model, category in rows:
+        category = _keep_category(category, valid_categories)
         name = _manufacturer_name(session, manufacturer_id)
         if model:
             # The document names a model. It is used as it stands.
@@ -349,6 +353,19 @@ def remove_stale_products(session: Session) -> int:
         session.execute(delete(product).where(product.c.id == product_id))
         removed += 1
     return removed
+
+
+def _keep_category(
+    category: Optional[str], valid: frozenset[str]
+) -> Optional[str]:
+    """The document's own category, kept only when the vocabulary knows it.
+
+    A document is sometimes tagged with its manufacturer's slug rather than a
+    product family. Copying that onto the product would filter retrieval on a
+    word no BOQ item ever infers, so anything the vocabulary does not name is
+    left null - the same answer as a document that states no category.
+    """
+    return category if category in valid else None
 
 
 def _upsert_product(
