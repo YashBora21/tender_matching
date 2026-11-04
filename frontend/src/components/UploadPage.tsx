@@ -49,6 +49,26 @@ type Phase =
   | 'incomplete'
   | 'failed'
 
+/** What each way of falling short means, in the reviewer's terms (D-156).
+ *
+ * The three are different problems with different fixes: an attachment nobody
+ * found, a scan nobody could read, and a document that was read and states
+ * nothing. One sentence for all three would hide which one it is. */
+const SHORT_READ: Record<string, { title: string; body: string }> = {
+  no_specification_found: {
+    title: 'No specification was among the documents',
+    body: 'The tender links to forms or certificates, or to a bill of quantities and nothing else, so nothing states what the item has to do. Add the specification as an attachment above, then upload the same file again.',
+  },
+  specification_unreadable: {
+    title: 'The specification is a scan nobody could read',
+    body: 'A specification was found, but the text read out of it is empty or nearly so: its pages are images and OCR gave little or no text. This is not a document that states nothing. Upload a text-based copy, or a better scan.',
+  },
+  no_requirements_stated: {
+    title: 'The specification was read and states no requirement',
+    body: 'Every page was read and no clause states a technical requirement the catalogue could be matched against. Check that the right file was attached before running it.',
+  },
+}
+
 /** The phase a payload means. Anything still being read is `reading`. */
 function phaseOf(data: TenderRequirements): Phase {
   if (data.status === 'done') return 'ready'
@@ -390,16 +410,18 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
 
       {phase === 'incomplete' && tender && (
         <section className="panel">
-          <h2>The tender was not read in full</h2>
+          <h2>{SHORT_READ[tender.reason_code ?? '']?.title ?? 'The tender was not read in full'}</h2>
           <Notice variant="warning" title="Incomplete reading">
-            {tender.error ?? 'A part of the tender was never read.'}
+            {SHORT_READ[tender.reason_code ?? '']?.body ??
+              tender.error ??
+              'A part of the tender was never read.'}
           </Notice>
           <p className="muted">
-            The document opened, but what came out of it is short because of what did not
-            arrive - not because the tender states less. Running it now would be refused: a
-            requirement nobody read is not a requirement the manufacturer fails. Supply the
-            missing document above, then upload the same file again; the reading runs on from
-            what is already stored.
+            Running it now would be refused: a requirement nobody read is not a requirement the
+            manufacturer fails.
+            {tender.reason_code === 'no_requirements_stated'
+              ? ''
+              : ' Supply the missing document above, then upload the same file again; the reading runs on from what is already stored.'}
           </p>
         </section>
       )}

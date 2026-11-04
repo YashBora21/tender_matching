@@ -25,7 +25,7 @@ from typing import Any, Optional
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.orm import Session
 
-from app.schemas.enums import TenderStatus
+from app.schemas.enums import TenderReasonCode, TenderStatus
 
 from app.core.logging import get_logger
 from app.repositories.schema import (
@@ -90,6 +90,7 @@ class TenderRepo:
                 tender.c.page_count,
                 tender.c.status,
                 tender.c.error,
+                tender.c.reason_code,
             )
             .where(tender.c.id == tender_id)
         ).first()
@@ -102,6 +103,7 @@ class TenderRepo:
             "page_count": row[3],
             "status": row[4],
             "error": row[5],
+            "reason_code": row[6],
         }
 
     def tenders_in_states(self, statuses: tuple[TenderStatus, ...]) -> list[dict]:
@@ -130,18 +132,25 @@ class TenderRepo:
         status: TenderStatus,
         *,
         error: Optional[str] = None,
+        reason_code: Optional[TenderReasonCode] = None,
     ) -> None:
         """Move a tender's ingestion to a state, recording why when it failed.
 
         The reason is written together with the state, including when there is
         none: the column describes *this* attempt, and a read that starts while
         the previous attempt's message is still on the row reports a cause it
-        never had (D-120).
+        never had (D-120). `reason_code` is the same fact as a stable key, so a
+        screen can say which of the three outcomes it is without parsing a
+        sentence (D-156).
         """
         self.session.execute(
             update(tender)
             .where(tender.c.id == tender_id)
-            .values(status=status.value, error=error)
+            .values(
+                status=status.value,
+                error=error,
+                reason_code=reason_code.value if reason_code else None,
+            )
         )
 
     def upsert_tender(

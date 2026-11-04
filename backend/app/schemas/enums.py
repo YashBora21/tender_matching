@@ -59,6 +59,26 @@ class Applicability(StrEnum):
     UNKNOWN = "unknown"
 
 
+class TenderReasonCode(StrEnum):
+    """Why a tender's own reading stopped short (PRD 4).
+
+    These describe what happened to the *document*, never a finding about a
+    manufacturer: a tender whose specification was never found says nothing
+    about what anyone can supply, and the two must not be read as the same
+    answer.
+    """
+
+    # No attachment plays the specification's role: the tender links to forms
+    # or certificates, or to a bill of quantities and nothing else.
+    NO_SPECIFICATION_FOUND = "no_specification_found"
+    # A specification was found and nothing could be read out of it: its pages
+    # are scans and the OCR gave little or no text. A page nobody read is not
+    # a page that states nothing.
+    SPECIFICATION_UNREADABLE = "specification_unreadable"
+    # The specification was read, page by page, and it states no requirement.
+    NO_REQUIREMENTS_STATED = "no_requirements_stated"
+
+
 class ReasonCode(StrEnum):
     """Why a comparison produced no verdict (D-86).
 

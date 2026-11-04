@@ -348,6 +348,47 @@ describe('UploadPage', () => {
     expect(vi.mocked(getRequirements)).toHaveBeenCalledTimes(1)
   })
 
+  it('names which way an incomplete read fell short', async () => {
+    vi.mocked(getRequirements).mockResolvedValue(
+      read({
+        status: 'incomplete',
+        reason_code: 'specification_unreadable',
+        error: 'the specification is a scan and the OCR read no text from it',
+        requirements: [],
+        counts: { items: 0, requirements: 0, flagged: 0 },
+      }),
+    )
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+
+    chooseFile(container)
+
+    // A spec nobody could read is not a spec that states nothing, and the
+    // screen has to say which of the three it is (D-156).
+    await screen.findByText('The specification is a scan nobody could read')
+    expect(screen.getByText(/OCR gave little or no text/)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Run the match' })).toBeNull()
+  })
+
+  it('says when the document was read and states nothing', async () => {
+    vi.mocked(getRequirements).mockResolvedValue(
+      read({
+        status: 'incomplete',
+        reason_code: 'no_requirements_stated',
+        error: 'the specification gave no requirements',
+        requirements: [],
+        counts: { items: 1, requirements: 0, flagged: 0 },
+      }),
+    )
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+
+    chooseFile(container)
+
+    await screen.findByText('The specification was read and states no requirement')
+    expect(
+      screen.queryByText(/Supply the missing document above/),
+    ).toBeNull()
+  })
+
   it('fills the list from the stream while the tender is still being read', async () => {
     const globals = globalThis as { EventSource?: unknown }
     globals.EventSource = FakeEventSource

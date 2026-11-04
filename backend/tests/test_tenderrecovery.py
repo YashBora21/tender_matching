@@ -1,4 +1,4 @@
-"""A read that stopped with no process left to finish it (D-120).
+﻿"""A read that stopped with no process left to finish it (D-120).
 
 The decision is a pure function of the stage rows, so most of it is tested
 without a database. The SQL that writes the answer is tested against a real
@@ -70,6 +70,14 @@ def test_a_stage_still_in_flight_is_left_alone():
 def test_a_tender_with_no_stage_is_left_alone():
     """Nothing has been read, so nothing can be concluded about it."""
     assert final_state({}, requirements=0) is None
+
+
+def test_requirements_stored_with_no_stage_are_incomplete():
+    """The pipeline writes the requirements first and the stage rows after, so
+    a process killed in between leaves the answer stored and no record of
+    reading it. Nothing will ever finish it: it is `incomplete`, not `still
+    reading` (D-157)."""
+    assert final_state({}, requirements=31) is TenderStatus.INCOMPLETE
 
 
 # --- the repair, against a real database ---------------------------------
@@ -171,6 +179,40 @@ def test_a_finished_read_that_died_before_writing_its_state_is_marked_done(
     row = repo.get_tender(tender_id)
     assert row["status"] == "done"
     assert row["error"] is None
+
+
+@pytestmark_db
+def test_a_processing_tender_whose_stages_were_never_written_is_repaired(
+    rollback_session,
+):
+    """The row that can never move: requirements stored, not one stage row.
+    Nothing is reading it, and nothing ever will be (D-157)."""
+    repo = TenderRepo(rollback_session)
+    tender_id = _orphaned_tender(repo, "no-stages")
+    repo.replace_requirements(
+        tender_id,
+        [
+            StoredRequirement(
+                tender_id=tender_id,
+                item_id=None,
+                text="The connector shall have LED indication",
+                source_text="The connector shall have LED indication",
+                page=1,
+                requirement_type="unknown",
+                extraction_version="test",
+                schema_version="test",
+            )
+        ],
+    )
+    rollback_session.flush()
+
+    repaired = reconcile(rollback_session)
+
+    assert [row["tender_id"] for row in repaired] == [tender_id]
+    assert repaired[0]["now"] == "incomplete"
+    row = repo.get_tender(tender_id)
+    assert row["status"] == "incomplete"
+    assert "never recorded which stages" in (row["error"] or "")
 
 
 @pytestmark_db

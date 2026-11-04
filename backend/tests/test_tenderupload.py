@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from app.core.config import get_settings
-from app.schemas.enums import TenderStatus
+from app.schemas.enums import TenderReasonCode, TenderStatus
 from app.services.tender import upload
 from app.services.tender.collect import TenderManifest, read_manifest
 
@@ -40,6 +40,7 @@ class FakeRepo:
     instances: list["FakeRepo"] = []
     created: list[dict] = []
     statuses: list[tuple[str, str | None]] = []
+    reasons: list[str | None] = []
     row: dict = {}
 
     def __init__(self, session) -> None:
@@ -53,8 +54,11 @@ class FakeRepo:
     def get_tender(self, tender_id):
         return dict(FakeRepo.row) if tender_id == "T1" else None
 
-    def set_status(self, tender_id, status, *, error=None):
+    def set_status(self, tender_id, status, *, error=None, reason_code=None):
         FakeRepo.statuses.append((status.value, error))
+        FakeRepo.reasons.append(
+            reason_code.value if reason_code is not None else None
+        )
         FakeRepo.row["status"] = status.value
         if error is not None:
             FakeRepo.row["error"] = error
@@ -79,6 +83,7 @@ def _fakes(tmp_path, monkeypatch):
     FakeRepo.instances.clear()
     FakeRepo.created.clear()
     FakeRepo.statuses.clear()
+    FakeRepo.reasons.clear()
     FakeRepo.row.clear()
     FakeRepo.row.update({"id": "T1", "status": "queued", "error": None})
     monkeypatch.setattr(upload, "TenderRepo", FakeRepo)
@@ -263,6 +268,7 @@ def test_reading_a_tender_moves_it_from_processing_to_done(_fakes, monkeypatch):
 
     class Audit:
         failure = None
+        failure_code = None
         rate_limited = False
         rate_limited_detail = None
         pages_read = 1
@@ -289,6 +295,7 @@ def _audit(**values):
 
     class Audit:
         failure = None
+        failure_code = None
         rate_limited = False
         rate_limited_detail = None
         pages_read = 1
@@ -349,6 +356,43 @@ def test_a_tender_with_no_requirements_is_not_done(_fakes, monkeypatch):
     )
 
 
+def test_a_read_that_fell_short_says_which_way_it_did(_fakes, monkeypatch):
+    """The three ways a tender falls short are three different problems, so
+    each carries its own key (D-156)."""
+    _stored_tender(_fakes)
+
+    _ingest_with(monkeypatch, _audit(requirements=0))
+    assert FakeRepo.reasons[-1] == "no_requirements_stated"
+
+    _ingest_with(monkeypatch, _audit(pages_read=0, requirements=0))
+    assert FakeRepo.reasons[-1] == "specification_unreadable"
+
+    # A read that finished with requirements to show states no reason at all.
+    _ingest_with(monkeypatch, _audit())
+    assert FakeRepo.reasons[-1] is None
+
+
+def test_a_tender_with_no_specification_says_so(_fakes, monkeypatch):
+    _stored_tender(_fakes)
+
+    class Audit:
+        failure = "no specification was found"
+        failure_code = TenderReasonCode.NO_SPECIFICATION_FOUND
+        rate_limited = False
+        rate_limited_detail = None
+
+    monkeypatch.setattr(
+        upload,
+        "collect_tender",
+        lambda *a, **k: TenderManifest(tender_id="T1", documents=[]),
+    )
+    monkeypatch.setattr(upload, "audit_tender", lambda *a, **k: Audit())
+    monkeypatch.setattr("app.repositories.db.session_scope", _scope(FakeSession()))
+
+    assert upload.ingest("T1") == TenderStatus.FAILED.value
+    assert FakeRepo.reasons[-1] == "no_specification_found"
+
+
 def test_a_rate_limited_tender_is_neither_done_nor_failed(_fakes, monkeypatch):
     """The extraction stopped at the provider's limit. What was read is kept,
     and the tender says so instead of claiming it was read in full (D8)."""
@@ -378,6 +422,7 @@ def test_a_tender_that_cannot_be_read_is_failed_with_its_reason(_fakes, monkeypa
 
     class Audit:
         failure = "no bill of quantities was found: the only attachment is a form"
+        failure_code = None
         rate_limited = False
         rate_limited_detail = None
 

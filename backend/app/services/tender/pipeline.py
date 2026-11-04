@@ -28,7 +28,7 @@ from typing import Optional
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.repositories.tender import LLMCache, StoredRequirement, TenderRepo
-from app.schemas.enums import RequirementType
+from app.schemas.enums import RequirementType, TenderReasonCode
 from app.schemas.models import EXTRACTION_VERSION
 from app.services.requirement.atomize import atomize_records
 from app.services.requirement.extract import (
@@ -167,6 +167,9 @@ class PipelineResult:
     rate_limited_detail: Optional[str] = None
     # The reason the tender could not be read, when it could not.
     failure: Optional[str] = None
+    # The same fact as a stable key, so a screen can name the outcome without
+    # reading the sentence (D-156).
+    failure_code: Optional[TenderReasonCode] = None
 
     @property
     def ok(self) -> bool:
@@ -183,6 +186,35 @@ def _attachment_by_kind(attachments: list[dict], *kinds: str) -> Optional[dict]:
             "failed",
             "restricted",
         ):
+            return record
+    return None
+
+
+# The words a file's own name or address uses for the two parts of a tender.
+# They are a tie-break among scans and nothing more: a hint never outranks a
+# real `boq-pdf` or `spec`, and a scan that hints at nothing keeps its place
+# in the list (D-156).
+_BOQ_WORDS = ("boq", "bom", "bill", "price", "item")
+_SPEC_WORDS = ("spec", "technical", "annexure", "requirement", "tcs")
+
+
+def _scanned_hinted(
+    attachments: list[dict], words: tuple[str, ...]
+) -> Optional[dict]:
+    """The scanned attachment whose own name hints at this role, if any.
+
+    Two scans in one tender are the case this exists for: a terms-and-
+    conditions page and a specification sheet are both `scanned`, and which is
+    which is only visible in the file's name or the link it came from.
+    """
+    for record in attachments:
+        if record.get("kind") != "scanned" or record.get("status") in (
+            "failed",
+            "restricted",
+        ):
+            continue
+        haystack = f"{record.get('path') or ''} {record.get('url') or ''}".lower()
+        if any(word in haystack for word in words):
             return record
     return None
 
@@ -218,6 +250,8 @@ def resolve_roles(attachments: list[dict]) -> Roles:
 
     roles.boq = _attachment_by_kind(attachments, "boq-csv", "boq-pdf")
     if roles.boq is None:
+        roles.boq = _scanned_hinted(attachments, _BOQ_WORDS)
+    if roles.boq is None:
         roles.boq = _attachment_by_kind(attachments, "scanned")
     if roles.boq is None:
         roles.boq = _attachment_by_kind(attachments, "spec")
@@ -228,6 +262,10 @@ def resolve_roles(attachments: list[dict]) -> Roles:
     roles.specification = _attachment_by_kind(attachments, "boq-pdf")
     if roles.specification is None:
         roles.specification = _attachment_by_kind(attachments, "spec")
+    if roles.specification is None:
+        # Among scans the file's own name decides, because a tender can scan
+        # two different things and the order they were listed in says nothing.
+        roles.specification = _scanned_hinted(attachments, _SPEC_WORDS)
     if roles.specification is None and roles.boq is not None:
         if str(roles.boq.get("path") or "").lower().endswith(".pdf"):
             roles.specification = roles.boq
@@ -442,11 +480,29 @@ def run_pipeline(
         requirements_state.detail = "no specification was found"
         result.stages[STAGE_REQUIREMENTS] = requirements_state
         result.failure = requirements_state.detail
+        result.failure_code = TenderReasonCode.NO_SPECIFICATION_FOUND
         if repo is not None:
             _save_failed(repo, result, settings)
         return result
     backfill = False
     if changed(STAGE_REQUIREMENTS):
+        # Before a single model call: a specification nobody can read is not a
+        # specification that states nothing. One page is read here, OCR
+        # included, so a hopeless scan costs a second of local work instead of
+        # a call per clause (D-156).
+        specification_path = tender_dir / (spec.get("path") or "")
+        if specification_path.exists() and _reads_nothing(specification_path):
+            requirements_state.status = STATUS_FAILED
+            requirements_state.detail = (
+                f"the specification {specification_path.name} is a scan and the "
+                "OCR read no text from it"
+            )
+            result.stages[STAGE_REQUIREMENTS] = requirements_state
+            result.failure = requirements_state.detail
+            result.failure_code = TenderReasonCode.SPECIFICATION_UNREADABLE
+            if repo is not None:
+                _save_failed(repo, result, settings)
+            return result
         read = _read_specification(spec, tender_dir)
         if read.error:
             # The document could not be opened, so no page of it was looked
@@ -795,6 +851,38 @@ def assign_categories(items: list[TenderItem]) -> list[TenderItem]:
         item.category_ambiguous = guess.ambiguous
         item.category_reason = guess.reason
     return items
+
+
+def _reads_nothing(path: Path) -> bool:
+    """True when a document's first page holds no text a reader could use.
+
+    A scan is not a document that states nothing: it is a document nobody has
+    read yet, and the two answers must not be merged (PRD 4). One page is
+    enough to tell them apart, and it is read here - OCR included - before any
+    model call, so a hopeless specification costs a second of local work
+    instead of a call per clause (D-156).
+
+    A file that cannot be opened is not this question's business: the reader
+    reports that failure itself, and answering True here would report it as
+    "unreadable by OCR".
+    """
+    from app.services.tender.parse import ocr_page_with_reason
+
+    minimum = get_settings().ingest_ocr_min_chars
+    try:
+        import pymupdf
+
+        with pymupdf.open(path) as document:
+            if document.page_count == 0:
+                return True
+            page = document[0]
+            text = page.get_text() or ""
+            if len(text.strip()) >= minimum:
+                return False
+            ocr, _ = ocr_page_with_reason(page)
+            return len(ocr.strip()) < minimum
+    except Exception:  # noqa: BLE001 - the open failure has its own answer
+        return False
 
 
 def _read_specification(attachment: dict, tender_dir: Path) -> SpecificationRead:

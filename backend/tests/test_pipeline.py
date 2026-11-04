@@ -1147,3 +1147,38 @@ def test_a_rate_limit_mid_atoms_keeps_the_unread_atoms(tmp_path, monkeypatch):
     assert result.rate_limited is True
     assert len(result.requirements) == 3
     assert result.llm_calls == 2
+
+
+# --- a scan nobody can read is not a document that states nothing (D-156) ---
+
+
+def test_a_blank_scan_is_not_a_specification_that_states_nothing(tmp_path):
+    """One page, read through OCR, before any model call: a specification
+    whose pages hold no text is a different answer from one that states no
+    requirement (PRD 4)."""
+    import pymupdf
+
+    blank = tmp_path / "scan.pdf"
+    document = pymupdf.open()
+    document.new_page()
+    document.save(blank)
+    document.close()
+
+    assert pipeline._reads_nothing(blank) is True
+
+
+def test_a_page_of_prose_is_readable(tmp_path):
+    import pymupdf
+
+    written = tmp_path / "spec.pdf"
+    document = pymupdf.open()
+    page = document.new_page()
+    page.insert_text(
+        (72, 72),
+        "The valve body shall be cast steel, and the flange shall be drilled "
+        "to ASME B16.5 class 150.",
+    )
+    document.save(written)
+    document.close()
+
+    assert pipeline._reads_nothing(written) is False

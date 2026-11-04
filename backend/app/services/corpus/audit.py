@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.core.logging import get_logger
-from app.schemas.enums import TenderStatus
+from app.schemas.enums import TenderReasonCode, TenderStatus
 from app.services.tender.collect import read_manifest
 from app.services.tender.pipeline import PipelineResult, resolve_roles, run_pipeline
 
@@ -45,6 +45,9 @@ class TenderAudit:
     pages_read: int = 0
     # The reason the tender could not be read, when it could not.
     failure: Optional[str] = None
+    # The same fact as a stable key, so a screen can name the outcome without
+    # reading the sentence (D-156).
+    failure_code: Optional[TenderReasonCode] = None
     llm_calls: int = 0
     llm_cache_hits: int = 0
     prompt_tokens: int = 0
@@ -214,6 +217,7 @@ def audit_tender(
         requirements=len(result.requirements),
         pages_read=len(result.pages),
         failure=result.failure,
+        failure_code=result.failure_code,
         llm_calls=result.llm_calls,
         llm_cache_hits=result.llm_cache_hits,
         prompt_tokens=result.prompt_tokens,

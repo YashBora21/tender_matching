@@ -58,6 +58,7 @@ def test_a_rate_limited_tender_is_not_stored_as_done(tmp_path, monkeypatch):
         requirements=[],
         pages=[],
         failure=None,
+        failure_code=None,
         llm_calls=5,
         llm_cache_hits=0,
         prompt_tokens=100,

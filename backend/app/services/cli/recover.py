@@ -1,4 +1,4 @@
-"""A read that stopped with no process left to finish it (D-120).
+﻿"""A read that stopped with no process left to finish it (D-120).
 
 The background read lives inside the API process (`services.tenderupload`).
 The pipeline commits each stage as it goes, so a process that dies mid-read
@@ -46,8 +46,17 @@ def final_state(
     alone rather than called `done`: "the document was read" and "the document
     stated nothing" are the two answers PRD 4 forbids merging, and the stages
     alone cannot tell `done` from `incomplete` (D-91).
+
+    A tender with requirements stored and **no stage at all** is the other
+    half of that: the pipeline writes the requirements first and the stage
+    rows after (`pipeline._persist`), so a process that died in between leaves
+    exactly this - the answer written, the record of having read it missing -
+    and nothing will ever finish it. It is called `incomplete`, which is what
+    it is (D-157).
     """
     if not stages:
+        if requirements > 0:
+            return TenderStatus.INCOMPLETE
         return None
     values = stages.values()
     if "rate_limited" in values:
@@ -76,7 +85,37 @@ def _reason(
             return detail
     if status is TenderStatus.RATE_LIMITED:
         return "the read stopped at the provider's limit and no process finished it"
+    if status is TenderStatus.INCOMPLETE:
+        return (
+            "the read stored its requirements and never recorded which stages "
+            "it finished, so the row was left saying it was still reading"
+        )
     return "the read failed and no process recorded why"
+
+
+def settle(
+    session: Session, tender_id: str, *, repo: Optional[TenderRepo] = None
+) -> Optional[TenderStatus]:
+    """Record the state of a read no process is finishing, if it has one.
+
+    The caller owns the transaction, exactly as `reconcile` arranges it. This
+    is the per-tender half: the upload route asks it about a duplicate the
+    database still calls `processing`, because that row is what stops the
+    caller's own re-upload from scheduling a read (D-157).
+    """
+    repo = repo or TenderRepo(session)
+    status = final_state(
+        repo.stage_statuses(tender_id), repo.count_requirements(tender_id)
+    )
+    if status is None:
+        return None
+    repo.set_status(tender_id, status, error=_reason(repo, tender_id, status))
+    logger.warning(
+        "tender %s was left reading by a read that never finished; recorded %s",
+        tender_id,
+        status.value,
+    )
+    return status
 
 
 def reconcile(
@@ -92,21 +131,10 @@ def reconcile(
     repaired: list[dict] = []
     for row in repo.tenders_in_states(_ORPHANED):
         tender_id = row["id"]
-        status = final_state(
-            repo.stage_statuses(tender_id),
-            repo.count_requirements(tender_id),
-        )
+        status = settle(session, tender_id, repo=repo)
         if status is None:
             continue
-        error = _reason(repo, tender_id, status)
-        repo.set_status(tender_id, status, error=error)
         repaired.append(
             {"tender_id": tender_id, "was": row["status"], "now": status.value}
-        )
-        logger.warning(
-            "tender %s was left %s by a read that never finished; recorded %s",
-            tender_id,
-            row["status"],
-            status.value,
         )
     return repaired

@@ -1,4 +1,4 @@
-"""`POST /api/tenders` and `GET /api/tenders/{id}/requirements` (PRD 11).
+﻿"""`POST /api/tenders` and `GET /api/tenders/{id}/requirements` (PRD 11).
 
 The service that freezes and reads a tender is tested in
 `test_tenderupload.py`. What is tested here is the contract: what the routes
@@ -30,6 +30,7 @@ class FakeRepo:
     upserts: list[dict] = []
     items: dict[str, list[dict]] = {}
     requirements: dict[str, list[dict]] = {}
+    stages: dict[str, dict[str, str]] = {}
 
     def __init__(self, session) -> None:
         self.session = session
@@ -56,6 +57,18 @@ class FakeRepo:
 
     def list_requirements(self, tender_id):
         return [dict(row) for row in FakeRepo.requirements.get(tender_id, [])]
+
+    def stage_statuses(self, tender_id):
+        return dict(FakeRepo.stages.get(tender_id, {}))
+
+    def count_requirements(self, tender_id):
+        return len(FakeRepo.requirements.get(tender_id, []))
+
+    def set_status(self, tender_id, status, *, error=None, reason_code=None):
+        row = FakeRepo.rows[tender_id]
+        row["status"] = status.value
+        row["error"] = error
+        row["reason_code"] = reason_code.value if reason_code else None
 
 
 class FakeSession:
@@ -85,6 +98,7 @@ def client(tmp_path, monkeypatch, scheduled):
     FakeRepo.upserts.clear()
     FakeRepo.items.clear()
     FakeRepo.requirements.clear()
+    FakeRepo.stages.clear()
     monkeypatch.setattr("app.api.tenders.TenderRepo", FakeRepo)
     monkeypatch.setattr("app.services.tender.upload.TenderRepo", FakeRepo)
 
@@ -226,6 +240,25 @@ def test_a_duplicate_that_is_still_reading_is_left_alone(client, scheduled):
     assert response.json()["duplicate"] is True
     # A tender being read is not queued a second time.
     assert scheduled == [TENDER_ID]
+
+
+def test_a_duplicate_left_processing_with_its_stages_missing_is_read_again(
+    client, scheduled
+):
+    """The pipeline stores the requirements before it records its stages, so a
+    process that died in between leaves a row saying `processing` with nothing
+    reading it. Re-uploading it must read it, not wait forever (D-157)."""
+    assert _upload(client).status_code == 202
+    FakeRepo.rows[TENDER_ID]["status"] = "processing"
+    # Requirements stored, no stage row: the shape a killed process leaves.
+    FakeRepo.requirements[TENDER_ID] = [{"item_id": "1", "text": "Body shall be SS316"}]
+
+    response = _upload(client)
+
+    assert response.status_code == 202
+    assert response.json()["status"] == "incomplete"
+    assert scheduled == [TENDER_ID, TENDER_ID]
+    assert FakeRepo.rows[TENDER_ID]["status"] == "incomplete"
 
 
 # --- reading the requirements ---------------------------------------------

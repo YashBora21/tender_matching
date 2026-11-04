@@ -43,6 +43,12 @@ export interface TenderRequirements {
   filename: string | null
   status: TenderStatus
   error: string | null
+  /** Which of the three ways the reading stopped short, when it did (D-156).
+   *
+   * A stable key rather than a sentence: "no specification was found", "it
+   * was found and could not be read" and "it was read and states nothing" are
+   * different answers and the screen says which one it is. */
+  reason_code?: string | null
   page_count: number | null
   /** True while the tender is still being read, so the list is what has been
    * read so far and not the whole document (D-82). */

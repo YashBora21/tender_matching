@@ -50,6 +50,7 @@ from app.schemas.enums import (
     RequirementStatus,
     RequirementType,
     RunStatus,
+    TenderReasonCode,
     TenderStatus,
     ValueType,
     VerificationOutcome,
@@ -236,6 +237,10 @@ tender = Table(
     # poll, and a failure needs somewhere to say why (PRD 11).
     Column("status", _enum(TenderStatus, "tender_status"), nullable=False),
     Column("error", Text),
+    # Why this attempt stopped short, when it did (D-156). NULL is "the read
+    # finished": an empty requirement list is not the same answer as a
+    # specification nobody could find or read.
+    Column("reason_code", _enum(TenderReasonCode, "tender_reason_code")),
 )
 
 tender_item = Table(

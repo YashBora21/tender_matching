@@ -21,6 +21,7 @@ from app.services.tender.ingest import (
     read_specification,
     requirements_from_items,
 )
+from app.services.tender.pipeline import Roles, resolve_roles
 
 
 def test_the_english_half_of_a_bilingual_line_is_read():
@@ -586,3 +587,91 @@ def test_a_should_clause_in_an_item_is_read_as_an_obligation():
     item = TenderItem(item_id="t:1", title="The body should be corrosion resistant")
 
     assert item_states_a_requirement(item) is True
+
+
+# --- which attachment plays which part -----------------------------------
+#
+# Every attachment here is synthetic: a name and a kind, no file, no page.
+
+
+def _attachment(kind: str, path: str, url: str = "") -> dict:
+    return {"kind": kind, "path": path, "url": url, "status": "new"}
+
+
+def test_a_boq_csv_and_a_scanned_pdf_are_the_bill_and_the_specification():
+    """The CSV lists the items and has no pages, so the scan is what is read
+    as the specification."""
+    attachments = [
+        _attachment("boq-csv", "raw/boq_3500.csv"),
+        _attachment("scanned", "raw/specs_3500.pdf"),
+    ]
+
+    roles = resolve_roles(attachments)
+
+    assert roles.boq is attachments[0]
+    assert roles.specification is attachments[1]
+
+
+def test_a_boq_pdf_and_a_spec_are_read_from_the_boq_pdf():
+    """The item table in a GeM bid document is usually the technical
+    description too, so a `boq-pdf` is taken as the specification before a
+    separate `spec` file is tried. Neither is a scan, so the scan step never
+    runs and no hint can change the answer."""
+    attachments = [
+        _attachment("spec", "raw/technical_spec.pdf"),
+        _attachment("boq-pdf", "raw/bill_of_quantities.pdf"),
+    ]
+
+    roles = resolve_roles(attachments)
+
+    assert roles.boq is attachments[1]
+    assert roles.specification is attachments[1]
+
+
+def test_a_spec_alone_is_read_for_both_parts():
+    """A specification sheet lists the items too, and a tender read as having
+    no bill of quantities would stop before any requirement was looked for."""
+    attachments = [_attachment("spec", "raw/technical_spec.pdf")]
+
+    roles = resolve_roles(attachments)
+
+    assert roles.boq is attachments[0]
+    assert roles.specification is attachments[0]
+
+
+def test_a_tender_with_only_a_scan_uses_it_for_both_parts():
+    attachments = [_attachment("scanned", "raw/1791798951.pdf")]
+
+    roles = resolve_roles(attachments)
+
+    assert roles.boq is attachments[0]
+    assert roles.specification is attachments[0]
+
+
+def test_a_tender_with_nothing_to_read_gets_no_roles():
+    assert resolve_roles([]) == Roles()
+
+
+def test_two_scans_are_split_by_what_their_names_say():
+    """A terms-and-conditions page and a specification sheet are both scans,
+    and the order they were listed in says nothing about which is which."""
+    attachments = [
+        _attachment("scanned", "raw/TCVALVE_JWM-M1A.pdf"),
+        _attachment("scanned", "raw/technical_specification.pdf"),
+    ]
+
+    roles = resolve_roles(attachments)
+
+    assert roles.specification is attachments[1]
+    # The other scan is still the bill of quantities: a tender read as having
+    # no bill of quantities would fail before the specification is reached.
+    assert roles.boq is attachments[0]
+
+
+def test_a_hint_never_makes_a_scan_outrank_a_real_document():
+    attachments = [
+        _attachment("scanned", "raw/boq_scan.pdf"),
+        _attachment("boq-pdf", "raw/table.pdf"),
+    ]
+
+    assert resolve_roles(attachments).boq is attachments[1]

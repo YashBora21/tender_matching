@@ -1,15 +1,15 @@
-"""Tender routes (PRD 11): the tenders, their attachments, and the manual
+﻿"""Tender routes (PRD 11): the tenders, their attachments, and the manual
 upload that stands in for a fetch that failed.
 
 A tender PDF is a wrapper: it links to the bill of quantities and the
 specification, and it embeds nothing. The pipeline fetches those links. When
-a fetch fails — the link has moved, the host is unreachable, the tender
-was withdrawn — the tender is *not* a tender with no requirements. It is a
+a fetch fails â€” the link has moved, the host is unreachable, the tender
+was withdrawn â€” the tender is *not* a tender with no requirements. It is a
 tender whose attachments are missing, and the fix is to upload them.
 
 `POST /api/tenders` is the other direction: a caller hands over the tender
 itself. The file is frozen, the tender is created or found by its hash, and
-the reading happens in the background — a 200-page tender is minutes of work
+the reading happens in the background â€” a 200-page tender is minutes of work
 and the request that uploads it must not wait for it.
 """
 
@@ -42,6 +42,7 @@ from app.core.logging import get_logger
 from app.repositories.db import session_scope
 from app.repositories.tender import TenderRepo
 from app.schemas.enums import TenderStatus
+from app.services.cli.recover import settle
 from app.services.tender.upload import (
     ingest,
     safe_name,
@@ -116,11 +117,22 @@ async def upload_tender(
     # own session, and it must be able to see the row it was told to read.
     session.commit()
 
+    # A read that died between storing its requirements and recording its
+    # stages leaves the row saying `processing` with nothing reading it. That
+    # row is what stops the caller's own re-upload from scheduling a read, so
+    # it is settled here before the decision below (D-157).
+    state = uploaded.status
+    if uploaded.duplicate and state == TenderStatus.PROCESSING.value:
+        settled = settle(session, uploaded.tender_id, repo=TenderRepo(session))
+        if settled is not None:
+            session.commit()
+            state = settled.value
+
     # A new file is read now. A duplicate is read again when its earlier
-    # reading stopped short — it failed, or the provider's limit cut it off —
+    # reading stopped short â€” it failed, or the provider's limit cut it off â€”
     # because that read is resumable and this is the caller asking for it. A
     # tender already reading is left to finish.
-    if not uploaded.duplicate or uploaded.status in (
+    if not uploaded.duplicate or state in (
         TenderStatus.FAILED.value,
         TenderStatus.RATE_LIMITED.value,
         TenderStatus.INCOMPLETE.value,
@@ -130,7 +142,7 @@ async def upload_tender(
     logger.info("tender %s accepted (%s)", uploaded.tender_id, name)
     return {
         "tender_id": uploaded.tender_id,
-        "status": uploaded.status,
+        "status": state,
         "duplicate": uploaded.duplicate,
     }
 
@@ -208,6 +220,7 @@ def _requirements_payload(repo: TenderRepo, tender: dict) -> dict:
         "filename": tender.get("filename"),
         "status": tender["status"],
         "error": tender.get("error"),
+        "reason_code": tender.get("reason_code"),
         "page_count": tender.get("page_count"),
         # A short list while the read is running is not the document stating
         # few requirements: the flag is what tells the two apart.

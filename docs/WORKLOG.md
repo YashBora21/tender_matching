@@ -3325,3 +3325,51 @@ Whether the replay's cross-product scope (Series 75/76 answering a Series 7/8 cl
 acceptable waits on `product.product_type` reaching the type filter, which is held for the
 reviewed list.
 
+
+### Step 32 - a tender that fell short says which way, and a wedged read settles (D-156, D-157)
+
+*Date: 2026-11-04. Every phase in one place, then the fix.*
+
+Two problems from the same session. Tender `41aaa025` had been `processing` for hours with
+31 requirements and no stage rows: nothing was reading it, and re-uploading it did not
+schedule a read because the route trusted the `processing` row. And a tender whose
+specification is a scan was sent to the extractor page by page, so "no specification", "a
+scan nobody could read" and "read, states nothing" all arrived at the screen as one
+sentence.
+
+The wedged row first (D-157): `final_state` now calls a tender with requirements stored and
+no stage rows `incomplete`, `recover.settle` is the per-tender repair the upload route
+calls on a duplicate, and the row is read again rather than waited on.
+
+Then the three outcomes (D-156): `TenderReasonCode` on the tender row (`reason_code`,
+migration `0017`), sent with the requirements payload, printed by `UploadPage` as three
+different messages. Before any model call, `_reads_nothing` reads page 1 of the chosen
+specification - text layer, then tesseract - and a page under `INGEST_OCR_MIN_CHARS` (40)
+stops the tender as `specification_unreadable` instead of paying for extraction. Inside the
+scanned step only, a filename or URL hint now splits a terms-and-conditions page from a
+specification sheet in the same tender.
+
+**Probe, read-only, no model call** - page 1 of four stored attachments, tesseract
+`C:\Program Files\Tesseract-OCR\tesseract.EXE`:
+
+| Tender | File | Pages | Text layer | OCR chars |
+| --- | --- | --- | --- | --- |
+| 41aaa025 | `TCVALVE_...JWM-M1A.pdf` | 4 | 0 | 3,723 |
+| 41aaa025 | `drg_valve_...pdf` | 21 | 0 | 1,561 |
+| 4e0a9c5f | `1791798951.pdf` | 1 | 0 | 392 |
+| 5b68e376 | `specs_3500_...pdf` | 1 | 0 | 1,378 |
+
+**Files:** `schemas/enums.py`, `repositories/schema.py`, `repositories/tender.py`,
+`alembic/versions/0017_tender_reason_code.py`, `core/config.py`, `.env.example`,
+`services/tender/pipeline.py`, `services/tender/upload.py`, `services/corpus/audit.py`,
+`services/cli/recover.py`, `api/tenders.py`, `frontend/src/types.ts`,
+`frontend/src/components/UploadPage.tsx`, and the five test files named in D-156.
+
+**Verified:** the full unit suite passes (exit 0); `npx tsc -b` clean and 15 `UploadPage`
+tests pass; migration `0017` applied to the local database and the CHECK reads back the
+three values. The five database tests in `test_tenderrecovery.py` still skip without
+`TEST_DATABASE_URL`.
+
+**Left:** no model call has been made on `41aaa025`; that waits on the reviewer seeing the
+OCR text. The probe separates empty from non-empty and would not catch noise (the drawing
+passes at 1,561 characters of it).

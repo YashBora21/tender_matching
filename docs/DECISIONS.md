@@ -4204,3 +4204,86 @@ ids, silence stays flagged, the refused client raises); `pytest eval` 57 pass; t
 suite passes. The counts above are read from the live database while another writer was
 adding facts to it (221 facts at the first read, 237 at the last), so they are a snapshot of
 2026-11-03, and the six-pair outcome did not change between the two reads.
+
+
+## D-156 - A tender that fell short says which of three ways it did
+
+Every tender that stopped short used to end at the same two answers: `failed` with a
+sentence, or `incomplete` with a sentence, and the screen printed the sentence. Three
+different problems hide behind that. A tender whose links never included a specification;
+a tender whose specification is a scan the OCR could not read; and a tender that was read
+page by page and states no requirement. The first is a missing document, the second is a
+bad scan, the third is a fact about the tender - and only the third means the document was
+actually read and says nothing (PRD 4).
+
+Each now has a key of its own, `TenderReasonCode` (`no_specification_found`,
+`specification_unreadable`, `no_requirements_stated`), stored on the tender row in
+`reason_code` under the CHECK constraint `tender_reason_code` (migration
+`0017_tender_reason_code`, same drop-and-recreate pattern as 0011/0013/0016). The API
+sends the key with the requirements payload and `UploadPage` prints its own title and
+paragraph for each, instead of one sentence for all three.
+
+*Before any model call.* `pipeline._reads_nothing` opens the chosen specification, reads
+page 1's text layer and, when that is under `INGEST_OCR_MIN_CHARS` (40, from the
+environment), OCRs that page with tesseract. Only if both come back under the threshold is
+the tender called unreadable, and no extraction runs. This is a page of local work instead
+of a call per clause on a scan nobody can read. The setting is a threshold, not a promise:
+a page whose OCR yields 1,561 characters of noise passes it (measured, below).
+
+*Which attachment is the specification.* `resolve_roles` still tries `boq-csv`/`boq-pdf`
+first for the bill of quantities and `boq-pdf`/`spec` first for the specification. Inside
+the scanned step - the last resort for both - the file's own path or URL is now a
+tie-break: `boq|bom|bill|price|item` for the bill, `spec|technical|annexure|requirement|
+tcs` for the specification. A hint never lifts a scan above a real document.
+
+*What was measured, read-only, on 2026-11-04.* Tesseract
+`C:\Program Files\Tesseract-OCR\tesseract.EXE`, page 1 of four stored attachments:
+
+| Tender | File | Pages | Text layer | OCR chars | What the text is |
+| --- | --- | --- | --- | --- | --- |
+| 41aaa025 | `TCVALVE_...JWM-M1A.pdf` | 4 | 0 | 3,723 | a terms-and-conditions page, not a specification |
+| 41aaa025 | `drg_valve_...pdf` | 21 | 0 | 1,561 | drawing labels, mostly noise |
+| 4e0a9c5f | `1791798951.pdf` | 1 | 0 | 392 | an indent annexure with real specifications |
+| 5b68e376 | `specs_3500_...pdf` | 1 | 0 | 1,378 | a readable purchase-specification table |
+
+So the threshold separates the empty case from the non-empty one, and it does **not**
+detect noise: the drawing passes at 1,561 characters of garbage. Nothing here measures
+whether the text is *useful*; that is what the extraction stage and the verifier are for,
+and no model call has been made on tender 41aaa025.
+
+*Verified:* six new `resolve_roles` tests in `test_tenderingest.py`, two OCR-probe tests in
+`test_pipeline.py` (a blank page is unreadable, a page of prose is not), reason-code
+assertions in `test_tenderupload.py`, a duplicate-settle test in
+`test_tender_upload_api.py`, two screen tests in `UploadPage.test.tsx`, and the full unit
+suite.
+
+
+## D-157 - A read with its requirements stored and no stage rows is incomplete, not still reading
+
+`pipeline._persist` writes the requirements first and the stage checkpoints after. A
+process killed between the two leaves exactly the shape tender `41aaa025` was found in on
+2026-11-04: 15 items, 31 requirements, zero `extraction_batch` rows, and the tender row
+still saying `processing`. Nothing was reading it, and `final_state` returned `None` for a
+tender with no stage rows - the right answer for a read that never started, the wrong one
+here, where the output was already written.
+
+Three things were changed, all of them the same fix reached from different doors:
+
+- `final_state({}, requirements > 0)` is `INCOMPLETE`. The answer was stored and the record
+  of reading it was not; nothing will ever finish it, so it is not settled by waiting.
+- `recover.settle()` is the per-tender half of `reconcile`, and the upload route asks it
+  about a duplicate the database still calls `processing` before deciding not to schedule a
+  read. Re-uploading such a tender now repairs it and reads it again instead of returning a
+  status that never moves.
+- The reason it writes says what happened, so the reviewer is not told the read is still
+  running.
+
+The general rule this encodes: a status written by a process is a claim about the present.
+When the process is gone, the row is re-derived from what was actually stored, and "the
+output exists but the bookkeeping does not" is `incomplete` - never `done`, because no stage
+says a page was read in full.
+
+*Verified:* `test_tenderrecovery.py` (the pure decision, plus a database test that
+`reconcile` repairs the shape), `test_tender_upload_api.py` (a duplicate left `processing`
+with requirements stored is settled to `incomplete` and read again; one with nothing stored
+is still left alone).

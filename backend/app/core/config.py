@@ -223,6 +223,10 @@ class Settings(BaseSettings):
     # language, and the resolution is a quality/speed trade-off.
     ingest_ocr_language: str = "eng"
     ingest_ocr_dpi: int = 200
+    # A specification whose first page yields fewer characters than this has
+    # no text a reader could use: a scan the OCR could not read, which is a
+    # different answer from "the document states nothing" (D-156).
+    ingest_ocr_min_chars: int = 40
     # A page with less text than this ends a chunk; a header or footer sits
     # in the top or bottom band of the page, this far from the edge.
     ingest_min_chunk_chars: int = 80

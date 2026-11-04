@@ -36,7 +36,7 @@ from app.core.config import get_settings
 from app.core.errors import ValidationError
 from app.core.logging import get_logger
 from app.repositories.tender import LLMCache, TenderRepo
-from app.schemas.enums import TenderStatus
+from app.schemas.enums import TenderReasonCode, TenderStatus
 from app.services.corpus.audit import audit_tender
 from app.services.tender.collect import (
     TenderDocument,
@@ -177,7 +177,7 @@ def ingest(tender_id: str) -> str:
         session.commit()
 
         try:
-            status, error = _read(session, tender_id)
+            status, error, code = _read(session, tender_id)
         except Exception as exc:  # noqa: BLE001 - the state is the answer
             session.rollback()
             message = f"{type(exc).__name__}: {exc}"
@@ -186,13 +186,15 @@ def ingest(tender_id: str) -> str:
             session.commit()
             return TenderStatus.FAILED.value
 
-        repo.set_status(tender_id, status, error=error)
+        repo.set_status(tender_id, status, error=error, reason_code=code)
         session.commit()
         logger.info("tender %s %s", tender_id, status.value)
         return status.value
 
 
-def _read(session: Session, tender_id: str) -> tuple[TenderStatus, Optional[str]]:
+def _read(
+    session: Session, tender_id: str
+) -> tuple[TenderStatus, Optional[str], Optional[TenderReasonCode]]:
     """Collect the tender's documents and run its pipeline."""
     directory = tender_dir(tender_id)
     manifest = read_manifest(directory / "manifest.json")
@@ -201,6 +203,7 @@ def _read(session: Session, tender_id: str) -> tuple[TenderStatus, Optional[str]
         return (
             TenderStatus.FAILED,
             "the uploaded file is no longer on disk; upload it again",
+            None,
         )
 
     collected = collect_tender(
@@ -226,22 +229,30 @@ def _read(session: Session, tender_id: str) -> tuple[TenderStatus, Optional[str]
         cache=LLMCache(session),
     )
     if audit.failure:
-        return TenderStatus.FAILED, audit.failure
+        return TenderStatus.FAILED, audit.failure, audit.failure_code
     if audit.rate_limited:
         # The extraction stopped at the provider's limit. The requirements it
         # did read are stored; the tender is resumable, so it is not failed
         # and not done (D8).
-        return TenderStatus.RATE_LIMITED, audit.rate_limited_detail
+        return TenderStatus.RATE_LIMITED, audit.rate_limited_detail, None
     # A tender that was read but gave nothing is not `done`: "done" says the
     # document was read, and an empty requirement list would be read as a
     # tender that states nothing (PRD 4, D-91).
     if not audit.pages_read:
-        return TenderStatus.INCOMPLETE, "no page of the specification was read"
+        return (
+            TenderStatus.INCOMPLETE,
+            "no page of the specification was read",
+            TenderReasonCode.SPECIFICATION_UNREADABLE,
+        )
     if not audit.items:
-        return TenderStatus.INCOMPLETE, "the bill of quantities gave no items"
+        return TenderStatus.INCOMPLETE, "the bill of quantities gave no items", None
     if not audit.requirements:
-        return TenderStatus.INCOMPLETE, "the specification gave no requirements"
-    return TenderStatus.DONE, None
+        return (
+            TenderStatus.INCOMPLETE,
+            "the specification gave no requirements",
+            TenderReasonCode.NO_REQUIREMENTS_STATED,
+        )
+    return TenderStatus.DONE, None, None
 
 
 def _wrapper(directory: Path, manifest: dict) -> Optional[Path]:
