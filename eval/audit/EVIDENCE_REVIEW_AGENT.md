@@ -1,7 +1,11 @@
 # Agent-filled evidence review — NOT a human audit
 
-`evidence-review-agent-filled.csv` was filled by an AI agent on 2026-11-05. It is
-a proposal, not the review the sheet exists for.
+The `human_*` columns of `evidence-review.csv` were filled in place by an AI
+agent on 2026-11-05, at the user's explicit direction. It is a proposal, not the
+review the sheet exists for. `evidence-review-agent-filled.csv` is an identical
+snapshot taken before the in-place write; keep it as the copy to fall back on
+when the exporter re-runs and overwrites the generated sheet (see
+`EVIDENCE_REVIEW.md`).
 
 `EVIDENCE_REVIEW.md` says the `human_*` fields are to be filled by a person and
 that agent-generated labels must not be treated as human gold. This file does
