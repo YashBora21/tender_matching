@@ -151,7 +151,9 @@ def discover_links(pdf_path: Path) -> list[str]:
     return list(dict.fromkeys(links))
 
 
-def classify_document(data: bytes, filename: str) -> tuple[str, Optional[int]]:
+def classify_document(
+    data: bytes, filename: str, *, page_limit: Optional[int] = 2
+) -> tuple[str, Optional[int]]:
     """What a document is, from its content, and how many pages it has.
 
     A bill of quantities is recognised by its *header*, not by its prose: the
@@ -166,6 +168,13 @@ def classify_document(data: bytes, filename: str) -> tuple[str, Optional[int]]:
 
     A document that cannot be opened is unknown, and the fetch is recorded as
     failed rather than as a document that says nothing.
+
+    `page_limit` is how much of the document the prose test may read. Two
+    pages is enough for a fetched document, whose first pages say what it is.
+    A wrapper is different: a GeM bid document opens with bid details and
+    carries its specification and its BOQ item table further in, so the
+    upload path passes `None` and the whole file is read before it is called
+    a form (D-162).
     """
     if filename.lower().endswith(".csv"):
         text = data.decode("utf-8", "replace").lower()
@@ -179,7 +188,8 @@ def classify_document(data: bytes, filename: str) -> tuple[str, Optional[int]]:
     except Exception:
         return "unknown", None
     pages = document.page_count
-    body = " ".join((document[index].get_text() or "") for index in range(min(pages, 2)))
+    window = pages if page_limit is None else min(pages, page_limit)
+    body = " ".join((document[index].get_text() or "") for index in range(window))
     document.close()
     low = body.lower()
 

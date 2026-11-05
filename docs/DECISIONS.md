@@ -4404,3 +4404,29 @@ requirements are atomised before matching.
 This is a replay against six frozen labels, not a review: status accuracy,
 false-confident rate and citation correctness stay unmeasured until the audit
 sheet is filled in.
+
+
+## D-162 - A wrapper is classified on the whole file, because it is the last resort
+
+`classify_document` reads two pages of prose: a fetched document says what it is
+at the front, and pdfplumber is slow on a long file. That window is wrong for
+the one caller that is not a fetch. A GeM bid document opens with bid details
+and a declaration - so two pages say `form` - and carries its technical
+specification and BOQ item table further in. `_wrapper_document` only runs when
+the wrapper yielded no documents at all, and it applied the same two-page test,
+so the file was discarded and the tender failed with "the tender has no
+attachments" while holding 17 pages of requirements.
+
+`classify_document` now takes `page_limit` (default 2, unchanged for fetches);
+the upload path passes `None` and reads the whole file before calling it a form.
+The `_SELF_READING` gate is untouched: a wrapper that is only a form is still
+not an attachment, because there is nothing in it to read.
+
+*Verified:* tender `3b6befdc`'s wrapper classifies `form` on two pages and
+`boq-pdf` on the whole file, and `_wrapper_document` now returns a `boq-pdf`
+attachment of 17 pages instead of `None`. New synthetic test in
+`test_tenderupload.py` (a three-page file whose specification is on page 3).
+
+The re-read itself has not been run: `audit_tender` spends model calls, and the
+next step waits on an approval for that spend. What is verified is the
+classification and the attachment, not the extraction.

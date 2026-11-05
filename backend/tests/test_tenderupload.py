@@ -478,3 +478,34 @@ def _scope(session):
         yield session
 
     return scope
+
+
+def test_a_wrapper_is_read_whole_before_it_is_called_a_form(tmp_path):
+    """A GeM bid document opens with bid details and carries its
+    specification further in. Classified on its first two pages it is a form,
+    so the tender was reported as having no attachments; the wrapper is the
+    last resort and is read whole (D-162). This PDF is synthetic."""
+    import pymupdf
+
+    from app.services.tender.collect import classify_document
+
+    path = tmp_path / "tender.pdf"
+    document = pymupdf.open()
+    for text in (
+        "Bid Details - Declaration regarding conflict of interest",
+        "Bid Details - Certificate and undertaking",
+        "TECHNICAL SPECIFICATION - the body shall be SS316",
+    ):
+        page = document.new_page()
+        page.insert_text((72, 90), text, fontsize=10)
+    document.save(path)
+    document.close()
+
+    # The two-page read a fetched document gets is what called it a form.
+    assert classify_document(path.read_bytes(), path.name)[0] == "form"
+
+    document = upload._wrapper_document(path, tmp_path)
+
+    assert document is not None
+    assert document.kind == "spec"
+    assert document.pages == 3

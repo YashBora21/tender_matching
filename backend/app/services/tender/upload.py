@@ -309,12 +309,18 @@ def _wrapper_document(wrapper: Path, directory: Path) -> Optional[TenderDocument
     A tender that embeds its bill of quantities has no links to follow. It is
     still a tender with a bill of quantities, so the file stands as its own
     attachment rather than being reported as an empty wrapper.
+
+    This is the last resort - it only runs when the wrapper yielded no
+    documents at all - so the whole file is classified, not its first two
+    pages. A GeM bid document opens with bid details and carries its
+    specification and BOQ table further in; two pages called it a form and
+    the tender became "no attachments" (D-162).
     """
     try:
         data = wrapper.read_bytes()
     except OSError:  # pragma: no cover - `_wrapper` found it a moment ago
         return None
-    kind, pages = classify_document(data, wrapper.name)
+    kind, pages = classify_document(data, wrapper.name, page_limit=None)
     if kind not in _SELF_READING:
         return None
     try:

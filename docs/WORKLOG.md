@@ -3476,3 +3476,34 @@ unit suite run once before the commit.
 **Left:** wrapper-as-last-resort classification (`_SELF_READING` +
 `classify_document` on 2 pages), and `reconcile` not retrying after a startup
 with the database down.
+
+
+### Step 35 - a wrapper is read whole before it is called a form (D-162)
+
+*Date: 2026-11-05. The backlog's "wrapper as last resort" item: tender
+`3b6befdc` failed with "the tender has no attachments" while holding 17 pages.*
+
+**The failure shape.** `classify_document` reads two pages of prose, which is
+right for a fetched document. `_wrapper_document` - the last resort, run only
+when the wrapper yielded no documents - used the same window. A GeM bid document
+opens with bid details and a declaration, so two pages say `form`; its
+specification and BOQ item table are on pages 3-17. The file was therefore
+discarded and the tender failed as empty.
+
+**The fix.** `classify_document(data, filename, *, page_limit=2)`; the upload
+path passes `None`. One parameter, no new threshold, and the fetched path is
+byte-for-byte the same. `_SELF_READING` is untouched: a wrapper that is only a
+form is still not an attachment.
+
+**Measured:** tender `3b6befdc`'s wrapper is `form` on two pages and `boq-pdf`
+on the whole file; `_wrapper_document` now returns a 17-page `boq-pdf`
+attachment instead of `None`.
+
+**Files:** `services/tender/collect.py`, `services/tender/upload.py`,
+`tests/test_tenderupload.py` (1 synthetic test).
+
+**Verified:** `test_tenderupload.py` + `test_tendercollect.py` 40 pass; full
+unit suite run once before the commit.
+
+**Left:** the re-read of `3b6befdc` costs model calls and waits on an approval;
+`reconcile` still does not retry after a startup with the database down.
