@@ -3539,3 +3539,40 @@ was up, so the next one is its first live exercise. Still open: the re-read of
 #39's `product_type` filter waits on the user reviewing
 `eval/product_types_todo.csv`; the audit sheet is unfilled, so no accuracy
 figure here is measured performance.
+
+
+### Step 37 - which failed tenders the whole-file read actually unblocks (read-only sweep)
+
+*Date: 2026-11-05. No model calls, no writes: every stored tender's wrapper was
+classified twice, two pages and whole.*
+
+**The wrapper path runs far less often than the classification table suggests.**
+`_wrapper_document` is called only when the collected document list is empty
+(`upload.py`), so a spec→boq-pdf change on a wrapper with links never executes.
+Of 39 stored tender directories, four have no documents:
+
+| tender | wrapper | two pages | whole | outcome |
+| --- | --- | --- | --- | --- |
+| `3b6befdc` | GeM-Bidding-9605024.pdf, 17p | form | boq-pdf | **attached now; failed before with "no attachments"** |
+| `75137aae` | `<hash>.pdf`, 8p | spec | boq-pdf | attached before and after |
+| `GEM_9935…` | GEM_9935572_Pump.pdf, 8p | spec | boq-pdf | attached before and after |
+| `279d6c4c` | Tender_Matching_Intern_Assignment.pdf, 2p | other | other | still not attached - it is the assignment, not a tender |
+
+The two spec→boq-pdf wrappers lose nothing: `boq-pdf` is the first choice for
+*both* roles (`pipeline.py`: boq picks `boq-csv`,`boq-pdf`; specification picks
+`boq-pdf`), so the role split is the same before and after.
+
+**A correction to the record.** `5b68e376` (GeM-Bidding-10078785.pdf) is not a
+wrapper case. Its manifest holds two documents - a one-page **scanned** spec and
+a BOQ CSV - so the wrapper is never consulted; its failure is
+`specification_unreadable`, which is the OCR gate, not classification.
+`41aaa025` likewise has four documents (two `unknown`, two `scanned`). The
+whole-file read neither fixes nor breaks either one. What would rescue a tender
+in that shape is a different change: fall back to the wrapper when every
+collected document failed to read, not only when none was collected.
+
+**So the spend list is:** `3b6befdc` (17 pages, no links) is the only failed
+tender D-162 unblocks; `5b68e376` needs its one scanned page OCR'd locally then
+extracted; `41aaa025` needs its two `unknown` documents identified before any
+model call is worth making. Nothing here is a measurement of extraction quality;
+no read was run.
