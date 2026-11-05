@@ -3373,3 +3373,51 @@ three values. The five database tests in `test_tenderrecovery.py` still skip wit
 **Left:** no model call has been made on `41aaa025`; that waits on the reviewer seeing the
 OCR text. The probe separates empty from non-empty and would not catch noise (the drawing
 passes at 1,561 characters of it).
+
+### Step 33 - three small repairs: a seed guard, a root health probe, and a class nobody could read (D-158, D-159, D-160)
+
+*Date: 2026-11-05. Unblocked work that needed no model call and no schema change.*
+
+**D-158 (`4e877cb`) - the seed guard.** `seed_corpus` copied a document's `category` onto
+the product, and a document tagged with its manufacturer's slug (`delval_flow`) produced a
+product whose category no BOQ item ever infers. `_keep_category` now keeps only a name
+`category_names()` knows; anything else is stored `null`, the same as no category. No
+corpus row changes today - the local corpus has no such document - so this is insurance.
+
+**D-159 (`62b3d67`) - `/health` at the root.** A container healthcheck probes `/health` and
+got a 404 for a service that was up. The same handler is now registered on a prefix-free
+router, hidden from the OpenAPI schema so `/api/health` stays the documented path. The
+database check is unchanged, so both paths degrade the same way.
+
+**D-160 - `ASMECLASS150`.** The normalizer stores a pressure class uppercased with its
+spaces removed; the comparison registry required a space between `ASME` and `CLASS`, and its
+bare-number fallback refuses a digit after a letter, so that form parsed as no class and the
+pair died with "pressure class comparison needs a class on both sides". The gap is optional
+now - one token in `_CLASS_TOKEN`.
+
+The measurement matters more than the fix. `eval/facts_replay.py` (stored facts only, no
+model call, six frozen labels) before and after:
+
+| | before | after |
+| --- | --- | --- |
+| pairs that reach a comparison | 0 of 6 | 6 of 6 |
+| coverage | 0.0 | 0.6667 |
+| review rate | 1.0 | 0.6667 |
+| false-confident rate | 0.0 | 0.3333 |
+| status accuracy | 0.0 | 0.1667 |
+
+Two Flowserve pairs that the gold calls `partial_match` now come back wrong and unflagged,
+because the replay answers a whole clause from one attribute (D-155's cross-product scope).
+A readable class removes a false silence; it does not make the answer right.
+
+**Files:** `services/corpus/seed.py`, `tests/test_corpusseed.py`, `api/routes.py`,
+`main.py`, `tests/test_healthroute.py`, `comparison/registry.py`,
+`tests/test_comparison.py`.
+
+**Verified:** full unit suite exit 0 at HEAD; `test_corpusseed.py` 6, `test_healthroute.py` 2,
+`test_comparison.py` 41; the replay was run with `--out` into a temp file so the committed
+`eval/replay/facts-only.json` still holds the pre-fix numbers.
+
+**Left:** the compound-clause problem the replay exposed (one attribute answered as if it
+were the clause), the wrapper-as-last-resort classification, and `reconcile` not retrying
+after a startup with the database down.

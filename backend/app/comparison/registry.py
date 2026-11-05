@@ -577,8 +577,13 @@ def evaluate_material(request: ComparisonRequest) -> Evaluation:
 # Pressure classes are ordered, but they are not numbers in one scale: an
 # ASME class and a PN class are different systems. A token is read as
 # (system, value); the evaluator only compares tokens in the same system.
+#
+# The gap between "ASME" and "CLASS" is optional: the normalizer stores a
+# pressure class uppercased with its spaces removed (`ASMECLASS150`), so
+# requiring one space here made every such requirement unreadable - four gold
+# pairs died on it (D-155, D-160).
 _CLASS_TOKEN = re.compile(
-    r"\b(?:(?:ANSI|ASME)\s+)?CLASS\s*-?\s*(?P<class>\d{1,4})\b"
+    r"\b(?:(?:ANSI|ASME)\s*)?CLASS\s*-?\s*(?P<class>\d{1,4})\b"
     r"|\bPN\s*-?\s*(?P<pn>\d{1,3})\b",
     re.IGNORECASE,
 )

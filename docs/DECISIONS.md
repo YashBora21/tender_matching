@@ -4287,3 +4287,64 @@ says a page was read in full.
 `reconcile` repairs the shape), `test_tender_upload_api.py` (a duplicate left `processing`
 with requirements stored is settled to `incomplete` and read again; one with nothing stored
 is still left alone).
+
+
+## D-158 - A product keeps a category only when the vocabulary names it
+
+`seed_corpus` copies a document's `category` onto the product it creates. A document is
+sometimes tagged with its manufacturer's slug rather than a product family, and a product
+carrying `delval_flow` as its category filters retrieval on a word no BOQ item ever infers
+- the product becomes invisible to every requirement except one that happens to say the
+slug. `_keep_category` now keeps the value only when `category_names()` knows it; anything
+else is stored as `null`, which means exactly what a document with no category means.
+
+Blast radius is documents whose category is not a real name; the local corpus has none
+today, so this is insurance rather than a repair, and it adds no query - the vocabulary is
+read once per seed run.
+
+*Verified:* `test_corpusseed.py` (6 pass), the new case being a slug that must not survive.
+
+## D-159 - `/health` answers at the root as well as under `/api`
+
+A container healthcheck and a load balancer probe `/health`, not `/api/health`. The same
+handler is registered on a second, prefix-free router, so a probe of a service that is up
+gets 200 instead of 404 - and a probe cannot report a healthy service as dead. The alias is
+`include_in_schema=False`: the documented endpoint stays `/api/health`, and the OpenAPI
+schema lists one health route.
+
+The database check inside `health()` is unchanged, so both paths report a degraded database
+the same way; this adds a route, not a second opinion.
+
+*Verified:* `test_healthroute.py` (2 tests: the alias is served, and it is not in the
+schema), plus `GET /health` and `GET /api/health` both answering against the local database.
+
+## D-160 - A pressure class whose spaces were stripped is still a class
+
+The normalizer stores a pressure class uppercased with its spaces removed, so a clause
+saying "ASME class 150" becomes `ASMECLASS150`. `_CLASS_TOKEN` in the comparison registry
+required one space between `ASME` and `CLASS`, and its bare-number fallback refuses a digit
+that follows a letter, so that form parsed as *no class at all*: the pair came back
+`no_evidence_found` with "pressure class comparison needs a class on both sides". The gap
+is now optional (`(?:ANSI|ASME)\s*`), which is one token and leaves every form that already
+worked untouched.
+
+*What it changes in a report, measured with `eval/facts_replay.py` (stored facts only, no
+model call, six frozen labels):*
+
+| | before | after |
+| --- | --- | --- |
+| pairs that reach a comparison | 0 of 6 | 6 of 6 |
+| coverage | 0.0 | 0.6667 |
+| review rate | 1.0 | 0.6667 |
+| false-confident rate | 0.0 | **0.3333** |
+| status accuracy | 0.0 | 0.1667 |
+
+The rise in confident wrongness is the point worth stating plainly: with the class readable,
+four pairs get a verdict, and two of them are wrong without a review flag. Both are Flowserve
+pairs whose gold label is `partial_match` - a judgement about the whole clause - answered
+here from one attribute, which is the replay's cross-product scope (D-155) and not something
+the class rule can fix. A verdict on one attribute is not a verdict on a clause; the fix
+removes a false silence, it does not make the answer right.
+
+This is a replay against six frozen labels, not a review: status accuracy, false-confident
+rate and citation correctness stay unmeasured until the audit sheet is filled in.

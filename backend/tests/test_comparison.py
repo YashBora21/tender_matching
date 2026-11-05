@@ -200,6 +200,27 @@ def test_pressure_classes_in_different_systems_need_review() -> None:
     assert result.needs_review is True
 
 
+def test_a_class_whose_spaces_were_stripped_is_still_a_class() -> None:
+    """The normalizer stores a pressure class uppercased with its spaces
+    removed, so a requirement arrives as `ASMECLASS150`. That is class 150 to
+    an ASME valve, not an unreadable value - four gold pairs died on it
+    (D-155, D-160)."""
+    result = evaluate(_pressure_class("ASMECLASS150", "150"), ValueType.CATEGORICAL)
+
+    assert result.status is RequirementStatus.FULL_MATCH
+    assert result.needs_review is False
+
+
+def test_a_stripped_class_is_still_ordered() -> None:
+    """The stripped form must not fall through to the bare-number rule: a
+    lower class stays a failing value, not an absence of evidence."""
+    result = evaluate(
+        _pressure_class("ASMECLASS150", "ASMECLASS100"), ValueType.CATEGORICAL
+    )
+
+    assert result.status is RequirementStatus.MISSING_CAPABILITY
+
+
 def test_an_attribute_without_an_evaluator_is_review_never_unsupported() -> None:
     """`unsupported_requirement` is for a clause no document could answer, not
     for an attribute this registry has no rule for (D-95)."""
