@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import asyncio
+from contextlib import asynccontextmanager, suppress
 from typing import AsyncIterator
 
 from fastapi import FastAPI
@@ -17,12 +18,13 @@ from app.core.logging import configure_logging, get_logger
 logger = get_logger(__name__)
 
 
-def _reconcile_on_startup() -> None:
+def _reconcile_on_startup() -> bool:
     """Finish the reads a previous process left mid-flight (D-120).
 
     A failure here must not stop the API: a database that is down is what
     `/api/health` reports, and refusing to start would turn a degraded service
-    into no service at all.
+    into no service at all. It returns whether the repair ran, so the caller
+    knows whether to ask again later (D-163).
     """
     try:
         from app.repositories.db import session_scope
@@ -30,14 +32,39 @@ def _reconcile_on_startup() -> None:
 
         with session_scope() as session:
             reconcile(session)
+        return True
     except Exception as exc:  # noqa: BLE001 - the API starts either way
         logger.warning("could not reconcile tenders left mid-read: %s", exc)
+        return False
+
+
+async def _reconcile_until_it_works(retry_seconds: float, attempt=None) -> None:
+    """Keep trying the startup repair while the database is down (D-163).
+
+    A service that starts before its database is up would otherwise hold every
+    tender a dead process left mid-read as *processing* until the next restart.
+    The repair is idempotent, so asking again is safe. The attempt is a
+    blocking database call and is kept off the event loop.
+    """
+    attempt = attempt or _reconcile_on_startup
+    while not await asyncio.to_thread(attempt):
+        await asyncio.sleep(retry_seconds)
 
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    _reconcile_on_startup()
-    yield
+    task = None
+    if not _reconcile_on_startup():
+        task = asyncio.create_task(
+            _reconcile_until_it_works(get_settings().reconcile_retry_seconds)
+        )
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
 
 def create_app() -> FastAPI:

@@ -4430,3 +4430,34 @@ attachment of 17 pages instead of `None`. New synthetic test in
 The re-read itself has not been run: `audit_tender` spends model calls, and the
 next step waits on an approval for that spend. What is verified is the
 classification and the attachment, not the extraction.
+
+
+## D-163 - The startup repair is asked again while the database is down
+
+`reconcile` runs once, at startup, and finishes the tenders a dead process left
+mid-read (D-120). If it cannot reach the database it logs
+`could not reconcile tenders left mid-read` and gives up for the lifetime of the
+process: a row left `processing` then stays `processing` until someone restarts
+the service, and `--reload` restarts are exactly when the database can be
+starting too. The failure is not hypothetical - it is what a `--reload` restart
+with Postgres down produced.
+
+`_reconcile_on_startup` now returns whether the repair ran, and the lifespan
+starts a background task that asks again every `RECONCILE_RETRY_SECONDS`
+(default 30) until it does. The first attempt stays synchronous, as before, so
+a healthy startup behaves identically: a live database means no task at all.
+The retry runs the blocking database call off the event loop and the task is
+cancelled and awaited on shutdown, so no request sees a half-started task.
+
+Only the loop is new; the repair is the same idempotent `reconcile`, so asking
+twice is safe. The interval is configuration, not a literal in the loop, because
+a deployment that gives Postgres a longer start-up window needs to say so.
+
+*Verified:* `test_startup.py` (4 tests: a down database is reported not raised,
+a run is reported, the loop retries until an attempt succeeds, and the lifespan
+starts no task when the first attempt worked), plus `test_health.py`,
+`test_healthroute.py`, `test_tenderrecovery.py`, `test_tender_api.py` together
+with it, and the full unit suite before the commit.
+
+What is not verified is the restart that motivated it: the local Postgres is up,
+and the next wedged row will be the first real exercise of the retry.

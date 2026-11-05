@@ -175,6 +175,10 @@ class Settings(BaseSettings):
     # Comma separated; kept as a string because pydantic-settings would try to
     # JSON-decode a list field straight from the environment.
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    # How long to wait before asking again whether the database has come up.
+    # The startup repair is skipped while the database is down, and a row left
+    # mid-read stays `processing` until the repair runs (D-163).
+    reconcile_retry_seconds: float = 30.0
 
     # --- scoring policy (defaults are the PRD 8 values, overridable per deployment) ---
     scoring_full_score: float = 1.0

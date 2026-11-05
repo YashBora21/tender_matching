@@ -3507,3 +3507,35 @@ unit suite run once before the commit.
 
 **Left:** the re-read of `3b6befdc` costs model calls and waits on an approval;
 `reconcile` still does not retry after a startup with the database down.
+
+
+### Step 36 - the startup repair asks again while the database is down (D-163)
+
+*Date: 2026-11-05. The last of the three backlog items from Step 34.*
+
+**The failure shape.** `reconcile` runs once at startup and finishes tenders a
+dead process left `processing` (D-120). If the database is down at that moment it
+logs a warning and gives up for the life of the process. With `--reload`, the
+process restarts exactly when Postgres may be starting too, so a wedged row
+stays wedged until someone restarts again.
+
+**The fix.** `_reconcile_on_startup` returns whether the repair ran; the lifespan
+starts a background task that asks again every `RECONCILE_RETRY_SECONDS` (new
+setting, default 30) until it does. The first attempt stays synchronous, so a
+healthy startup is unchanged and starts no task. The blocking call runs in a
+thread, the task is cancelled and awaited on shutdown.
+
+**Files:** `main.py`, `core/config.py`, `.env.example`,
+`tests/test_startup.py` (4 tests).
+
+**Verified:** `test_startup.py` 4; `test_health.py`, `test_healthroute.py`,
+`test_tenderrecovery.py`, `test_tender_api.py`, `test_startup.py` pass together
+(5 DB-recovery tests skip without `TEST_DATABASE_URL`); full unit suite run once
+before the commit.
+
+**Left:** the retry is untested against a real wedged row - the local Postgres
+was up, so the next one is its first live exercise. Still open: the re-read of
+`3b6befdc` and the extraction on `5b68e376` both wait on model-spend approval;
+#39's `product_type` filter waits on the user reviewing
+`eval/product_types_todo.csv`; the audit sheet is unfilled, so no accuracy
+figure here is measured performance.
