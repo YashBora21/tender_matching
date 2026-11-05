@@ -29,6 +29,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.comparison.attributes import attributes_named
 from app.comparison.registry import ComparisonRequest, evaluate
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -545,7 +546,7 @@ def _match_candidate(
     result.attribute = fact.attribute
     result.fact_value = fact.value
     result.fact_unit = fact.unit
-    return result
+    return _note_compound_clause(result, requirement_text)
 
 
 def _operator(value: Optional[str]) -> Operator:
@@ -701,6 +702,60 @@ def _from_cached_fact(
             "the evidence covers a family of products, not this model"
         )
     result.confidence = _confidence(False, False, evaluation.score)
+    return _note_compound_clause(result, requirement_text)
+
+
+def _note_compound_clause(result: MatchResult, clause: Optional[str]) -> MatchResult:
+    """A verdict on one attribute is not a verdict on the whole clause (D-161).
+
+    A BOQ item title can name several attributes at once - "Three piece ball
+    valves 2\" Screwed end ASME class 150 Cast carbon steel" fixes a pressure
+    class *and* a body material. The comparison reads the one attribute the
+    fact states and says nothing about the rest, so a full match here would
+    claim more than was checked. PRD 4 calls that "only part of a compound
+    requirement": the verdict becomes a partial match, the score is capped,
+    and a person is asked to look.
+
+    Only *value-shaped* attributes count (see `attributes_named`), so a clause
+    with one figure in it is not compound just because figures are numbers.
+    A status this cannot improve on (no evidence, unsupported) is left alone:
+    it already says the clause was not answered.
+    """
+    if not clause:
+        return result
+    if result.status not in (
+        RequirementStatus.FULL_MATCH,
+        RequirementStatus.PARTIAL_MATCH,
+        RequirementStatus.MISSING_CAPABILITY,
+    ):
+        return result
+
+    compared = _canonical_term(result.attribute)
+    if compared is None:
+        return result
+
+    named = attributes_named(clause)
+    others = [spec.canonical_term for spec in named if spec.canonical_term != compared]
+    if compared not in {spec.canonical_term for spec in named} or not others:
+        return result
+
+    note = (
+        "the clause also fixes "
+        + ", ".join(sorted(others))
+        + f", and this comparison read only {compared}"
+    )
+    if result.status is RequirementStatus.FULL_MATCH:
+        # Full means the documented capability meets the clause. One attribute
+        # meeting it is not the clause meeting it.
+        result.status = RequirementStatus.PARTIAL_MATCH
+        result.score = min(result.score, get_settings().comparison_partial_score_max)
+    elif result.score > get_settings().comparison_partial_score_max:
+        result.score = get_settings().comparison_partial_score_max
+    result.review_required = True
+    result.review_reason = "; ".join(
+        part for part in (result.review_reason, note) if part
+    )
+    result.reason = f"{result.reason}; {note}" if result.reason else note
     return result
 
 

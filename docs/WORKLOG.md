@@ -3421,3 +3421,58 @@ A readable class removes a false silence; it does not make the answer right.
 **Left:** the compound-clause problem the replay exposed (one attribute answered as if it
 were the clause), the wrapper-as-last-resort classification, and `reconcile` not retrying
 after a startup with the database down.
+
+
+### Step 34 - a verdict on one attribute is not a verdict on the clause (D-161)
+
+*Date: 2026-11-05. Follows Step 33: the replay's false-confident pairs were
+clauses answered from a single attribute.*
+
+**The shape of the failure.** The two Flowserve pairs the replay answered wrong
+and unflagged are BOQ item titles: "Three piece ball valves 2" Socket weld ends
+Face to face distance 122mm ASME class 600 Cast Carbon steel". The fact cache
+holds a verified pressure class, the comparison reads it, and a *full match* is
+published - a claim about the clause from evidence about one of its two
+attributes. D-160 made the class readable and so made that visible.
+
+**The fix.** `attributes_named(text)` in `comparison/attributes.py` counts the
+attributes a clause names *and* has a value shape for; `_note_compound_clause`
+in `services/match/match.py` runs at the end of both evaluation paths (fresh and
+cache) and, when the compared attribute is one of two or more, turns a full
+match into a partial match with a capped score and flags it for review. A
+partial stays partial and a failing value stays missing - a failing value fails
+the clause whatever the other attributes say. Every flagged result says which
+attribute was not read.
+
+The shape test is what keeps it honest: an earlier version used "can a number be
+extracted", which made "Pressure class 150" read as two attributes (class and
+operating pressure). Measured over 325 stored requirements: 0 attributes 87%,
+1 attribute 11%, 2 attributes 2% - and the two are always `pressure_class` +
+`material_grade` on an item title.
+
+**Measurement** (`eval/facts_replay.py`, stored facts only, no model call, six
+frozen labels, `--out` into a temp file):
+
+| | before | after |
+| --- | --- | --- |
+| status accuracy | 0.1667 | 0.3333 |
+| false-confident rate | 0.3333 | 0.0 |
+| review rate | 0.6667 | 1.0 |
+| coverage | 0.6667 | 0.6667 |
+
+Every pair in this sample is an item title, so all six are flagged now. That is
+the replay's cross-product scope (D-155) being stated out loud, not a threshold
+tuned to six labels; real runs atomise a clause before matching, and the flag
+fires only when one comparison really did stand in for several attributes.
+
+**Files:** `comparison/attributes.py` (`_shaped_attributes`, `attributes_named`),
+`services/match/match.py` (`_note_compound_clause`, both call sites),
+`tests/test_matching.py` (4 tests).
+
+**Verified:** `test_matching.py` 39, and `test_comparison.py` +
+`test_normalizer.py` + `test_resolution.py` + `test_matching.py` 113 pass; full
+unit suite run once before the commit.
+
+**Left:** wrapper-as-last-resort classification (`_SELF_READING` +
+`classify_document` on 2 pages), and `reconcile` not retrying after a startup
+with the database down.

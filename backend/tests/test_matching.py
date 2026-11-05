@@ -1233,3 +1233,97 @@ def test_a_second_requirement_on_the_same_product_is_read_once(monkeypatch):
     # The second clause is its own answer, reached the same way.
     assert second.status is first.status
     assert second.score == first.score
+
+
+# --- A compound clause is not answered by one of its attributes (D-161) ------
+
+
+_COMPOUND = (
+    'Three piece ball valves 2" Socket weld ends Face to face distance 122mm '
+    "ASME class 600 Cast Carbon steel"
+)
+
+
+def test_a_compound_clause_is_not_answered_by_one_of_its_attributes() -> None:
+    """A BOQ title that fixes a class *and* a body material is two
+    requirements. A full match on the class alone claims more than was
+    checked, so it becomes a partial match for a person to look at (PRD 4,
+    D-161). This clause is synthetic."""
+    from app.services.match.match import MatchResult, _note_compound_clause
+
+    result = MatchResult(
+        requirement_text=_COMPOUND,
+        status=RequirementStatus.FULL_MATCH,
+        score=1.0,
+        attribute="pressure class",
+        reason="class 600 meets class 600",
+    )
+    noted = _note_compound_clause(result, _COMPOUND)
+
+    assert noted.status is RequirementStatus.PARTIAL_MATCH
+    assert noted.score <= 0.75
+    assert noted.review_required is True
+    assert "material_grade" in noted.review_reason
+    assert "material_grade" in noted.reason
+    # The original reason is kept, not replaced: the class did meet the class.
+    assert noted.reason.startswith("class 600 meets class 600")
+
+
+def test_a_single_attribute_clause_keeps_its_verdict() -> None:
+    """One attribute fixed by the clause is a clause this comparison can
+    answer. `Pressure class 150` must not be flagged (D-161)."""
+    from app.services.match.match import MatchResult, _note_compound_clause
+
+    result = MatchResult(
+        requirement_text="Pressure class 150",
+        status=RequirementStatus.FULL_MATCH,
+        score=1.0,
+        attribute="pressure class",
+        reason="class 150 meets class 150",
+    )
+    noted = _note_compound_clause(result, "Pressure class 150")
+
+    assert noted.status is RequirementStatus.FULL_MATCH
+    assert noted.score == 1.0
+    assert noted.review_required is False
+
+
+def test_a_failing_value_on_a_compound_clause_is_flagged_not_upgraded() -> None:
+    """A value that fails the requirement fails the clause whatever the other
+    attributes say, so the status stays *missing* - but a person is told the
+    reading covered one attribute of a compound clause (D-161)."""
+    from app.services.match.match import MatchResult, _note_compound_clause
+
+    result = MatchResult(
+        requirement_text=_COMPOUND,
+        status=RequirementStatus.MISSING_CAPABILITY,
+        score=0.0,
+        attribute="pressure class",
+        reason="class 300 is below the required 600",
+    )
+    noted = _note_compound_clause(result, _COMPOUND)
+
+    assert noted.status is RequirementStatus.MISSING_CAPABILITY
+    assert noted.review_required is True
+    assert noted.score == 0.0
+
+
+def test_the_cache_path_marks_a_compound_clause_too() -> None:
+    """The two wrong Flowserve pairs in the replay are answered from the fact
+    cache, not by reading a passage, so the flag has to be applied there as
+    well as on the fresh path (D-161). The fact row and clause are synthetic."""
+    from app.services.match.match import _from_cached_fact
+
+    result = _from_cached_fact(
+        _cached_fact_row(attribute="pressure_class", value="600"),
+        _COMPOUND,
+        requirement_value="600",
+        requirement_unit=None,
+        requirement_operator="eq",
+        manufacturer_name="Acme",
+        model="SYNTHETIC-1",
+    )
+
+    assert result.status is RequirementStatus.PARTIAL_MATCH
+    assert result.review_required is True
+    assert "material_grade" in result.review_reason

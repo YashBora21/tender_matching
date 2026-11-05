@@ -299,6 +299,63 @@ def find_attribute(text: str) -> Optional[AttributeSpec]:
     return _value_shaped_attribute(text)
 
 
+def _shaped_attributes(text: str) -> tuple[AttributeSpec, ...]:
+    """Every attribute whose *value shape* this text carries.
+
+    `_value_shaped_attribute` answers "which one is this text about" and stops
+    at the first shape it finds; a clause can carry several, and that is the
+    difference a compound clause turns on (D-161).
+    """
+    vocabulary = load_vocabulary()
+    patterns = _patterns(vocabulary_path())
+    shapes = vocabulary.value_shapes
+    found: list[AttributeSpec] = []
+    for pattern, term in zip(
+        patterns,
+        (
+            shapes.get("material_grade", ""),
+            shapes.get("certification", ""),
+            shapes.get("ip_rating", ""),
+            shapes.get("nominal_size", ""),
+            shapes.get("pressure_class", ""),
+        ),
+    ):
+        if pattern is None or not pattern.search(text):
+            continue
+        spec = vocabulary.by_term.get(term)
+        if spec is not None:
+            found.append(spec)
+    return tuple(found)
+
+
+def attributes_named(text: str) -> tuple[AttributeSpec, ...]:
+    """Every attribute this text names *and* carries a value of that shape for.
+
+    `find_attribute` answers "which one is this clause about"; this answers
+    "how many are in it", which is how a compound clause is recognised. A
+    clause that fixes a body material and a pressure class is two
+    requirements, and a comparison that reads one of them has answered part
+    of the clause, not all of it (PRD 4, D-161).
+
+    The test is the attribute's *value shape*, not "a number appears": a
+    numeric attribute would otherwise count any clause with a figure in it
+    ("Pressure class 150" naming an operating pressure too). An attribute
+    this misses is a missed flag, not a false one.
+    """
+    seen: dict[str, AttributeSpec] = {}
+    lowered = text.lower()
+    for synonym, spec in _matchers(vocabulary_path()):
+        if spec.canonical_term in seen:
+            continue
+        if re.search(rf"\b{re.escape(synonym)}\b", lowered) and has_value_shape(
+            spec, text
+        ):
+            seen[spec.canonical_term] = spec
+    for spec in _shaped_attributes(text):
+        seen.setdefault(spec.canonical_term, spec)
+    return tuple(seen.values())
+
+
 def material_group(value: str) -> Optional[str]:
     """The alloy group a material value belongs to, or None if it is unknown."""
     token = normalise_token(value)

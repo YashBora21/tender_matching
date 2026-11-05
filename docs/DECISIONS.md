@@ -4348,3 +4348,59 @@ removes a false silence, it does not make the answer right.
 
 This is a replay against six frozen labels, not a review: status accuracy, false-confident
 rate and citation correctness stay unmeasured until the audit sheet is filled in.
+
+
+## D-161 - A verdict on one attribute is not a verdict on a compound clause
+
+A BOQ item title fixes several attributes in one line: "Three piece ball valves
+2" Socket weld ends Face to face distance 122mm ASME class 600 Cast Carbon
+steel" states a pressure class *and* a body material. The matcher read the one
+attribute the fact stated, compared it, and published a full match - a claim
+about the whole clause from evidence about half of it. PRD 4 already names that
+case: a requirement met "only part of a compound requirement" is a partial
+match.
+
+`attributes_named(text)` counts the attributes a clause names *and carries a
+value shape for*. The shape test is deliberate: a numeric attribute would
+otherwise count any clause with a figure in it, and "Pressure class 150" would
+read as two attributes (class and operating pressure). Against the 325 stored
+requirements it returns 0 attributes for 87%, 1 for 11%, and 2 for 2% - the two
+are always `pressure_class` + `material_grade` on an item title.
+
+`_note_compound_clause` runs at the end of both evaluation paths - the fresh
+read and the fact cache, because the two wrong Flowserve pairs come from the
+cache. When the compared attribute is one of at least two named attributes:
+
+- a `full_match` becomes `partial_match`, with the score capped at
+  `comparison_partial_score_max`;
+- a `partial_match` keeps its status and its score is capped;
+- a `missing_capability` keeps its status - a failing value fails the clause
+  whatever the other attributes say, and upgrading it would excuse a real miss;
+- all three get `review_required` with a reason naming the attribute that was
+  not read, and the note is appended to `reason` rather than replacing it.
+
+Statuses that already say the clause was not answered (`no_evidence_found`,
+`unsupported_requirement`) are left untouched.
+
+*What it changes in a report, measured with `eval/facts_replay.py` (stored facts
+only, no model call, six frozen labels):*
+
+| | before | after |
+| --- | --- | --- |
+| status accuracy | 0.1667 | 0.3333 |
+| false-confident rate | 0.3333 | **0.0** |
+| review rate | 0.6667 | **1.0** |
+| coverage | 0.6667 | 0.6667 |
+
+Every pair in this sample is an item title, so every pair is now flagged - that
+is the honest reading, not a tuned threshold: the replay answers a clause from
+one stored attribute, and now says so. The two confident Flowserve answers are
+gone; one of them becomes the gold's `partial_match`, the other is still wrong
+but is no longer published as a verdict. Coverage does not move because coverage
+counts whether evidence was found, not how much of the clause it covers; a
+review rate of 1.0 on six item titles is not a claim about real tenders, where
+requirements are atomised before matching.
+
+This is a replay against six frozen labels, not a review: status accuracy,
+false-confident rate and citation correctness stay unmeasured until the audit
+sheet is filled in.
