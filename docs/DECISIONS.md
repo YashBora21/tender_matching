@@ -4470,3 +4470,8 @@ Exercise the existing shared local embedding model during API lifespan startup, 
 ## Preserve interleaved bilingual English runs — 2026-11-08
 
 The five-call free-tier wrapper probe completed but exposed unsafe empty extraction and total-order-quantity classification; do not apply its answers to requirements or generalize its accuracy. The shared English selector discarded everything before the last Hindi run, losing earlier English clauses in flattened bilingual tables. Retain all English/value runs in source order, remove only Devanagari runs, PDF CID encoding markers and control characters, normalize whitespace and separators, and preserve source identifier punctuation/zeros/operators. Retain original source text separately. Reader version8 invalidates affected stages; normalized input already participates in per-clause extraction hashes so old truncated-input answers cannot collide with corrected inputs. No LLM prompt changes and no further remote probe calls.
+
+
+## Preserve unknown-clause review notes — 2026-11-08
+
+Keep existing source/proposal review notes in manufacturer outcomes for unknown clauses. This changes reporting only: unknown remains review-required, no retrieval or business-type approval is introduced. No prompt or cache-key change.

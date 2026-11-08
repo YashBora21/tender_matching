@@ -524,7 +524,10 @@ def _assess(
 
     requirement_type = _requirement_type(requirement.get("type"))
     if requirement_type not in MATCHABLE:
-        return _unsupported(requirement_type, text), category
+        outcome = _unsupported(requirement_type, text)
+        if requirement_type is RequirementType.UNKNOWN and requirement.get('review_reason'):
+            outcome.review_reason = '; '.join((outcome.review_reason, requirement['review_reason']))
+        return outcome, category
 
     if not text:
         return _unsupported(RequirementType.UNKNOWN, ""), category

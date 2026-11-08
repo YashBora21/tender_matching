@@ -3589,3 +3589,8 @@ Five authorized configured free-tier calls completed with0 retries,3533 input/51
 Found and corrected shared English selector truncation: previous logic dropped English preceding the last Hindi fragment. Preserve all English/value runs in source order and strip only Devanagari, CID encoding markers/control residue and separator noise; keep identifiers, zeros, signs and operators. Original source text retained. Reader version8 invalidates affected stage caches; input hashes already include normalized text. No prompt changes.70 focused ingestion/pipeline tests passed; complete offline suite and no-remote tender rerun follow. Production classification-before-item-binding remains deferred because the diagnostic did not establish safe automatic classification.
 
 Final validation: full backend non-integration suite passed. No-remote forced-stage rerun21.642s/12.582s using OCR cache; worker startup24.381s separately; cached0.232s/0.297s.40/40 pages and17/25 source part rows retained, zero blocked requests. Both remain incomplete; no supplier matching accuracy claim.
+
+
+### 2026-11-08 — Independent unknown-clause reporting fix
+
+Preserved source review notes in unknown-clause manufacturer outcomes. One synthetic offline regression confirms the source text and review flag survive and matching is not invoked. Staged independently of the larger uncommitted OCR/classification work. No live calls or database changes.
