@@ -1,0 +1,118 @@
+{
+  "scope": "frozen two-page specification subset; original full tender source integrity checked separately",
+  "remote_calls": 0,
+  "original_package_integrity": [
+    {
+      "path": "raw/specification_for_gem_2026-07-28-13-19-47_24a8abef7ef7463a9774adda15150895.pdf",
+      "expected_sha256": "cfd76796ef1d366905dc14d079a2d3a6e3c288f317f4377829a83f7e9c28c5d1",
+      "actual_sha256": "cfd76796ef1d366905dc14d079a2d3a6e3c288f317f4377829a83f7e9c28c5d1",
+      "matches": true,
+      "declared_pages": 2
+    },
+    {
+      "path": "raw/boq_item_sample_file_2026-07-28-13-19-47_22bd547622be9874d5fd4cc206785e7a.csv",
+      "expected_sha256": "1c69477d0e949f91c55607ad58a8419de0fb2c1a47f7b084deb78ed328d6fe6e",
+      "actual_sha256": "1c69477d0e949f91c55607ad58a8419de0fb2c1a47f7b084deb78ed328d6fe6e",
+      "matches": true,
+      "declared_pages": null
+    },
+    {
+      "path": "raw/slafds",
+      "expected_sha256": "966495ce38f97f7512079289c28d7afa97d785aafa6cf1ac856d4364f6bfcccf",
+      "actual_sha256": "0165905f8ac1d8619b10f2ad3650f7cb850df356a90740db85ec62e1a926193d",
+      "matches": false,
+      "declared_pages": 24
+    },
+    {
+      "path": "raw/slafds",
+      "expected_sha256": "0165905f8ac1d8619b10f2ad3650f7cb850df356a90740db85ec62e1a926193d",
+      "actual_sha256": "0165905f8ac1d8619b10f2ad3650f7cb850df356a90740db85ec62e1a926193d",
+      "matches": true,
+      "declared_pages": 17
+    }
+  ],
+  "frozen_sources": {
+    "specification_sha256": "cfd76796ef1d366905dc14d079a2d3a6e3c288f317f4377829a83f7e9c28c5d1",
+    "gold_sha256": "d91e9b2a26aef6dd2d803fc625ed5efdd9d3303140df3303f1a02c809000a4ab",
+    "gold_scope": "six confirmed compound requirement/manufacturer pairs for two BOQ items; no whole-tender extraction gold"
+  },
+  "code_fingerprint": "a05d47d6dbddfcb7d174aa2cfc640225b6334547500737c1f1c90041b68a81e5",
+  "private_retrieval_config_fingerprint": "6385e85b1b217b7a20d820bd06d90f02dff01407d6ce01f2468a54effe26e355",
+  "local_source_read": {
+    "seconds": 0.47,
+    "rows": 48,
+    "pages": 2,
+    "states": [
+      "parsed",
+      "parsed"
+    ],
+    "error_type": null
+  },
+  "frozen_requirements_sha256": "733af55f1ae107a4371cbfd839457363f540f6b8e2cd4ff5f391caeafb971836",
+  "corpus_snapshot": {
+    "documents": 101,
+    "chunks": 29688,
+    "metadata_text_vector_fingerprint": "b5dd6b0034851f77eb9f121ad3e3e2d17c0a87f7e4260aed03837504bfe65a4f"
+  },
+  "stored_extraction": {
+    "requirements": 48,
+    "items": 11,
+    "item_linked": 48,
+    "with_attribute": 48,
+    "review_required": 0,
+    "accuracy": "unmeasured; no complete confirmed extraction inventory"
+  },
+  "embedding_startup": {
+    "seconds": 34.659,
+    "device": "cuda:0"
+  },
+  "retrieval": [
+    {
+      "phase": "first",
+      "seconds": 25.336,
+      "gold": {
+        "label_count": 6,
+        "page_hits": {
+          "3": 3,
+          "20": 6
+        },
+        "document_hits": {
+          "3": 5,
+          "20": 6
+        }
+      },
+      "pairs": 144,
+      "zero_candidate_pairs": 0,
+      "ranking_fingerprint": "717ac405c38e12e6876ae24bf3255df1ac1ac31168ecea03736a86b9eaec81f7"
+    },
+    {
+      "phase": "warm",
+      "seconds": 26.126,
+      "gold": {
+        "label_count": 6,
+        "page_hits": {
+          "3": 3,
+          "20": 6
+        },
+        "document_hits": {
+          "3": 5,
+          "20": 6
+        }
+      },
+      "pairs": 144,
+      "zero_candidate_pairs": 0,
+      "ranking_fingerprint": "717ac405c38e12e6876ae24bf3255df1ac1ac31168ecea03736a86b9eaec81f7"
+    }
+  ],
+  "cached_assessment": {
+    "seconds": 47.94,
+    "pairs_attempted": 144,
+    "states": {
+      "evaluated_without_generation": 14,
+      "pending_generation": 130
+    },
+    "blocked_generation_attempts": 130,
+    "accuracy": "not computed: confirmed compound labels are not interchangeable with atomic requirements"
+  },
+  "total_diagnostic_seconds": 145.425
+}

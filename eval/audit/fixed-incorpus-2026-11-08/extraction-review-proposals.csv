@@ -1,0 +1,3 @@
+item_id,source_page,source_quote,proposed_attribute,proposed_value,issue,reviewer,human_confirmed
+10,2,Screwed end,connection_type,screwed,No separate connection-type requirement in frozen stored extraction; source text may mention connection inside a size requirement.,assistant visual/source-text review,no
+11,2,Socket weld ends,connection_type,socket weld,No separate connection-type requirement in frozen stored extraction; source text may mention connection inside a size requirement.,assistant visual/source-text review,no

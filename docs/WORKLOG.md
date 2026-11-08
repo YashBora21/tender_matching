@@ -3594,3 +3594,10 @@ Final validation: full backend non-integration suite passed. No-remote forced-st
 ### 2026-11-08 — Independent unknown-clause reporting fix
 
 Preserved source review notes in unknown-clause manufacturer outcomes. One synthetic offline regression confirms the source text and review flag survive and matching is not invoked. Staged independently of the larger uncommitted OCR/classification work. No live calls or database changes.
+
+
+### 2026-11-08 — Frozen in-corpus validation baseline
+
+Froze the exact two-page specification linked to the confirmed 17-page tender, 48 stored atomic requirements/11 items, six confirmed compound matching labels, source hashes, code/config fingerprints and a 101-document/29,688-chunk corpus fingerprint. Read-only repeatable-read benchmark ran 144 retrieval pairs twice: expected page3/6@3 and6/6@20; document5/6@3 and6/6@20; identical rankings, zero empty candidate lists. Passes25.336s/26.126s. Cached-only assessment47.940s:14 review-required No evidence found,130 pending generation, zero confirmed answers. Zero generative calls/DB writes. Diagnostic total145.425s is not full matching SLA. An initial progress-output collision was fixed and its partial result preserved.
+
+Visual/source review proposes missing connection-type requirements for items10/11; proposals are not human-confirmed extraction gold. Original full tender also has a historical duplicate attachment path/hash mismatch. Those blockers prevent claiming a complete end-to-end accuracy result. Details and reproducible read-only runner: docs/FIXED_TENDER_VALIDATION_2026-11-08.md and eval/validate_fixed_tender.py. Baseline artifacts are committed separately from implementation; raw source copies and large rankings remain local. No retrieval tuning, prompt change or model/provider migration.
