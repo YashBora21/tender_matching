@@ -675,3 +675,15 @@ def test_a_hint_never_makes_a_scan_outrank_a_real_document():
     ]
 
     assert resolve_roles(attachments).boq is attachments[1]
+
+
+def test_interleaved_english_before_later_hindi_is_not_discarded():
+    """Synthetic bilingual labels and specifications, not real vendor facts."""
+    assert english_half("Body SS316 दबाव/Pressure 16 bar तापमान/Temperature 80 C") == "Body SS316 Pressure 16 bar Temperature 80 C"
+    assert english_half("Supporting documents must be uploaded पात्रता/Eligibility") == "Supporting documents must be uploaded Eligibility"
+
+
+def test_encoding_artifacts_do_not_delete_values_or_part_identifiers():
+    """Synthetic PDF CID markers are encoding residue, not source values."""
+    assert english_half("(cid:42) विवरण/Part 001-AB (cid:1) pressure -20 bar") == "Part 001-AB pressure -20 bar"
+    assert english_half("Pressure >= 10 bar") == "Pressure >= 10 bar"

@@ -3580,3 +3580,12 @@ no read was run.
 ### 2026-11-08 — Warm local embedding startup
 
 Added local embedding readiness work to API lifespan using the existing shared model cache. Remote backends are skipped; local failures prevent ready startup. Updated startup/API fixtures to mock embedding work and avoid live startup reconciliation during API contract tests. Focused startup/embedding/API checks and the complete backend non-integration suite passed with synthetic credentials and no paid calls. Full suite used a non-live database target. An initial sandboxed asyncio test stalled and was stopped; elevated runs completed. No extraction prompt or cache-key changes. Unseen-tender accuracy, full end-to-end timing and live deployment startup remain untested; user will supply an unseen tender next.
+
+
+### 2026-11-08 — Bounded free-tier clause probe and bilingual reader correction
+
+Five authorized configured free-tier calls completed with0 retries,3533 input/511 output tokens, individual elapsed1.420/0.383/0.786/0.353/0.546s. No database writes or active provider changes. Sample returned3 empty requirement lists and classified total order quantity as technical; spans were range-valid only, not evidence that labels or values were correct. Probe is unsuitable for automatic rollout. Results retained in eval/audit/ocr-integration-2026-11-08/clause-probe.json without configured model/endpoint/credentials. No further paid/free calls.
+
+Found and corrected shared English selector truncation: previous logic dropped English preceding the last Hindi fragment. Preserve all English/value runs in source order and strip only Devanagari, CID encoding markers/control residue and separator noise; keep identifiers, zeros, signs and operators. Original source text retained. Reader version8 invalidates affected stage caches; input hashes already include normalized text. No prompt changes.70 focused ingestion/pipeline tests passed; complete offline suite and no-remote tender rerun follow. Production classification-before-item-binding remains deferred because the diagnostic did not establish safe automatic classification.
+
+Final validation: full backend non-integration suite passed. No-remote forced-stage rerun21.642s/12.582s using OCR cache; worker startup24.381s separately; cached0.232s/0.297s.40/40 pages and17/25 source part rows retained, zero blocked requests. Both remain incomplete; no supplier matching accuracy claim.

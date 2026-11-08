@@ -41,22 +41,17 @@ _MANGLED = re.compile(r"[^\x00-\x7Fऀ-ॿ‌‍°·•–—‘’“”₹€�
 
 
 def english_half(text: str) -> str:
-    """The English of a bilingual line.
-
-    A GeM line is "Hindi/English" or "Hindi English", so the English is
-    what follows the last Devanagari run. A line that is only Devanagari
-    has no English half, and the caller is told so rather than being given
-    an empty string that looks like a line with no content.
-    """
+    """Retain every English/value run in interleaved bilingual source text."""
     if not text:
         return ""
-    matches = list(_DEVANAGARI.finditer(text))
-    if not matches:
-        return text.strip()
-    tail = text[matches[-1].end():].strip()
-    # The separator the PDF leaves between the two halves.
-    tail = tail.lstrip("/\\-–—:;,| ")
-    return tail.strip()
+    cleaned = re.sub(r"\(cid:\d+\)", " ", text)
+    cleaned = re.sub(r"[\x00-\x1f]", " ", cleaned)
+    parts = []
+    for part in re.split(r"[\u0900-\u097F]+", cleaned):
+        if not re.search(r"[A-Za-z0-9]", part):
+            continue
+        parts.append(part.strip().lstrip("/\\–—:;,| "))
+    return " ".join(" ".join(parts).split())
 
 
 def is_mangled(text: str) -> bool:
@@ -74,7 +69,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "3"
+READER_VERSION = "8"
 
 
 @dataclass

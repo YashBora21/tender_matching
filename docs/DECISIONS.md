@@ -4465,3 +4465,8 @@ and the next wedged row will be the first real exercise of the retry.
 ## Warm local embeddings before serving — 2026-11-08
 
 Exercise the existing shared local embedding model during API lifespan startup, off the event loop, before accepting requests. Reuse the current per-process model cache; no new worker framework, dependency, configuration option or model identifier. Skip remote embedding backends so startup never introduces a remote request. Local initialization failure prevents ready startup instead of charging its failure/latency to the first tender. This moves cold loading to startup; it does not eliminate it or establish a full-tender SLA. No extraction prompt or cache-key changes.
+
+
+## Preserve interleaved bilingual English runs — 2026-11-08
+
+The five-call free-tier wrapper probe completed but exposed unsafe empty extraction and total-order-quantity classification; do not apply its answers to requirements or generalize its accuracy. The shared English selector discarded everything before the last Hindi run, losing earlier English clauses in flattened bilingual tables. Retain all English/value runs in source order, remove only Devanagari runs, PDF CID encoding markers and control characters, normalize whitespace and separators, and preserve source identifier punctuation/zeros/operators. Retain original source text separately. Reader version8 invalidates affected stages; normalized input already participates in per-clause extraction hashes so old truncated-input answers cannot collide with corrected inputs. No LLM prompt changes and no further remote probe calls.
