@@ -32,7 +32,9 @@ class FakeSession:
 
 
 @pytest.fixture
-def client():
+def client(monkeypatch):
+    monkeypatch.setattr("app.main.embed", lambda texts: [[0.0]])
+    monkeypatch.setattr("app.main._reconcile_on_startup", lambda: True)
     app = create_app()
     # No connection is opened: the routes are exercised without a database.
     app.dependency_overrides[get_session] = lambda: FakeSession()

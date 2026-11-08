@@ -4461,3 +4461,7 @@ with it, and the full unit suite before the commit.
 
 What is not verified is the restart that motivated it: the local Postgres is up,
 and the next wedged row will be the first real exercise of the retry.
+
+## Warm local embeddings before serving — 2026-11-08
+
+Exercise the existing shared local embedding model during API lifespan startup, off the event loop, before accepting requests. Reuse the current per-process model cache; no new worker framework, dependency, configuration option or model identifier. Skip remote embedding backends so startup never introduces a remote request. Local initialization failure prevents ready startup instead of charging its failure/latency to the first tender. This moves cold loading to startup; it does not eliminate it or establish a full-tender SLA. No extraction prompt or cache-key changes.

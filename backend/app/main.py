@@ -14,6 +14,7 @@ from app.api.routes import root_router
 from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging, get_logger
+from app.services.llm import embed
 
 logger = get_logger(__name__)
 
@@ -59,6 +60,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             _reconcile_until_it_works(get_settings().reconcile_retry_seconds)
         )
     try:
+        if get_settings().embedding_backend.strip().lower() == "sentence-transformers":
+            # Load and exercise the shared local model before accepting tender runs.
+            await asyncio.to_thread(embed, ["Synthetic embedding readiness check."])
         yield
     finally:
         if task is not None:

@@ -15,6 +15,8 @@ from app.main import create_app
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.main.embed", lambda texts: [[0.0]])
+    monkeypatch.setattr("app.main._reconcile_on_startup", lambda: True)
     monkeypatch.setenv("DATA_DIR", str(tmp_path))
     get_settings.cache_clear()
     with TestClient(create_app()) as test_client:

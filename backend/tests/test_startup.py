@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
 from fastapi.testclient import TestClient
 
 import app.main as main
@@ -62,6 +63,7 @@ def test_the_lifespan_asks_again_only_when_the_first_attempt_failed(monkeypatch)
     """The wiring, not the loop: a startup with a live database must not leave
     a task running behind it."""
     asked: list[float] = []
+    monkeypatch.setattr(main, "embed", lambda texts: [[0.0]])
 
     async def fake(retry_seconds: float, attempt=None) -> None:
         asked.append(retry_seconds)
@@ -81,3 +83,27 @@ def test_the_lifespan_asks_again_only_when_the_first_attempt_failed(monkeypatch)
         pass
 
     assert asked == []
+
+
+@pytest.mark.parametrize("backend,expected_calls", [("sentence-transformers", 1), ("http", 0)])
+def test_startup_warms_only_local_embeddings_before_serving(monkeypatch, backend, expected_calls):
+    monkeypatch.setenv("EMBEDDING_BACKEND", backend)
+    monkeypatch.setattr(main, "_reconcile_on_startup", lambda: True)
+    calls = []
+    monkeypatch.setattr(main, "embed", lambda texts: calls.append(texts) or [[0.0]])
+
+    with TestClient(main.create_app()):
+        assert len(calls) == expected_calls
+
+
+def test_local_embedding_failure_prevents_ready_startup(monkeypatch):
+    monkeypatch.setenv("EMBEDDING_BACKEND", "sentence-transformers")
+    monkeypatch.setattr(main, "_reconcile_on_startup", lambda: True)
+
+    def failed(texts):
+        raise RuntimeError("synthetic local embedding failure")
+
+    monkeypatch.setattr(main, "embed", failed)
+    with pytest.raises(RuntimeError, match="synthetic local embedding failure"):
+        with TestClient(main.create_app()):
+            pytest.fail("must not serve before local embeddings are ready")

@@ -3576,3 +3576,7 @@ tender D-162 unblocks; `5b68e376` needs its one scanned page OCR'd locally then
 extracted; `41aaa025` needs its two `unknown` documents identified before any
 model call is worth making. Nothing here is a measurement of extraction quality;
 no read was run.
+
+### 2026-11-08 — Warm local embedding startup
+
+Added local embedding readiness work to API lifespan using the existing shared model cache. Remote backends are skipped; local failures prevent ready startup. Updated startup/API fixtures to mock embedding work and avoid live startup reconciliation during API contract tests. Focused startup/embedding/API checks and the complete backend non-integration suite passed with synthetic credentials and no paid calls. Full suite used a non-live database target. An initial sandboxed asyncio test stalled and was stopped; elevated runs completed. No extraction prompt or cache-key changes. Unseen-tender accuracy, full end-to-end timing and live deployment startup remain untested; user will supply an unseen tender next.
