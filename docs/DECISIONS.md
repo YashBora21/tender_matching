@@ -4475,3 +4475,8 @@ The five-call free-tier wrapper probe completed but exposed unsafe empty extract
 ## Preserve unknown-clause review notes — 2026-11-08
 
 Keep existing source/proposal review notes in manufacturer outcomes for unknown clauses. This changes reporting only: unknown remains review-required, no retrieval or business-type approval is introduced. No prompt or cache-key change.
+
+
+## Reusable frozen-source checksum validator — 2026-11-09
+
+Validate declared source and wrapper bytes by SHA-256 regardless of extension. Missing paths, unreadable bytes and missing/invalid checksums are distinct failures; two records sharing a filename are each checked against their own expected hash. The helper introduces no model calls, prompt/cache semantics or database writes. Pipeline/matching integration is tracked separately.
