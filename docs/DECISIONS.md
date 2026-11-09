@@ -4494,3 +4494,7 @@ Before creating/reusing a matching run or resuming unanswered pairs, validate fr
 ## Source-span value support utility — 2026-11-09
 
 Use literal source support with Unicode/case/whitespace normalization and exact decimal-number comparison. Require complete numeric tokens and range limits inside the cited offsets; reject a quoted range endpoint proposed as the whole scalar even when offsets clip to that endpoint. Recognize explicit dash/to/between ranges, not a plain discrete and-list. Do not infer semantic aliases, repair offsets or promote claims. Conservative textual rejection can require human review for legitimate paraphrases. The reusable utility itself makes no prompt, cache, database or provider changes; extraction integration and version invalidation are recorded separately.
+
+## Conservative inline model-binding utility — 2026-11-09
+
+An explicit native line in the form model; attribute: value (or pipe/equal separators) can bind a candidate to one model without page-wide inference. Require exact model identity, an exact supplied attribute label/value, valid source coordinates, and a unique matching line. Reject repeated anchors, extra fields, wrong models, malformed geometry and unresolved conditions. Do not infer column ownership or semantic aliases. Complex headings, paragraph layouts and scans remain unbound until a separate explicit region-binding method is validated. This pure utility changes no provider, prompt, cache or database behavior by itself.

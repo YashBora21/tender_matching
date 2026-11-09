@@ -3620,3 +3620,7 @@ Added source-byte and extraction-version validation at run creation/resumption. 
 ### 2026-11-09 — Independent source-span value support utility
 
 Added a pure source-span/value gate with synthetic checks for valid numeric/text/Unicode values, wrong spans, decimal/sign/token clipping, complete ranges, clipped endpoints, discrete lists and invalid offsets. No model calls or database writes. Kept the reusable helper and pure tests independently committable from the existing uncommitted extraction/source-context integration.
+
+### 2026-11-09 — Independent conservative native-line binding utility
+
+Added a pure inline model/attribute/value resolver retaining line ID, bounding box and source text. Synthetic cases cover valid open-vocabulary labels, wrong model/attribute/value, prefix collisions, repeated anchors, cross-line borrowing, extra fields/conditions, exact units and malformed coordinates/layout. No remote calls or DB writes. Kept this utility independently committable from the wider uncommitted matching/source-context wiring.
