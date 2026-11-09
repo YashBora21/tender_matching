@@ -99,3 +99,46 @@ def test_malformed_geometry_is_not_used_to_infer_gutters(change):
     lines = copy.deepcopy(source())
     lines[2].update(change)
     assert not heading_regions(lines)
+
+def test_repeated_model_headings_are_ambiguous_even_when_value_occurs_once():
+    lines = source()
+    lines[1]['text'] = 'Synthetic A'
+    assert anchor(lines) is None
+
+
+def test_duplicate_source_line_ids_cannot_identify_a_region():
+    lines = source()
+    lines[3]['line_id'] = lines[2]['line_id']
+    assert not heading_regions(lines)
+
+
+def test_three_columns_preserve_distinct_model_value_ownership():
+    lines = source() + [native('Synthetic C', 580, 20, 80, 16),
+        native('Coupling geometry: Z1', 580, 80),
+        native('Synthetic unrelated background source text in the third column.', 580, 110)]
+    result = anchor(lines, model='Synthetic C', value='Z1', quote='Z1')
+    assert result and result['line_id'] == 'synthetic:580:80'
+    assert anchor(lines, model='Synthetic A', value='Z1', quote='Z1') is None
+
+
+def test_source_order_translation_and_scale_do_not_choose_a_different_line():
+    original = anchor(source())
+    lines = list(reversed(copy.deepcopy(source())))
+    for line in lines:
+        line['bbox'] = [coordinate * 2 + 50 for coordinate in line['bbox']]
+        line['font_size'] *= 2
+    result = anchor(lines)
+    assert result and result['line_id'] == original['line_id']
+
+
+@pytest.mark.parametrize('value,unit', [('12–18', 'bar'), ('12.5', 'bar')])
+def test_complete_numeric_values_and_units_are_not_collapsed(value, unit):
+    lines = source()
+    lines[2]['text'] = f'Synthetic pressure: {value} {unit}'
+    assert anchor(lines, labels=['synthetic pressure'], value=value, unit=unit, quote=value)
+    assert anchor(lines, labels=['synthetic pressure'], value='12', unit=unit, quote='12') is None
+
+
+def test_condition_in_another_models_column_does_not_support_the_claim():
+    lines = source() + [native('Synthetic upgrade required', 300, 95)]
+    assert anchor(lines, conditions='Synthetic upgrade required') is None

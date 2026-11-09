@@ -4,7 +4,7 @@ import math
 import re
 from app.services.textnorm import normalise_text
 
-POLICY_VERSION = 'heading-regions-review-1'
+POLICY_VERSION = 'heading-regions-review-2'
 
 
 def _normalise(text):
@@ -36,6 +36,8 @@ def _gutter(left, right, lines, top, bottom):
 def heading_regions(lines):
     """Propose columns only from disjoint, aligned, overlapping heading bands."""
     if not isinstance(lines, list) or not lines or not all(_valid(line) for line in lines):
+        return []
+    if len({line['line_id'] for line in lines}) != len(lines):
         return []
     sizes = Counter()
     for line in lines:
@@ -102,7 +104,10 @@ def propose_region_anchor(lines, model, labels, value, quote, unit=None, conditi
     labels = {_normalise(label) for label in labels}
     expected = {value, _normalise(value + ' ' + (unit or ''))}
     matches = []
-    for region in heading_regions(lines):
+    regions = heading_regions(lines)
+    if not regions or sum(_normalise(line['text']) == model for line in lines) != 1:
+        return None
+    for region in regions:
         if not any(_normalise(l['text']) == model for l in region['heading_lines']):
             continue
         for line in region['lines']:

@@ -3628,3 +3628,7 @@ Added a pure inline model/attribute/value resolver retaining line ID, bounding b
 ### 2026-11-09 — Independent review-only heading-region utility
 
 Added a pure native-font/geometry region proposal resolver and synthetic tests for column ownership, wrong model/label/value, repeated quotes, later competing headings, wrapped captions, crossed gutters, overlapping headings, uniform fonts, unsupported conditions and malformed geometry. Proposals retain source IDs/boxes and review state. No provider requests or DB writes. Kept the standalone utility and pure tests separately committable from the uncommitted source-context/verifier integration.
+
+### 2026-11-09 — Repeated-heading and duplicate-provenance regression fixes
+
+Expanded synthetic layout checks to repeated model headings, duplicate source IDs, three columns, source-order/translation/scale invariance, complete ranges/decimals with units, and conditions in another model column. Reproduced two failures before fixing the shared resolver: repeated model headings could select a uniquely occurring value, and duplicate line IDs could identify distinct source lines. Both now abstain. Updated region/binding lineage; automatic region verification remains disabled. No API calls or DB writes. Kept the independently testable utility/policy/test changes separate from existing uncommitted integration.

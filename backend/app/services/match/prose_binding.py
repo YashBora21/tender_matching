@@ -3,7 +3,7 @@ import math
 import re
 from app.services.textnorm import normalise_text
 
-POLICY_VERSION = 'native-inline-model-1'
+POLICY_VERSION = 'native-inline-1-heading-proposals-2'
 
 
 def bind_inline_model(lines, model, labels, value, quote, unit=None, conditions=None):
