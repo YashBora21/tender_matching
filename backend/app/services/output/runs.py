@@ -227,6 +227,17 @@ def _manufacturer_names(session: Session, wanted: Optional[list[str]]) -> list[s
     return chosen
 
 
+def _require_current_extraction(requirements):
+    from app.services.requirement.extract import PROMPT_VERSION
+    if any('prompt_version' in row and row['prompt_version'] != PROMPT_VERSION for row in requirements):
+        raise ConflictError('tender extraction must be refreshed before matching', {})
+
+
+def _source_issues(tender_id, repository):
+    from app.services.tender.integrity import tender_source_issues
+    return tender_source_issues(tender_id, repository.list_attachments(tender_id))
+
+
 def create_run(
     session: Session,
     tender_id: str,
@@ -254,12 +265,17 @@ def create_run(
             {"status": tender.get("status")},
         )
 
+    if _source_issues(tender_id, tender_repo):
+        raise ConflictError('tender source integrity must be restored before matching', {})
+
     # A clause only a model can read needs a model, and asking that here is
     # what keeps a run from being created, scheduled, and then never moving off
     # `queued` because there was nothing to call (D-108). A tender that is
     # nothing but commercial lines is answered from its clause types alone, so
     # it is not refused for want of a key.
-    if needs_model(tender_repo.list_requirements(tender_id)):
+    requirements = tender_repo.list_requirements(tender_id)
+    _require_current_extraction(requirements)
+    if needs_model(requirements):
         reason = config_error()
         if reason:
             raise ValidationError(reason)
@@ -363,6 +379,9 @@ def execute_run(
     started = time.monotonic() - float(spent.get("total", 0.0) or 0.0)
 
     try:
+        if _source_issues(run["tender_id"], tenders):
+            raise ConflictError('tender source integrity must be restored before matching', {})
+        _require_current_extraction(requirements)
         if matcher is None and client is None and needs_model(requirements):
             # One client for the run: its counters are what the run spent, and a
             # client per requirement would lose them (D4). Built inside the

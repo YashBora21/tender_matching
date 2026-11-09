@@ -3611,3 +3611,8 @@ Added SHA-256 source validation with synthetic tests for valid/changed extension
 ### 2026-11-09 — Independent structured-source coverage policy
 
 Added a reusable lexical coverage review trigger and vocabulary-backed function words. Independent synthetic tests cover complete structured facts, an omitted qualitative facet hidden in paraphrase, an unapproved attribute copying source words and empty facts. Isolated staged-snapshot tests run without provider or DB access. No tender-specific source values, model/provider changes or automatic completeness claims.
+
+
+### 2026-11-09 — Independent matching cache-lineage gate
+
+Added source-byte and extraction-version validation at run creation/resumption. Isolated synthetic tests verify corrupt sources are rejected before stale requirements, resumed work stops before run claim/matching, and outdated/unversioned extraction requires refresh. Filesystem checks are mocked only in unrelated orchestration tests. No provider requests or DB writes in gate tests.

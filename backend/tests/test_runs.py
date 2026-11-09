@@ -1308,3 +1308,9 @@ def test_a_document_with_no_path_is_named_by_its_address():
         [_evidence_row(None, "https://manufacturer.test/files/d-series.pdf")]
     )
     assert RunRepo(session).results("run-1")[0]["evidence"]["document"] == "d-series.pdf"
+
+
+@pytest.fixture(autouse=True)
+def isolated_source_integrity(monkeypatch):
+    """Run orchestration fakes have no filesystem; source guards have dedicated tests."""
+    monkeypatch.setattr('app.services.output.runs._source_issues', lambda *args: [])

@@ -4485,3 +4485,8 @@ Validate declared source and wrapper bytes by SHA-256 regardless of extension. M
 ## Conservative structured-source coverage utility — 2026-11-09
 
 Source content is represented only by approved attribute names and structured values/units/operators, never by a paraphrase or broad span. Unknown attributes cannot launder source words into apparent coverage. Generic function-word exclusions are vocabulary data. Unrepresented tokens trigger review; their absence does not prove semantic correctness, and synonyms/product nouns may cause conservative warnings. This utility does not change model prompts or approve requirements. Its integration/cache policy is tracked separately.
+
+
+## Matching source-lineage gate — 2026-11-09
+
+Before creating/reusing a matching run or resuming unanswered pairs, validate frozen source bytes and stored requirement prompt versions. Stop with a source-integrity/refresh conflict before model construction, run claim or matching. Repository reads expose the stored prompt version; historical completed reports remain historical and are not rewritten. This gate does not change LLM prompts or report verdicts.

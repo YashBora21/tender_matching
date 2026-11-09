@@ -459,6 +459,7 @@ class TenderRepo:
                 requirement.c.operator,
                 requirement.c.extraction_confidence,
                 requirement.c.mandatory,
+                requirement.c.prompt_version,
             )
             .where(requirement.c.tender_id == tender_id)
         ).all()
@@ -482,6 +483,7 @@ class TenderRepo:
                 "operator": row[13],
                 "confidence": row[14],
                 "mandatory": bool(row[15]) if row[15] is not None else True,
+                "prompt_version": row[16],
             }
             for row in rows
         ]
