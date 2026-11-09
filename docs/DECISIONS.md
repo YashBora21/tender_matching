@@ -4490,3 +4490,7 @@ Source content is represented only by approved attribute names and structured va
 ## Matching source-lineage gate — 2026-11-09
 
 Before creating/reusing a matching run or resuming unanswered pairs, validate frozen source bytes and stored requirement prompt versions. Stop with a source-integrity/refresh conflict before model construction, run claim or matching. Repository reads expose the stored prompt version; historical completed reports remain historical and are not rewritten. This gate does not change LLM prompts or report verdicts.
+
+## Source-span value support utility — 2026-11-09
+
+Use literal source support with Unicode/case/whitespace normalization and exact decimal-number comparison. Require complete numeric tokens and range limits inside the cited offsets; reject a quoted range endpoint proposed as the whole scalar even when offsets clip to that endpoint. Recognize explicit dash/to/between ranges, not a plain discrete and-list. Do not infer semantic aliases, repair offsets or promote claims. Conservative textual rejection can require human review for legitimate paraphrases. The reusable utility itself makes no prompt, cache, database or provider changes; extraction integration and version invalidation are recorded separately.

@@ -3616,3 +3616,7 @@ Added a reusable lexical coverage review trigger and vocabulary-backed function 
 ### 2026-11-09 — Independent matching cache-lineage gate
 
 Added source-byte and extraction-version validation at run creation/resumption. Isolated synthetic tests verify corrupt sources are rejected before stale requirements, resumed work stops before run claim/matching, and outdated/unversioned extraction requires refresh. Filesystem checks are mocked only in unrelated orchestration tests. No provider requests or DB writes in gate tests.
+
+### 2026-11-09 — Independent source-span value support utility
+
+Added a pure source-span/value gate with synthetic checks for valid numeric/text/Unicode values, wrong spans, decimal/sign/token clipping, complete ranges, clipped endpoints, discrete lists and invalid offsets. No model calls or database writes. Kept the reusable helper and pure tests independently committable from the existing uncommitted extraction/source-context integration.
