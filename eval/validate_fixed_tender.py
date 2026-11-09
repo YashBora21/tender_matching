@@ -8,8 +8,8 @@ os.environ["TRANSFORMERS_OFFLINE"]="1"
 from pathlib import Path
 logging.disable(logging.CRITICAL)
 sys.path[:0]=['backend','eval']
-from sqlalchemy import text,select,cast,Text
-from app.repositories.db import session_scope
+from sqlalchemy import text,select,cast,Text,event
+from app.repositories.db import session_scope,get_engine
 from app.repositories.tender import TenderRepo
 from app.repositories.schema import document,chunk
 from app.core.config import get_settings
@@ -20,9 +20,29 @@ from app.services.match.retrieve import search
 from app.services.llm import _sentence_transformer,LLMBudgetExceeded
 from app.services.output.runs import _assess
 from recall import load_labels,DatabaseRanking,evaluate
-root=Path('eval/audit/fixed-incorpus-2026-11-08');root.mkdir(parents=True,exist_ok=True)
+import argparse
+parser=argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--output-dir',type=Path,default=Path('eval/audit/fixed-incorpus-2026-11-08'))
+root=parser.parse_args().output_dir;root.mkdir(parents=True,exist_ok=True)
 out={'scope':'frozen two-page specification subset; original full tender source integrity checked separately','remote_calls':0}
 started=time.perf_counter()
+from app.services.match import page_context
+from collections import Counter
+cache_counts=Counter();cache_seconds=0.0
+original_context_loader=page_context.load_page_context
+def measured_context(*args,**kwargs):
+ global cache_seconds
+ begin=time.perf_counter()
+ try:
+  result=original_context_loader(*args,**kwargs)
+  cache_counts[result['cache']]+=1
+  return result
+ finally:cache_seconds+=time.perf_counter()-begin
+page_context.load_page_context=measured_context
+
+@event.listens_for(get_engine(),'begin')
+def readonly_transaction(connection):
+ connection.exec_driver_sql('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
 def digest(data):return hashlib.sha256(data).hexdigest()
 def save():
  temp=root/'results.tmp';temp.write_text(json.dumps(out,indent=2,default=str),encoding='utf-8');temp.replace(root/'results.json')
@@ -72,6 +92,8 @@ try:
    h.update(json.dumps(list(row),default=str).encode());chunk_count+=1
   out['corpus_snapshot']={'documents':len(docs),'chunks':chunk_count,'metadata_text_vector_fingerprint':h.hexdigest()}
   (root/'corpus-document-inventory.json').write_text(json.dumps(docs,indent=2),encoding='utf-8')
+  from app.services.requirement.extract import PROMPT_VERSION as requirement_prompt
+  out['stored_extraction_version_gate']={'current_rows':sum(r.get('prompt_version')==requirement_prompt for r in reqs),'outdated_rows':sum(r.get('prompt_version')!=requirement_prompt for r in reqs),'new_matching_runs_require_refresh':any(r.get('prompt_version')!=requirement_prompt for r in reqs)}
   out['stored_extraction']={'requirements':len(reqs),'items':len(items),'item_linked':sum(bool(r['item_id']) for r in reqs),'with_attribute':sum(bool(r['attribute']) for r in reqs),'review_required':sum(bool(r['review_required']) for r in reqs),'accuracy':'unmeasured; no complete confirmed extraction inventory'}
   save();emit('frozen',requirements=len(reqs),original_package_hash_failures=sum(not r['matches'] for r in integrity))
   t=time.perf_counter()
@@ -113,6 +135,7 @@ try:
    if len(assessments)%30==0:emit('cached_assessment_progress',pairs=len(assessments))
   from collections import Counter
   out['cached_assessment']={'seconds':round(time.perf_counter()-begin,3),'pairs_attempted':len(assessments),'states':dict(Counter(r['state'] for r in assessments)),'blocked_generation_attempts':no_remote.blocked,'accuracy':'not computed: confirmed compound labels are not interchangeable with atomic requirements'}
+  out['page_context_cache']={'lookups':dict(cache_counts),'seconds':round(cache_seconds,3),'source_hash_verified_before_every_hit':True}
   (root/'cached-assessments.json').write_text(json.dumps(assessments,indent=2),encoding='utf-8')
   s.rollback()
  out['total_diagnostic_seconds']=round(time.perf_counter()-started,3);save();emit('finished',**out['cached_assessment'])
