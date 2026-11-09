@@ -3632,3 +3632,7 @@ Added a pure native-font/geometry region proposal resolver and synthetic tests f
 ### 2026-11-09 — Repeated-heading and duplicate-provenance regression fixes
 
 Expanded synthetic layout checks to repeated model headings, duplicate source IDs, three columns, source-order/translation/scale invariance, complete ranges/decimals with units, and conditions in another model column. Reproduced two failures before fixing the shared resolver: repeated model headings could select a uniquely occurring value, and duplicate line IDs could identify distinct source lines. Both now abstain. Updated region/binding lineage; automatic region verification remains disabled. No API calls or DB writes. Kept the independently testable utility/policy/test changes separate from existing uncommitted integration.
+
+### 2026-11-09 — Independent verified page-context cache utility
+
+Added a content-addressed native PDF context cache with source-byte validation before memory/disk lookup, strict payload validation/checksums, source/page/reader/engine/binding identity and atomic writes. Synthetic cases cover equivalent cold/disk/memory output, caller mutation, changed/missing bytes, invalid identities/pages, reader/engine/binding invalidation, corrupted payload/schema/geometry/IDs/table cells, parse failures, unwritable cache and identical verified bytes under another path. No API calls or DB writes. The utility and pure tests are independently committable; matching/source-context/run wiring is tracked separately from prior uncommitted integration.
