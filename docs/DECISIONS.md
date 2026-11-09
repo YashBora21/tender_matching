@@ -4480,3 +4480,8 @@ Keep existing source/proposal review notes in manufacturer outcomes for unknown 
 ## Reusable frozen-source checksum validator — 2026-11-09
 
 Validate declared source and wrapper bytes by SHA-256 regardless of extension. Missing paths, unreadable bytes and missing/invalid checksums are distinct failures; two records sharing a filename are each checked against their own expected hash. The helper introduces no model calls, prompt/cache semantics or database writes. Pipeline/matching integration is tracked separately.
+
+
+## Conservative structured-source coverage utility — 2026-11-09
+
+Source content is represented only by approved attribute names and structured values/units/operators, never by a paraphrase or broad span. Unknown attributes cannot launder source words into apparent coverage. Generic function-word exclusions are vocabulary data. Unrepresented tokens trigger review; their absence does not prove semantic correctness, and synonyms/product nouns may cause conservative warnings. This utility does not change model prompts or approve requirements. Its integration/cache policy is tracked separately.

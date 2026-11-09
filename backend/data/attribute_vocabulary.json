@@ -682,7 +682,8 @@
       "rated",
       "providing",
       "having"
-    ]
+    ],
+    "coverage_ignored_tokens": ["a", "an", "the", "of", "to", "be", "is", "are", "shall", "must", "should", "may", "and", "or", "with", "in", "for", "at", "by", "from", "it", "its", "that", "this", "equal", "than"]
   },
   "boolean_words": {
     "_comment": "The words that state a yes/no. Shared by the normalizer and the boolean evaluator, so a word is never true in one and false in the other.",

@@ -3606,3 +3606,8 @@ Visual/source review proposes missing connection-type requirements for items10/1
 ### 2026-11-09 — Independent frozen-source validation utility
 
 Added SHA-256 source validation with synthetic tests for valid/changed extensionless files, invalid checksums, missing files/paths and colliding filenames. Kept the reusable utility separate from the larger ingestion/matching wiring in the working tree. No provider requests or database changes in this utility commit.
+
+
+### 2026-11-09 — Independent structured-source coverage policy
+
+Added a reusable lexical coverage review trigger and vocabulary-backed function words. Independent synthetic tests cover complete structured facts, an omitted qualitative facet hidden in paraphrase, an unapproved attribute copying source words and empty facts. Isolated staged-snapshot tests run without provider or DB access. No tender-specific source values, model/provider changes or automatic completeness claims.

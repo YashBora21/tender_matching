@@ -76,6 +76,7 @@ class Vocabulary:
     mandatory_markers: tuple[str, ...] = ()
     optional_markers: tuple[str, ...] = ()
     clause_markers: tuple[str, ...] = ()
+    coverage_ignored_tokens: frozenset[str] = frozenset()
     # The words that state a yes/no.
     boolean_truthy: frozenset[str] = frozenset()
     boolean_falsy: frozenset[str] = frozenset()
@@ -171,6 +172,7 @@ def load_vocabulary(path: Optional[str] = None) -> Vocabulary:
         mandatory_markers=tuple(language.get("mandatory_markers", ())),
         optional_markers=tuple(language.get("optional_markers", ())),
         clause_markers=tuple(language.get("clause_markers", ())),
+        coverage_ignored_tokens=frozenset(language.get("coverage_ignored_tokens", ())),
         boolean_truthy=frozenset(boolean.get("truthy", ())),
         boolean_falsy=frozenset(boolean.get("falsy", ())),
         value_shapes=dict(data.get("value_shapes", {})),
