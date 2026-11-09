@@ -3624,3 +3624,7 @@ Added a pure source-span/value gate with synthetic checks for valid numeric/text
 ### 2026-11-09 — Independent conservative native-line binding utility
 
 Added a pure inline model/attribute/value resolver retaining line ID, bounding box and source text. Synthetic cases cover valid open-vocabulary labels, wrong model/attribute/value, prefix collisions, repeated anchors, cross-line borrowing, extra fields/conditions, exact units and malformed coordinates/layout. No remote calls or DB writes. Kept this utility independently committable from the wider uncommitted matching/source-context wiring.
+
+### 2026-11-09 — Independent review-only heading-region utility
+
+Added a pure native-font/geometry region proposal resolver and synthetic tests for column ownership, wrong model/label/value, repeated quotes, later competing headings, wrapped captions, crossed gutters, overlapping headings, uniform fonts, unsupported conditions and malformed geometry. Proposals retain source IDs/boxes and review state. No provider requests or DB writes. Kept the standalone utility and pure tests separately committable from the uncommitted source-context/verifier integration.
