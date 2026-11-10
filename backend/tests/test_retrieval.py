@@ -3,6 +3,31 @@
 from __future__ import annotations
 
 import pytest
+from types import SimpleNamespace
+
+
+def test_query_vector_reused_across_manufacturers(monkeypatch):
+    from app.services.match import retrieve
+
+    calls = []
+    monkeypatch.setattr(retrieve, "embed", lambda texts: calls.append(texts) or [[0.0] * 384])
+    session = SimpleNamespace(info={"requirement_embeddings": {}}, execute=lambda stmt: [])
+    retrieve.semantic_search(session, "Synthetic body material", manufacturer_name="Synthetic A")
+    retrieve.semantic_search(session, "Synthetic body material", manufacturer_name="Synthetic B")
+    assert len(calls) == 1
+    retrieve.semantic_search(session, "Synthetic pressure")
+    assert len(calls) == 2
+
+
+def test_failed_embedding_is_retried(monkeypatch):
+    from app.services.match import retrieve
+
+    calls = []
+    monkeypatch.setattr(retrieve, "embed", lambda texts: calls.append(texts) or [])
+    session = SimpleNamespace(info={"requirement_embeddings": {}}, execute=lambda stmt: [])
+    retrieve.semantic_search(session, "Synthetic query")
+    retrieve.semantic_search(session, "Synthetic query")
+    assert len(calls) == 2
 
 from app.services.match.retrieve import (
     Candidate,

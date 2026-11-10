@@ -1,0 +1,64 @@
+{
+  "requirements": [
+    {
+      "text": "The valve must be a three-piece ball valve.",
+      "source_quote": "Three piece ball valves",
+      "type": "technical",
+      "attribute": "valve type",
+      "operator": "eq",
+      "value": "Three piece ball valves",
+      "unit": null,
+      "mandatory": true
+    },
+    {
+      "text": "The valve size must be 2 inches.",
+      "source_quote": "2\"",
+      "type": "technical",
+      "attribute": "size",
+      "operator": "eq",
+      "value": "2\"",
+      "unit": "inch",
+      "mandatory": true
+    },
+    {
+      "text": "The valve must have screwed ends.",
+      "source_quote": "Screwed end",
+      "type": "technical",
+      "attribute": "end connection",
+      "operator": "eq",
+      "value": "Screwed end",
+      "unit": null,
+      "mandatory": true
+    },
+    {
+      "text": "The valve must conform to ASME class 150.",
+      "source_quote": "ASME class 150",
+      "type": "technical",
+      "attribute": "pressure class",
+      "operator": "eq",
+      "value": "ASME class 150",
+      "unit": null,
+      "mandatory": true
+    },
+    {
+      "text": "The valve body must be made of cast carbon steel.",
+      "source_quote": "Cast carbon steel",
+      "type": "technical",
+      "attribute": "body material",
+      "operator": "eq",
+      "value": "Cast carbon steel",
+      "unit": null,
+      "mandatory": true
+    },
+    {
+      "text": "The face to face distance must be 122 mm.",
+      "source_quote": "Face to face distance 122mm",
+      "type": "technical",
+      "attribute": "face to face distance",
+      "operator": "eq",
+      "value": "122",
+      "unit": "mm",
+      "mandatory": true
+    }
+  ]
+}

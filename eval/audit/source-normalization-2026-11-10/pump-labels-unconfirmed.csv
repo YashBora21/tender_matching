@@ -1,0 +1,13 @@
+proposed_row_id,item_id,page,table,source_label,source_value,source_quote,proposed_attribute,proposed_operator,proposed_unit,proposed_type,label_status,expected_match_status,expected_verification_outcome,notes
+pump-1,unconfirmed-single-product,4,Technical Specifications,"Maximum discharge,m3/h",10,"Maximum discharge,m3/h
+10",flow_rate,unknown,m3/h,technical,unconfirmed,unknown,unknown,Allowed value is 10; whether equality or minimum capability must be confirmed. Conflicts with rated flow more than 15 m3/h.
+pump-2,unconfirmed-single-product,4,Technical Specifications,Maximum Pressure,25.0 (bar),"Maximum Pressure
+25.0 (bar)",operating_pressure,unknown,bar,technical,unconfirmed,unknown,unknown,"Label is maximum pressure, not explicitly working pressure; canonical attribute and comparison direction require confirmation."
+pump-3,unconfirmed-single-product,4,Technical Specifications,Rated Power,5.5 (kiloWatt),"Rated Power
+5.5 (kiloWatt)",power,unknown,kW,technical,unconfirmed,unknown,unknown,Rated power allowed value; confirm equality/tolerance and canonical attribute.
+pump-4,unconfirmed-single-product,4,Technical Specifications,Maximum Head,95.0 (meter),"Maximum Head
+95.0 (meter)",head,unknown,m,technical,unconfirmed,unknown,unknown,"Confirm maximum-head interpretation, canonical attribute and comparison direction."
+pump-5,unconfirmed-single-product,4,Additional Specification Parameters,Efficiency class,IE2 (High efficiency),"Efficiency class
+IE2 (High efficiency)",efficiency_class,eq,,technical,unconfirmed,unknown,unknown,IE2 label stated; confirm enum semantics and canonical attribute.
+pump-6,unconfirmed-single-product,4,Additional Specification Parameters,Rated flow rate,More than 15 m3 /h,"Rated flow rate
+More than 15 m3 /h",flow_rate,gt,m3/h,technical,unconfirmed,unknown,unknown,Explicit strict lower bound; conflicts with maximum discharge 10 m3/h in the same specification.

@@ -1,0 +1,64 @@
+{
+  "requirements": [
+    {
+      "text": "The valve must be a three-piece ball valve.",
+      "source_quote": "Three piece ball valves",
+      "type": "technical",
+      "attribute": "valve type",
+      "operator": "eq",
+      "value": "Three piece ball valves",
+      "unit": null,
+      "mandatory": true
+    },
+    {
+      "text": "The valve size must be 2 inches.",
+      "source_quote": "2\" Socket weld ends",
+      "type": "technical",
+      "attribute": "valve size",
+      "operator": "eq",
+      "value": "2\"",
+      "unit": "inch",
+      "mandatory": true
+    },
+    {
+      "text": "The valve ends must be socket weld.",
+      "source_quote": "2\" Socket weld ends",
+      "type": "technical",
+      "attribute": "end connection type",
+      "operator": "eq",
+      "value": "Socket weld",
+      "unit": null,
+      "mandatory": true
+    },
+    {
+      "text": "The face to face distance must be 122 mm.",
+      "source_quote": "Face to face distance 122mm",
+      "type": "technical",
+      "attribute": "face to face distance",
+      "operator": "eq",
+      "value": "122",
+      "unit": "mm",
+      "mandatory": true
+    },
+    {
+      "text": "The valve must conform to ASME class 600.",
+      "source_quote": "ASME class 600",
+      "type": "certification",
+      "attribute": "pressure class",
+      "operator": "eq",
+      "value": "ASME class 600",
+      "unit": null,
+      "mandatory": true
+    },
+    {
+      "text": "The valve body must be made of cast carbon steel.",
+      "source_quote": "Cast Carbon steel",
+      "type": "technical",
+      "attribute": "body material",
+      "operator": "eq",
+      "value": "Cast Carbon steel",
+      "unit": null,
+      "mandatory": true
+    }
+  ]
+}

@@ -1,0 +1,436 @@
+{
+  "date": "2026-11-10",
+  "scope": "Saved proposals only; source quote contract and derived-field replay, no matching accuracy.",
+  "classification_policy": "82440d843e6a7a2935c4238f2d9429d553f1b2d515cb1d4056abfd666d8b5ee0",
+  "normalization_policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+  "source_hashes_asserted": {
+    "eval/audit/quote-contract-2026-11-10/live/proposal-1.json": "9f7ea2d0e0eb9821f90727289d24af64d688454a1be21ae2e8396c870775df23",
+    "eval/audit/quote-contract-2026-11-10/live/proposal-2.json": "18a48940a9ca3b2e6bfcd34b2ddc1b234bcd9dd198b3f2e07a70a7394e8eb7af",
+    "eval/audit/fixed-incorpus-2026-11-09/cache-replay/frozen-specification.pdf": "cfd76796ef1d366905dc14d079a2d3a6e3c288f317f4377829a83f7e9c28c5d1"
+  },
+  "raw_quotes_preserved": true,
+  "rows": [
+    {
+      "item_id": "10",
+      "proposal_row": 1,
+      "raw": {
+        "text": "The valve must be a three-piece ball valve.",
+        "source_quote": "Three piece ball valves",
+        "type": "technical",
+        "attribute": "valve type",
+        "operator": "eq",
+        "value": "Three piece ball valves",
+        "unit": null,
+        "mandatory": true
+      },
+      "quote_sha256": "fc6e6bec98afc916d588e777df81ac85480fd5c2abb46e1026307626977719f1",
+      "source_block_sha256": "60748c4dae3900195178dc38d5576082d874850265464be5eaa1ff2c4f2714ec",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": null,
+        "value": "Three piece ball valves",
+        "unit": null,
+        "review_required": true,
+        "review_reason": "unmapped attribute"
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": false,
+      "abstention_causes": [
+        "unmapped attribute"
+      ],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "10",
+      "proposal_row": 2,
+      "raw": {
+        "text": "The valve size must be 2 inches.",
+        "source_quote": "2\"",
+        "type": "technical",
+        "attribute": "size",
+        "operator": "eq",
+        "value": "2\"",
+        "unit": "inch",
+        "mandatory": true
+      },
+      "quote_sha256": "85d35af01a555c7ef4431e4d492ab1e63c969acc925cf5113ef848e46e814a9a",
+      "source_block_sha256": "60748c4dae3900195178dc38d5576082d874850265464be5eaa1ff2c4f2714ec",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": "nominal_size",
+        "value": "2",
+        "unit": "inch",
+        "review_required": false,
+        "review_reason": null,
+        "nominal_dn": [
+          50
+        ],
+        "nominal_nps": [
+          2
+        ],
+        "kind": "nominal",
+        "range": null
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute",
+        "value"
+      ],
+      "comparison_input_eligible": true,
+      "abstention_causes": [],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "10",
+      "proposal_row": 3,
+      "raw": {
+        "text": "The valve must have screwed ends.",
+        "source_quote": "Screwed end",
+        "type": "technical",
+        "attribute": "end connection",
+        "operator": "eq",
+        "value": "Screwed end",
+        "unit": null,
+        "mandatory": true
+      },
+      "quote_sha256": "06e88b079a15d27ea7a50eb4ced380e369e0d07298053fb1c587c7b463e1ead4",
+      "source_block_sha256": "60748c4dae3900195178dc38d5576082d874850265464be5eaa1ff2c4f2714ec",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": "connection_type",
+        "value": "Screwed end",
+        "unit": null,
+        "review_required": false,
+        "review_reason": null
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": true,
+      "abstention_causes": [],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "10",
+      "proposal_row": 4,
+      "raw": {
+        "text": "The valve must conform to ASME class 150.",
+        "source_quote": "ASME class 150",
+        "type": "technical",
+        "attribute": "pressure class",
+        "operator": "eq",
+        "value": "ASME class 150",
+        "unit": null,
+        "mandatory": true
+      },
+      "quote_sha256": "66bb395dd57b983a0a81bb799cb0f5c7127558a945ad1dd3776edc41170e9539",
+      "source_block_sha256": "60748c4dae3900195178dc38d5576082d874850265464be5eaa1ff2c4f2714ec",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": "pressure_class",
+        "value": "ASME class 150",
+        "unit": null,
+        "review_required": false,
+        "review_reason": null
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": true,
+      "abstention_causes": [],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "10",
+      "proposal_row": 5,
+      "raw": {
+        "text": "The valve body must be made of cast carbon steel.",
+        "source_quote": "Cast carbon steel",
+        "type": "technical",
+        "attribute": "body material",
+        "operator": "eq",
+        "value": "Cast carbon steel",
+        "unit": null,
+        "mandatory": true
+      },
+      "quote_sha256": "372f6d81bad2a5b1b331a2bf57ec78f1a77076253b894939fa73d4fa7ca7d665",
+      "source_block_sha256": "60748c4dae3900195178dc38d5576082d874850265464be5eaa1ff2c4f2714ec",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": "material_grade",
+        "value": "Cast carbon steel",
+        "unit": null,
+        "review_required": false,
+        "review_reason": null
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": true,
+      "abstention_causes": [],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "10",
+      "proposal_row": 6,
+      "raw": {
+        "text": "The face to face distance must be 122 mm.",
+        "source_quote": "Face to face distance 122mm",
+        "type": "technical",
+        "attribute": "face to face distance",
+        "operator": "eq",
+        "value": "122",
+        "unit": "mm",
+        "mandatory": true
+      },
+      "quote_sha256": "ea480f9224b950d5a613e3ca412c88e564308ac1e35d24876c590749e4d6d7dd",
+      "source_block_sha256": "60748c4dae3900195178dc38d5576082d874850265464be5eaa1ff2c4f2714ec",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": null,
+        "value": "122",
+        "unit": "mm",
+        "review_required": true,
+        "review_reason": "unmapped attribute"
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": false,
+      "abstention_causes": [
+        "unmapped attribute"
+      ],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "11",
+      "proposal_row": 1,
+      "raw": {
+        "text": "The valve must be a three-piece ball valve.",
+        "source_quote": "Three piece ball valves",
+        "type": "technical",
+        "attribute": "valve type",
+        "operator": "eq",
+        "value": "Three piece ball valves",
+        "unit": null,
+        "mandatory": true
+      },
+      "quote_sha256": "fc6e6bec98afc916d588e777df81ac85480fd5c2abb46e1026307626977719f1",
+      "source_block_sha256": "1bb3a63968b723f627c4d4ba106a3e306de5c8ca54ff8ee10e2ab9472f5e76fe",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": null,
+        "value": "Three piece ball valves",
+        "unit": null,
+        "review_required": true,
+        "review_reason": "unmapped attribute"
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": false,
+      "abstention_causes": [
+        "unmapped attribute"
+      ],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "11",
+      "proposal_row": 2,
+      "raw": {
+        "text": "The valve size must be 2 inches.",
+        "source_quote": "2\" Socket weld ends",
+        "type": "technical",
+        "attribute": "valve size",
+        "operator": "eq",
+        "value": "2\"",
+        "unit": "inch",
+        "mandatory": true
+      },
+      "quote_sha256": "8fde20a495d9b5e3fe282dd3229a8f11f60080f18c3c9eb7de725a5128fa1021",
+      "source_block_sha256": "1bb3a63968b723f627c4d4ba106a3e306de5c8ca54ff8ee10e2ab9472f5e76fe",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": null,
+        "value": "2\"",
+        "unit": "inch",
+        "review_required": true,
+        "review_reason": "unmapped attribute"
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": false,
+      "abstention_causes": [
+        "unmapped attribute"
+      ],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "11",
+      "proposal_row": 3,
+      "raw": {
+        "text": "The valve ends must be socket weld.",
+        "source_quote": "2\" Socket weld ends",
+        "type": "technical",
+        "attribute": "end connection type",
+        "operator": "eq",
+        "value": "Socket weld",
+        "unit": null,
+        "mandatory": true
+      },
+      "quote_sha256": "8fde20a495d9b5e3fe282dd3229a8f11f60080f18c3c9eb7de725a5128fa1021",
+      "source_block_sha256": "1bb3a63968b723f627c4d4ba106a3e306de5c8ca54ff8ee10e2ab9472f5e76fe",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": null,
+        "value": "Socket weld",
+        "unit": null,
+        "review_required": true,
+        "review_reason": "unmapped attribute"
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": false,
+      "abstention_causes": [
+        "unmapped attribute"
+      ],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "11",
+      "proposal_row": 4,
+      "raw": {
+        "text": "The face to face distance must be 122 mm.",
+        "source_quote": "Face to face distance 122mm",
+        "type": "technical",
+        "attribute": "face to face distance",
+        "operator": "eq",
+        "value": "122",
+        "unit": "mm",
+        "mandatory": true
+      },
+      "quote_sha256": "ea480f9224b950d5a613e3ca412c88e564308ac1e35d24876c590749e4d6d7dd",
+      "source_block_sha256": "1bb3a63968b723f627c4d4ba106a3e306de5c8ca54ff8ee10e2ab9472f5e76fe",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": null,
+        "value": "122",
+        "unit": "mm",
+        "review_required": true,
+        "review_reason": "unmapped attribute"
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": false,
+      "abstention_causes": [
+        "unmapped attribute"
+      ],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "11",
+      "proposal_row": 5,
+      "raw": {
+        "text": "The valve must conform to ASME class 600.",
+        "source_quote": "ASME class 600",
+        "type": "certification",
+        "attribute": "pressure class",
+        "operator": "eq",
+        "value": "ASME class 600",
+        "unit": null,
+        "mandatory": true
+      },
+      "quote_sha256": "fcd669f33d27fa13018ff95db4458b9fa23b8e1d23eb2790e38b5ae628e2b84e",
+      "source_block_sha256": "1bb3a63968b723f627c4d4ba106a3e306de5c8ca54ff8ee10e2ab9472f5e76fe",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": "pressure_class",
+        "value": "ASME class 600",
+        "unit": null,
+        "review_required": false,
+        "review_reason": null
+      },
+      "type_before": "certification",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": true,
+      "abstention_causes": [],
+      "verification_outcome": "not_run"
+    },
+    {
+      "item_id": "11",
+      "proposal_row": 6,
+      "raw": {
+        "text": "The valve body must be made of cast carbon steel.",
+        "source_quote": "Cast Carbon steel",
+        "type": "technical",
+        "attribute": "body material",
+        "operator": "eq",
+        "value": "Cast Carbon steel",
+        "unit": null,
+        "mandatory": true
+      },
+      "quote_sha256": "d66b628d13a612fa07b1f3d4c9a9de91406d6aa3cabbddbfb69c875467652e22",
+      "source_block_sha256": "1bb3a63968b723f627c4d4ba106a3e306de5c8ca54ff8ee10e2ab9472f5e76fe",
+      "derived": {
+        "policy": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+        "attribute": "material_grade",
+        "value": "Cast Carbon steel",
+        "unit": null,
+        "review_required": false,
+        "review_reason": null
+      },
+      "type_before": "technical",
+      "type_after": "technical",
+      "changed_fields": [
+        "attribute"
+      ],
+      "comparison_input_eligible": true,
+      "abstention_causes": [],
+      "verification_outcome": "not_run"
+    }
+  ],
+  "total_rows": 12,
+  "changed_derived_fields": {
+    "attribute": 12,
+    "value": 1,
+    "type": 1
+  },
+  "rows_with_changed_derived_fields": 12,
+  "rows_with_changed_type": 1,
+  "comparison_input_eligible": 6,
+  "abstentions_by_cause": {
+    "unmapped attribute": 6
+  },
+  "confirmed_matches": null,
+  "false_confident_claims": null,
+  "gold_accuracy": null,
+  "llm_calls": 0,
+  "cost_inr": 0
+}

@@ -1,0 +1,26 @@
+{
+  "created": "2026-11-10",
+  "scope": "Saved proposals only; source quote contract and derived-field replay, no matching accuracy.",
+  "source_pdf": "eval/audit/fixed-incorpus-2026-11-09/cache-replay/frozen-specification.pdf",
+  "page": 2,
+  "section": "Technical specification",
+  "files": {
+    "eval/audit/quote-contract-2026-11-10/live/proposal-1.json": "9f7ea2d0e0eb9821f90727289d24af64d688454a1be21ae2e8396c870775df23",
+    "eval/audit/quote-contract-2026-11-10/live/proposal-2.json": "18a48940a9ca3b2e6bfcd34b2ddc1b234bcd9dd198b3f2e07a70a7394e8eb7af",
+    "eval/audit/fixed-incorpus-2026-11-09/cache-replay/frozen-specification.pdf": "cfd76796ef1d366905dc14d079a2d3a6e3c288f317f4377829a83f7e9c28c5d1"
+  },
+  "cases": [
+    {
+      "proposal": "eval/audit/quote-contract-2026-11-10/live/proposal-1.json",
+      "item_id": "10",
+      "start": "10\nC.S. BALL VALVES DN50",
+      "end": "\n11\nC.S. BALL VALVE"
+    },
+    {
+      "proposal": "eval/audit/quote-contract-2026-11-10/live/proposal-2.json",
+      "item_id": "11",
+      "start": "11\nC.S. BALL VALVE",
+      "end": "\nRupees"
+    }
+  ]
+}
