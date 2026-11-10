@@ -1,0 +1,19 @@
+{
+  "version": "structured-values-1",
+  "sources": [
+    "https://www.schley-armaturen.de/en/dimensions.html",
+    "https://content.spiraxsarco.com/-/media/spiraxsarco/international/documents/en/ti/tp1_tp2_tp3-ti-p169-06-en.ashx?rev=35db90e946f9426c9fb9703c30c8170f"
+  ],
+  "unit_aliases": {"\"": "inch", "''": "inch", "″": "inch", "in": "inch", "inches": "inch", "inch": "inch", "mm": "mm", "millimeter": "mm", "millimeters": "mm", "millimetre": "mm", "millimetres": "mm"},
+  "nominal_prefixes": {"dn": "dn", "nps": "nps"},
+  "nominal_units": {"mm": "dn", "millimeter": "dn", "inch": "nps"},
+  "nominal_sizes": [
+    {"dn": 15, "nps": 0.5}, {"dn": 20, "nps": 0.75}, {"dn": 25, "nps": 1},
+    {"dn": 32, "nps": 1.25}, {"dn": 40, "nps": 1.5}, {"dn": 50, "nps": 2},
+    {"dn": 65, "nps": 2.5}, {"dn": 80, "nps": 3}, {"dn": 100, "nps": 4},
+    {"dn": 125, "nps": 5}, {"dn": 150, "nps": 6}, {"dn": 200, "nps": 8},
+    {"dn": 250, "nps": 10}, {"dn": 300, "nps": 12}, {"dn": 350, "nps": 14},
+    {"dn": 400, "nps": 16}, {"dn": 450, "nps": 18}, {"dn": 500, "nps": 20},
+    {"dn": 600, "nps": 24}, {"dn": 700, "nps": 28}
+  ]
+}

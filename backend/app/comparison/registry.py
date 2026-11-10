@@ -306,7 +306,12 @@ def evaluate_range(request: ComparisonRequest) -> Evaluation:
     covers the whole requirement range satisfies it; a narrower one may not
     reach every value the requirement allows.
     """
-    if not request.requirement_range or not request.capability_range:
+    required_range = request.requirement_range
+    if required_range is None and request.requirement_operator is Operator.EQ:
+        point = _numeric_value(request.requirement_value)
+        if point is not None:
+            required_range = (point, point)
+    if not required_range or not request.capability_range:
         return Evaluation(
             RequirementStatus.NO_EVIDENCE_FOUND,
             0.0,
@@ -314,8 +319,17 @@ def evaluate_range(request: ComparisonRequest) -> Evaluation:
             needs_review=True,
             code=ReasonCode.VALUE_MISSING,
         )
-    req_low, req_high = request.requirement_range
+    req_low, req_high = required_range
     cap_low, cap_high = request.capability_range
+    if bool(request.requirement_unit) != bool(request.capability_unit):
+        return Evaluation(RequirementStatus.NO_EVIDENCE_FOUND, 0.0,
+                          "range units are incomplete", needs_review=True)
+    if request.requirement_unit and request.capability_unit:
+        if not is_compatible(request.capability_unit, request.requirement_unit):
+            return Evaluation(RequirementStatus.NO_EVIDENCE_FOUND, 0.0,
+                              "range units are incompatible", needs_review=True)
+        cap_low = convert(cap_low, request.capability_unit, request.requirement_unit)
+        cap_high = convert(cap_high, request.capability_unit, request.requirement_unit)
     if cap_low <= req_low and cap_high >= req_high:
         return Evaluation(
             RequirementStatus.FULL_MATCH,
@@ -715,11 +729,50 @@ def get_evaluator(
     class is categorical, but its values are ordered. An attribute with no
     evaluator has no rule, and `evaluate` sends it to review.
     """
+    spec = attrs.attribute_by_term(attribute) if attribute else None
+    if spec and getattr(spec, 'normalization', None) == 'nominal':
+        return evaluate_nominal
     if attribute and attribute in ATTRIBUTE_EVALUATORS:
         return ATTRIBUTE_EVALUATORS[attribute]
     if value_type is None:
         return None
     return REGISTRY.get(value_type)
+
+
+def evaluate_nominal(request: ComparisonRequest) -> Evaluation:
+    """Nominal labels identify sizes; physical length conversion is invalid here."""
+    from app.services.requirement.structured_values import normalize_fields
+
+    sides = []
+    for value, unit, bounds in (
+        (request.requirement_value, request.requirement_unit, request.requirement_range),
+        (request.capability_value, request.capability_unit, request.capability_range),
+    ):
+        raw = '-'.join(f'{v:g}' for v in bounds) if bounds is not None else value
+        side = normalize_fields(request.attribute, raw, unit)
+        if side['review_required']:
+            return Evaluation(RequirementStatus.NO_EVIDENCE_FOUND, 0.0,
+                              side['review_reason'], needs_review=True,
+                              code=ReasonCode.UNIT_NOT_COMPARABLE)
+        points = side['nominal_dn']
+        sides.append((points[0], points[-1]))
+    (low, high), (offered_low, offered_high) = sides
+    op = request.requirement_operator
+    if op in (Operator.EQ, Operator.BETWEEN):
+        meets = offered_low <= low and offered_high >= high
+    elif op is Operator.GTE and low == high:
+        meets = offered_high >= low
+    elif op is Operator.LTE and low == high:
+        meets = offered_low <= high
+    elif op is Operator.NE and low == high:
+        meets = not offered_low <= low <= offered_high
+    else:
+        return Evaluation(RequirementStatus.NO_EVIDENCE_FOUND, 0.0,
+                          'nominal operator requires review', needs_review=True,
+                          code=ReasonCode.OPERATOR_NOT_COMPARABLE)
+    return Evaluation(RequirementStatus.FULL_MATCH if meets else RequirementStatus.MISSING_CAPABILITY,
+                      1.0 if meets else 0.0,
+                      'configured nominal-size table: documented sizes ' + ('meet' if meets else 'fail') + ' the requirement')
 
 
 def _apply_declared_scores(evaluation: Evaluation) -> None:

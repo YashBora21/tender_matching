@@ -65,3 +65,39 @@ def test_invalid_offsets(span):
 def test_nonvalue_clause_still_requires_nonempty_valid_span():
     assert span_supports('Synthetic information', (0, 21))
     assert not span_supports('   ', (0, 3))
+
+
+def test_extractor_rejects_value_outside_its_quote_without_repair_or_retry():
+    from app.services.requirement.extract import extract_requirements
+    text = 'Synthetic size 25 mm and pressure 80 bar'
+    class Client:
+        calls = 0
+        def complete_json(self, *args):
+            self.calls += 1
+            return {'requirements': [{'text': 'Synthetic size proposal',
+                'source_quote': text[text.index('pressure'):], 'type': 'technical',
+                'attribute': 'size', 'value': '25', 'unit': 'mm', 'operator': 'eq'}]}
+    client = Client()
+    result = extract_requirements(text, 'synthetic-item', client=client)
+    assert result.rejected == ['Synthetic size proposal']
+    assert not result.requirements and client.calls == 1
+
+
+def test_invalid_source_span_is_not_cached_and_original_clause_stays_reviewable():
+    from app.services.tender.pipeline import _extract_all
+    from app.services.tender.ingest import RequirementRecord
+    from app.services.requirement.coverage import MARKER
+    text = 'Synthetic size 25 mm and pressure 80 bar'
+    class Client:
+        def complete_json(self, *args):
+            return {'requirements': [{'text': 'Synthetic size proposal',
+                'source_quote': text[text.index('pressure'):], 'type': 'technical',
+                'attribute': 'size', 'value': '25', 'operator': 'eq'}]}
+    class Cache:
+        def get(self, *args): return None
+        def put(self, *args): raise AssertionError('invalid span must not be cached')
+    rows, _, _, _, _ = _extract_all([RequirementRecord(text=text, item_id='synthetic-item')],
+                                   client=Client(), cache=Cache())
+    assert len(rows) == 1 and rows[0].source_text == text and rows[0].text == text
+    assert rows[0].item_id == 'synthetic-item' and rows[0].review_required
+    assert MARKER in rows[0].review_reason

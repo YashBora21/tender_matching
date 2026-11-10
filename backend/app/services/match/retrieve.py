@@ -628,7 +628,16 @@ def semantic_search(
     if not query_text.strip():
         return []
     try:
-        vectors = embed([query_text])
+        info = getattr(session, "info", {})
+        cache = info.get("requirement_embeddings")
+        settings = get_settings()
+        key = (settings.embedding_backend, settings.embedding_model,
+               settings.embedding_base_url, settings.embedding_dimension, query_text)
+        vectors = cache.get(key) if cache is not None else None
+        if vectors is None:
+            vectors = embed([query_text])
+            if cache is not None and vectors:
+                cache[key] = vectors
     except Exception as exc:  # noqa: BLE001 - a search that cannot embed finds nothing
         logger.warning("could not embed the query: %s", exc)
         return []

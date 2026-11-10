@@ -302,6 +302,122 @@ def check_semantic(
     )
 
 
+def check_range_endpoint(quote: Optional[str], value: Optional[str]) -> Optional[LayerResult]:
+    if value and quote and re.fullmatch(r"\d+(?:\.\d+)?", value.strip()):
+        ranges = re.findall(r'(\d+(?:\.\d+)?)\s*[”"\u2033]?\s*(?:-|–|—|\bto\b)\s*(\d+(?:\.\d+)?)', quote)
+        if any(float(value) in (float(low), float(high)) and float(low) != float(high)
+               for low, high in ranges):
+            return LayerResult(Layer.SEMANTIC, False,
+                               "the claimed scalar is only an endpoint of a quoted range")
+    return None
+
+
+def check_source_anchor(context, attribute, value):
+    """A table claim must retain an unambiguous cell and its attribute header."""
+    if not context:
+        return None
+    claim = context.get('claim', {})
+    model = claim.get('model_or_series')
+    if model and context.get('document_model') and not _names(model, context['document_model']):
+        return LayerResult(Layer.SEMANTIC, False,
+                           'claim names a different model/series than the linked product')
+    conditions = claim.get('conditions')
+    if conditions and normalise_text(conditions) not in normalise_text(
+            context.get('passage', '') + ' ' + str(context.get('tables', []))):
+        return LayerResult(Layer.SEMANTIC, False, 'conditions are absent from source context')
+    if not context.get('tables'):
+        from app.services.match.prose_binding import bind_inline_model
+        spec = attrs.attribute_by_term(attribute or '') or attrs.find_attribute(attribute or '')
+        labels = (spec.canonical_term, *spec.approved_synonyms) if spec else (attribute or '',)
+        anchor = bind_inline_model(context.get('native_lines', []), model or context.get('document_model'),
+                                   labels, value, claim.get('quote'), claim.get('unit'), conditions)
+        if anchor is None:
+            from app.services.match.source_regions import propose_region_anchor
+            proposal = propose_region_anchor(context.get('native_lines', []),
+                model or context.get('document_model'), labels, value, claim.get('quote'),
+                claim.get('unit'), conditions)
+            if proposal is not None:
+                context['region_anchor_proposal'] = proposal
+                return LayerResult(Layer.SEMANTIC, False,
+                    'heading-based source region is a proposal requiring review')
+            return LayerResult(Layer.SEMANTIC, False,
+                'non-table claim lacks an explicit native-line model and attribute/value binding')
+        context['resolved_anchor'] = anchor
+        return None
+    try:
+        indices = [claim['table_index'], claim['row_index'], claim['column_index']]
+        if any(type(index) is not int or index < 0 for index in indices):
+            raise ValueError('invalid cell coordinates')
+        table = context['tables'][claim['table_index']]
+        row_index, column_index = claim['row_index'], claim['column_index']
+        if row_index == 0:
+            raise ValueError('header is not a value row')
+        cell = table[row_index][column_index]
+        header = table[0][column_index]
+        spec = attrs.attribute_by_term(attribute or '') or attrs.find_attribute(attribute or '')
+        compact = lambda x: re.sub(r'[^\w]', '', (x or '').casefold())
+        labels = {compact(s).removesuffix('s') for s in (*spec.synonyms, spec.canonical_term)} if spec else {compact(attribute).removesuffix('s')} - {''}
+        exact_value = lambda x: normalise_text(x or '').casefold()
+        # A label-cell anchor is resolvable only when its immediate value cell agrees exactly.
+        if compact(cell).removesuffix('s') in labels and column_index + 1 < len(table[row_index]):
+            adjacent = table[row_index][column_index + 1]
+            if value and exact_value(value) == exact_value(adjacent):
+                column_index += 1
+                cell, header = adjacent, table[0][column_index]
+                context['resolved_anchor'] = {
+                    'table_index': claim['table_index'], 'row_index': row_index,
+                    'column_index': column_index, 'method': 'exact_adjacent_label_value',
+                }
+        if not value or exact_value(value) != exact_value(cell):
+            raise ValueError('cell does not contain the claimed value')
+        column_label = compact(header).removesuffix('s') in labels
+        row_label = column_index > 0 and compact(table[row_index][column_index - 1]).removesuffix('s') in labels
+        if row_label and not column_label:
+            other_header = any(
+                compact(header).removesuffix('s') in {
+                    compact(label).removesuffix('s') for label in (*other.synonyms, other.canonical_term)
+                }
+                for other in attrs.load_vocabulary(attrs.vocabulary_path()).attributes
+                if spec is not None and other.canonical_term != spec.canonical_term
+            )
+            if other_header:
+                raise ValueError('row label conflicts with column header')
+        if not (column_label or row_label):
+            raise ValueError('cell/header does not support the claim')
+        scope = model or context.get('document_model')
+        for index, label in enumerate(table[0]):
+            if compact(label) in {'model', 'series', 'modelseries', 'modelnumber'}:
+                row_model = table[row_index][index]
+                if row_model and (not scope or not _names(row_model, scope)):
+                    raise ValueError('row model is outside the linked product scope')
+        return None
+    except (KeyError, TypeError, IndexError, ValueError):
+        return LayerResult(Layer.SEMANTIC, False,
+                           'table claim lacks a verified cell and attribute header; merged or ambiguous tables need review')
+
+
+def check_table_binding(tables, attribute: Optional[str], value: Optional[str]) -> Optional[LayerResult]:
+    """Reject a value located under another column in a source table."""
+    spec = attrs.attribute_by_term(attribute or "") or attrs.find_attribute(attribute or "")
+    if spec is None or not value:
+        return None
+    compact = lambda text: re.sub(r"[^\w]", "", (text or "").casefold())
+    labels = {compact(s).removesuffix("s") for s in (*spec.synonyms, spec.canonical_term)}
+    wanted = compact(value)
+    for rows in tables:
+        if not rows:
+            continue
+        columns = {i for i, label in enumerate(rows[0]) if compact(label).removesuffix("s") in labels}
+        if not columns:
+            continue
+        found = {i for row in rows[1:] for i, cell in enumerate(row)
+                 if cell and wanted == compact(cell)}
+        if found and not found.intersection(columns):
+            return LayerResult(Layer.SEMANTIC, False,
+                               "the source table places this value under a different attribute column")
+    return None
+
+
 @dataclass
 class ListedSet:
     """A passage that lists the values an attribute is available in.
@@ -458,6 +574,7 @@ def verify(
     capability_unit: Optional[str] = None,
     operator_is_known: bool = True,
     convertible: Optional[bool] = None,
+    source_tables: Optional[list] = None,
 ) -> VerificationReport:
     """Run all four layers and return the report."""
     report = VerificationReport()
@@ -474,7 +591,10 @@ def verify(
             is_family_level=is_family_level,
         )
     )
-    report.layers.append(check_semantic(passage, attribute, value))
+    binding = check_table_binding(source_tables or [], attribute, value)
+    semantic = binding or check_semantic(passage, attribute, value)
+    semantic = check_range_endpoint(quote, value) or semantic
+    report.layers.append(semantic)
     report.layers.append(
         check_comparison(requirement_unit, capability_unit, operator_is_known, convertible)
     )

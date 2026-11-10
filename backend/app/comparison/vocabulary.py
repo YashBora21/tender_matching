@@ -51,6 +51,7 @@ class AttributeSpec:
     # A requirement that names one of them ("screwed end") should also find
     # the document that calls the same thing "body style" (FR-20, D-102).
     query_expansion: bool = False
+    normalization: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -141,6 +142,7 @@ def load_vocabulary(path: Optional[str] = None) -> Vocabulary:
                 if approved
             ),
             query_expansion=bool(item.get("query_expansion", False)),
+            normalization=item.get('normalization'),
         )
         for item in data.get("attributes", ())
     )

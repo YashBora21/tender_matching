@@ -8,6 +8,12 @@ from app.schemas.enums import RequirementStatus, VerificationOutcome
 from app.services.match.match import build_query, match_requirement
 
 
+@pytest.fixture(autouse=True)
+def source_anchor_boundary(monkeypatch):
+    """These orchestration fakes have no PDFs; real anchors have dedicated tests."""
+    monkeypatch.setattr('app.services.match.verify.check_source_anchor', lambda *args: None)
+
+
 class _NoRows:
     """A result that holds nothing: no product row, no fact, no page."""
 
@@ -34,6 +40,30 @@ class FakeSession:
 
     def execute(self, statement):
         return _NoRows()
+
+
+def test_returned_attribute_cannot_reinterpret_requested_dimension(monkeypatch):
+    """Synthetic wrong-property fact must stop before physical/nominal comparison."""
+    from app.services.match import match
+    from app.services.match.facts import ExtractedFact, FactResult
+    from app.services.match.retrieve import Candidate
+    candidate = Candidate(chunk_id='synthetic-c', document_id='synthetic-d',
+                          text='Nominal size DN150', page=1)
+    fact = ExtractedFact(found=True, attribute='nominal_size', value='DN150',
+                         quote=candidate.text, operator='eq')
+    result = match._match_candidate(FakeSession(), candidate, 'Face-to-face dimension 150 mm',
+        requirement_attribute='face_to_face', requirement_value='150', requirement_unit='mm',
+        requirement_operator='eq', extracted=FactResult(facts=[fact]))
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.review_required
+    assert 'requested attribute' in result.reason
+
+
+def test_attribute_identity_uses_approved_aliases():
+    from app.services.match.match import _same_attribute
+    assert _same_attribute('nominal_size', 'size')
+    assert not _same_attribute('nominal_size', 'synthetic unknown label')
+    assert not _same_attribute('nominal_size', 'operating_pressure')
 
 
 class _DeclaresCategory:
@@ -755,6 +785,7 @@ def test_a_verified_fact_is_answered_without_retrieving_again(monkeypatch):
         "quote": "Body of body shall be SS316",
         "attribute": "body material",
         "is_family_level": False,
+        "source_context": {"version": 1, "tables": []},
     })
     monkeypatch.setattr(match, "search", no_search)
 
@@ -1091,6 +1122,7 @@ def test_the_transaction_is_closed_before_the_model_is_asked(monkeypatch):
 def _cached_fact_row(**overrides) -> dict:
     """One `cached_fact` row, as the findings read returns it (synthetic)."""
     row = {
+        "source_context": {"version": 1, "tables": []},
         "id": "fact-1",
         "value": "CF8M",
         "unit": None,
@@ -1103,6 +1135,29 @@ def _cached_fact_row(**overrides) -> dict:
     }
     row.update(overrides)
     return row
+
+
+@pytest.mark.parametrize("category,product_type", [("pumps", "ball"), ("valves", "control"), (None, None)])
+def test_explicit_model_cache_does_not_bypass_item_scope(monkeypatch, category, product_type):
+    from app.services.match import match
+
+    monkeypatch.setattr(match, "_cached_fact", lambda *a, **k: _cached_fact_row(category=category, product_type=product_type))
+    searched = []
+    monkeypatch.setattr(match, "search", lambda *a, **k: searched.append(k) or [])
+    result = match_requirement(FakeSession(), "Body shall be SS316", item_title="Ball valve", category="valves", manufacturer_name="Synthetic", model="Synthetic model")
+    assert searched and searched[0]["product_type"] == "ball"
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+
+
+def test_cached_candidate_keeps_uncertain_type_applicability(monkeypatch):
+    from app.services.match import match
+
+    candidate = _passage_of("Synthetic")
+    candidate.type_unconfirmed = True
+    monkeypatch.setattr(match, "_cached_fact", lambda *a, **k: _cached_fact_row())
+    result = match._match_candidate(FakeSession(), candidate, "Body shall be SS316", requirement_value="SS316")
+    assert result.applicability.value == "family_level"
+    assert result.review_required
 
 
 def _passage_of(model: str, manufacturer: str = "Acme"):

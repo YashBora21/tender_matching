@@ -67,52 +67,28 @@ class AliasRepo:
         if not token:
             return AliasResolution(needs_review=True, reason="no attribute name")
 
-        # A canonical term written with a space is still that term: a document
-        # says "Material Grade" and the vocabulary calls it `material_grade`.
-        # Only the separators differ, so reading it as a name nobody knows
-        # would send a known attribute to review and file its fact where the
-        # cache cannot find it (FR-21, D-136).
-        underscored = name.strip().casefold().replace("-", "_").replace(" ", "_")
-        spec = attribute_by_term(name) or attribute_by_term(token) or attribute_by_term(
-            underscored
-        )
-        if spec is not None:
-            return AliasResolution(
-                canonical_term=spec.canonical_term,
-                confidence=1.0,
-                is_canonical=True,
-            )
+        # Inspect every normalized spelling: first-hit lookup hides conflicting mappings.
+        from app.services.requirement.structured_values import resolve_name
+        rows = self._normalized_rows(name)
+        canonical, reason = resolve_name(name, rows, threshold=threshold)
+        terms = {row['canonical_term'] for row in rows}
+        if reason == 'ambiguous attribute mapping':
+            return AliasResolution(needs_review=True, reason=reason)
+        if canonical is not None:
+            confidence = max((float(row['confidence'] or 0) for row in rows), default=1.0)
+            return AliasResolution(canonical_term=canonical, confidence=confidence,
+                                   is_canonical=normalise_token(canonical) == token)
+        if len(terms) == 1:
+            term = next(iter(terms))
+            confidence = max(float(row['confidence'] or 0) for row in rows)
+            return AliasResolution(canonical_term=term, confidence=confidence,
+                                   needs_review=True,
+                                   reason=f"alias '{name}' is not approved with sufficient confidence in the vocabulary")
+        return AliasResolution(needs_review=True, reason=f"{reason}: '{name}'")
 
-        row = self._lookup(name) or self._lookup(token)
-        if row is None:
-            return AliasResolution(
-                needs_review=True,
-                reason=f"'{name}' is not a known attribute",
-            )
-
-        canonical_term, confidence, approved = row
-        confidence = float(confidence or 0.0)
-        if not approved:
-            return AliasResolution(
-                canonical_term=canonical_term,
-                confidence=confidence,
-                needs_review=True,
-                reason=f"the alias '{name}' has not been approved",
-            )
-        if confidence < threshold:
-            return AliasResolution(
-                canonical_term=canonical_term,
-                confidence=confidence,
-                needs_review=True,
-                reason=(
-                    f"the alias '{name}' has confidence {confidence:.2f}, "
-                    f"below the threshold {threshold:.2f}"
-                ),
-            )
-        return AliasResolution(
-            canonical_term=canonical_term,
-            confidence=confidence,
-        )
+    def _normalized_rows(self, name):
+        token = normalise_token(name)
+        return [row for row in self.list_all() if normalise_token(row['alias']) == token]
 
     def _lookup(self, name: str) -> Optional[tuple]:
         """The alias row for a name, if there is one."""

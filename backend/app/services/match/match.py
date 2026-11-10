@@ -21,6 +21,7 @@ coverage and not towards the score. It is never a missing capability
 from __future__ import annotations
 
 import time
+import re
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -43,7 +44,7 @@ from app.schemas.enums import (
     ValueType,
     VerificationOutcome,
 )
-from app.services.match.facts import extract_fact
+from app.services.match.facts import extract_fact, extract_fact_batch, FactResult, contract_version
 from app.services.llm import LLMClient
 from app.services.requirement.normalize import parse_range
 from app.services.match.retrieve import Candidate, search
@@ -71,6 +72,9 @@ class MatchResult:
     attribute: Optional[str] = None
     fact_value: Optional[str] = None
     fact_unit: Optional[str] = None
+    fact_operator: Optional[Operator] = None
+    fact_conditions: Optional[str] = None
+    source_context: Optional[dict] = None
     value_type: Optional[ValueType] = None
     # Why no verdict was reached, when the reason is a limit of this system
     # rather than a finding about the product (D-86). A code is what tells
@@ -194,12 +198,21 @@ def match_requirement(
     result = MatchResult(requirement_text=requirement_text)
     settings = get_settings()
     limit = limit or settings.match_max_candidates
+    product_type = None
+    if category and item_title:
+        from app.services.match.category import infer_type
+
+        product_type = infer_type(category, item_title).product_type
 
     # The fact cache is checked first: a fact that was verified once is the
     # answer, and the passage it came from has not changed (FR-21).
     with stage(result.stage_seconds, "cached_fact"):
         cached = _cached_fact(session, requirement_text, manufacturer_name, model)
-    if cached is not None:
+    if cached is not None and (
+        (not category or cached.get("category") == category)
+        and (not product_type or cached.get("product_type") == product_type)
+        and _same_attribute(requirement_attribute, cached.get('attribute'))
+    ):
         hit = _from_cached_fact(
             cached,
             requirement_text,
@@ -215,12 +228,6 @@ def match_requirement(
     # The finer scope inside the category: a gate-valve item is not answered
     # by a ball-valve datasheet. The type is read from the item's title, and
     # an item that names two types equally is not filtered on a guess (D-97).
-    product_type: Optional[str] = None
-    if category and item_title:
-        from app.services.match.category import infer_type
-
-        product_type = infer_type(category, item_title).product_type
-
     # The search is asked with the item's title and the read attribute, not
     # with the bare clause: a fragment names no subject on its own (D-96).
     query = build_query(
@@ -262,17 +269,39 @@ def match_requirement(
         return result
 
     best: Optional[MatchResult] = None
-    for candidate in candidates:
+    grouped = {}
+    for candidate_index, candidate in enumerate(candidates):
+        if settings.match_extraction_batch_size > 1 and candidate.chunk_id not in grouped:
+            pending = []
+            chars = 0
+            for next_candidate in candidates[candidate_index:]:
+                if len(pending) >= settings.match_extraction_batch_size:
+                    break
+                if chars + len(next_candidate.text) > settings.match_extraction_batch_chars:
+                    break
+                if _cached_fact(session, requirement_text, next_candidate.manufacturer, next_candidate.model) is not None:
+                    continue
+                pending.append(next_candidate)
+                chars += len(next_candidate.text)
+            if len(pending) > 1:
+                session.commit()
+                with stage(result.stage_seconds, "extract"):
+                    extracted_batch = extract_fact_batch(requirement_text, [p.text for p in pending], client=client,
+                                                        source_contexts=[_evidence_context(session, p) for p in pending])
+                result.llm_calls += 1
+                grouped.update((p.chunk_id, value) for p, value in zip(pending, extracted_batch))
         outcome = _match_candidate(
             session,
             candidate,
             requirement_text,
+            requirement_attribute=requirement_attribute,
             requirement_value=requirement_value,
             requirement_unit=requirement_unit,
             requirement_operator=requirement_operator,
             manufacturer_name=manufacturer_name,
             model=model,
             client=client,
+            extracted=grouped.get(candidate.chunk_id),
         )
         result.llm_calls += outcome.llm_calls
         merge_stages(result.stage_seconds, outcome.stage_seconds)
@@ -322,17 +351,28 @@ def _is_better(candidate: MatchResult, current: MatchResult) -> bool:
     return candidate.score > current.score
 
 
+def _same_attribute(required, offered):
+    if required is None:
+        return True
+    from app.services.requirement.structured_values import resolve_name
+    left, left_reason = resolve_name(required)
+    right, right_reason = resolve_name(offered)
+    return not left_reason and not right_reason and left == right
+
+
 def _match_candidate(
     session: Session,
     candidate: Candidate,
     requirement_text: str,
     *,
+    requirement_attribute: Optional[str] = None,
     requirement_value: Optional[str] = None,
     requirement_unit: Optional[str] = None,
     requirement_operator: Optional[str] = None,
     manufacturer_name: Optional[str] = None,
     model: Optional[str] = None,
     client: Optional[LLMClient] = None,
+    extracted: Optional[FactResult] = None,
 ) -> MatchResult:
     """Read one passage and say what it means for the requirement."""
     result = MatchResult(
@@ -353,7 +393,16 @@ def _match_candidate(
         cached = _cached_fact(
             session, requirement_text, candidate.manufacturer, candidate.model
         )
-    if cached is not None:
+    if cached is not None and (
+        (not candidate.document_type
+        or cached.get("product_type") == candidate.document_type)
+        and _same_attribute(requirement_attribute, cached.get('attribute'))
+    ):
+        cached = dict(cached)
+        cached["is_family_level"] = (
+            cached["is_family_level"] or candidate.is_family_level
+            or candidate.type_unconfirmed
+        )
         hit = _from_cached_fact(
             cached,
             requirement_text,
@@ -370,10 +419,12 @@ def _match_candidate(
     # otherwise hold its connection idle for the seconds the provider takes to
     # answer. Nothing written is pending here: a pair is stored and committed
     # by the run, after this call returns.
-    session.commit()
-    with stage(result.stage_seconds, "extract"):
-        extracted = extract_fact(requirement_text, candidate.text, client=client)
-    result.llm_calls = 1
+    if extracted is None:
+        session.commit()
+        with stage(result.stage_seconds, "extract"):
+            extracted = extract_fact(requirement_text, candidate.text, client=client,
+                                     source_context=_evidence_context(session, candidate))
+        result.llm_calls = 1
     if extracted.error:
         result.reason = extracted.error or "the passage could not be read"
         result.review_required = True
@@ -383,7 +434,28 @@ def _match_candidate(
     # A passage may state more than one capability. The one that answers the
     # requirement is the one the comparison runs on; the rest are not this
     # requirement's business.
-    fact = next((item for item in extracted.facts if item.found), None)
+    found = [item for item in extracted.facts if item.found]
+    fact = next((item for item in found if _same_attribute(requirement_attribute, item.attribute)), None)
+    if found and fact is None:
+        result.reason = 'extracted attribute does not bind to the requested attribute'
+        result.review_required = True
+        result.review_reason = result.reason
+        result.reason_code = ReasonCode.ATTRIBUTE_NOT_MAPPED
+        return result
+    if fact is not None:
+        result.source_context = _evidence_context(session, candidate)
+        result.source_context["claim"] = {
+            "attribute": fact.attribute, "unit": fact.unit, "quote": fact.quote,
+            "model_or_series": fact.model, "conditions": fact.conditions,
+            "table_index": fact.table_index, "row_index": fact.row_index,
+            "column_index": fact.column_index, "value": fact.value,
+            "range": parse_range(fact.value), "operator": fact.operator,
+        }
+        result.fact_operator = _operator(fact.operator)
+        result.fact_conditions = fact.conditions
+        result.attribute = fact.attribute
+        result.fact_value = fact.value
+        result.fact_unit = fact.unit
     with stage(result.stage_seconds, "page_read"):
         page_text = _page_text(session, candidate)
     if fact is None:
@@ -397,6 +469,28 @@ def _match_candidate(
             cited = finding is not None and check_citation(
                 finding.quote, page_text
             ).passed
+            if cited:
+                from app.services.match.verify import check_source_anchor
+                offered = re.split(r'[:=]', finding.quote, maxsplit=1)[-1].strip()
+                result.source_context = _evidence_context(session, candidate)
+                result.source_context['claim'] = {
+                    'model_or_series': candidate.model, 'quote': finding.quote, 'value': offered,
+                }
+                report = verify(
+                    quote=finding.quote, page_text=page_text, passage=candidate.text,
+                    document_manufacturer=candidate.manufacturer, document_model=candidate.model,
+                    document_family=candidate.family, document_model_or_family=candidate.model_or_family,
+                    expected_manufacturer=manufacturer_name, expected_model=model,
+                    is_family_level=candidate.is_family_level, attribute=finding.attribute, value=offered,
+                    source_tables=_source_tables(session, candidate))
+                anchor = check_source_anchor(result.source_context, finding.attribute, offered)
+                cited = report.passed and anchor is None
+                if not cited:
+                    result.verification_outcome = VerificationOutcome.FAILED
+                    result.reason = 'listed capability lacks verified model-specific source binding'
+                    result.review_required = True
+                    result.review_reason = result.reason
+                    return result
         if cited:
             result.status = finding.status
             result.score = 0.0
@@ -430,6 +524,7 @@ def _match_candidate(
             quote=fact.quote,
             page_text=page_text,
             passage=candidate.text,
+            source_tables=_source_tables(session, candidate),
             # Entity validity is decided from the document row, never from the
             # passage: a datasheet page that does not repeat its own manufacturer
             # is still the manufacturer's document (D-94).
@@ -451,6 +546,24 @@ def _match_candidate(
                 else _convertible(requirement_unit, fact.unit)
             ),
         )
+        from app.services.match.verify import check_source_anchor
+        anchor = check_source_anchor(result.source_context, fact.attribute, fact.value)
+        if anchor is not None:
+            report.layers[2] = anchor
+        from app.comparison.attributes import attribute_by_term
+        spec = attribute_by_term(_canonical_term(fact.attribute))
+        if spec and getattr(spec, 'normalization', None) == 'nominal':
+            from app.services.requirement.structured_values import normalize_fields
+            from app.services.match.verify import Layer, LayerResult
+            sides = [normalize_fields(spec.canonical_term, value, unit) for value, unit in (
+                (requirement_value, requirement_unit), (fact.value, fact.unit))]
+            reason = next((side['review_reason'] for side in sides if side['review_required']), None)
+            report.layers[3] = LayerResult(Layer.COMPARISON, not reason and bool(fact.operator),
+                reason or 'nominal designators resolved by configured size table')
+        if fact.conditions and " ".join(fact.conditions.casefold().split()) not in " ".join(requirement_text.casefold().split()):
+            from app.services.match.verify import Layer, LayerResult
+            report.layers[3] = LayerResult(Layer.COMPARISON, False,
+                "capability conditions are not established by the requirement; review required")
     if candidate.is_family_level or candidate.type_unconfirmed:
         # The document is about a family of products, or it never declares
         # which product type it covers. Either way the evidence is not
@@ -632,7 +745,23 @@ def _cached_fact(
     product_id = product_id_for(session, manufacturer_name, model)
     if not product_id:
         return None
-    return cached_fact(session, product_id, spec.canonical_term)
+    cached = cached_fact(session, product_id, spec.canonical_term)
+    if cached:
+        from app.services.match.verify import check_table_binding, check_range_endpoint, check_source_anchor
+
+        if not cached.get("source_context"):
+            return None
+        if check_source_anchor(cached["source_context"], cached["attribute"], cached["value"]) is not None:
+            return None
+
+        if check_range_endpoint(cached["quote"], cached["value"]) is not None:
+            return None
+
+        tables = _source_tables(session, Candidate(
+            chunk_id="", document_id=cached["document_id"], text="", page=cached["page"]))
+        if check_table_binding(tables, cached["attribute"], cached["value"]) is not None:
+            return None
+    return cached
 
 
 def _from_cached_fact(
@@ -662,9 +791,17 @@ def _from_cached_fact(
         attribute=cached["attribute"],
         fact_value=cached["value"],
         fact_unit=cached["unit"],
+        fact_operator=_operator(cached.get("operator")),
+        fact_conditions=cached.get("conditions"),
+        source_context=cached.get("source_context"),
     )
 
     value_type = _value_type(cached["attribute"])
+    if cached.get("conditions") and " ".join(cached["conditions"].casefold().split()) not in " ".join(requirement_text.casefold().split()):
+        result.verification_outcome = VerificationOutcome.FAILED
+        result.review_required = True
+        result.review_reason = result.reason = "cached capability conditions are not established by the requirement"
+        return result
     family_level = cached["is_family_level"]
     requirement_op = _operator(requirement_operator)
     evaluation = evaluate(
@@ -795,7 +932,9 @@ def store_fact(
             value=match.fact_value,
             unit=match.fact_unit,
             value_type=match.value_type,
-            conditions=match.model,
+            conditions=match.fact_conditions,
+            operator=match.fact_operator,
+            source_context=match.source_context,
             page=match.page,
             quote=match.quote,
             verification_status=(
@@ -937,6 +1076,59 @@ def _page_text(session: Session, candidate: Candidate) -> Optional[str]:
     # shortcut: chunks have no ordinal, so they are joined by id and a quote
     # that spans two of them is not found; upgrade when a page stores its text.
     return _page_chunk_text(session, candidate)
+
+
+def _source_tables(session: Session, candidate: Candidate) -> list:
+    """Read physical table columns rather than infer them from flattened text."""
+    from app.repositories.schema import document as document_table
+    from app.services.match.page_context import load_page_context, SourceIntegrityError
+    from app.services.match.prose_binding import POLICY_VERSION
+
+    info = getattr(session, "info", {})
+    cache = info.setdefault("verification_tables", {})
+    key = (candidate.document_id, candidate.page)
+    sources = info.setdefault('verification_sources', {})
+    if candidate.document_id not in sources:
+        row = session.execute(select(document_table.c.path, document_table.c.sha256).where(
+            document_table.c.id == candidate.document_id)).first()
+        if row:
+            sources[candidate.document_id] = (row[0], row[1])
+    stored = sources.get(candidate.document_id)
+    if not stored:
+        return []
+    if not stored[0]:
+        raise SourceIntegrityError('source path unavailable')
+    path = _corpus_file(stored[0])
+    if path is None:
+        raise SourceIntegrityError('source bytes unavailable')
+    context = load_page_context(path, candidate.page, stored[1],
+        get_settings().data_dir / 'tmp' / 'page_context', POLICY_VERSION,
+        memory=info.setdefault('verification_page_contexts', {}))
+    tables = context['tables']
+    info.setdefault('verification_native_lines', {})[key] = context['native_lines']
+    info.setdefault('verification_context_cache', {})[key] = context['cache']
+    cache[key] = tables
+    return tables
+
+
+def _evidence_context(session: Session, candidate: Candidate) -> dict:
+    tables = _source_tables(session, candidate)
+    source = getattr(session, 'info', {}).get('verification_sources', {}).get(candidate.document_id)
+    from app.services.match.prose_binding import POLICY_VERSION
+    return {
+        "version": 3, "document_id": candidate.document_id,
+        "model_binding_policy": POLICY_VERSION,
+        "fact_prompt_version": contract_version(),
+        "extraction_model": get_settings().llm_model,
+        "document_sha256": source[1].lower() if source else None,
+        "page": candidate.page, "chunk_id": candidate.chunk_id,
+        "document_model": candidate.model, "document_family": candidate.family,
+        "model_or_family": candidate.model_or_family,
+        "tables": tables,
+        "native_lines": getattr(session, 'info', {}).get('verification_native_lines', {}).get(
+            (candidate.document_id, candidate.page), []),
+        "passage": candidate.text,
+    }
 
 
 def _page_chunk_text(session: Session, candidate: Candidate) -> str:

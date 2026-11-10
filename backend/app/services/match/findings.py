@@ -48,6 +48,7 @@ class StoredFact:
     verification_status: FactVerificationStatus = FactVerificationStatus.NEEDS_REVIEW
     extractor_version: Optional[str] = None
     attribute_id: Optional[str] = None
+    source_context: Optional[dict] = None
 
 
 def _attribute_id(session: Session, canonical_term: Optional[str]) -> Optional[str]:
@@ -91,7 +92,7 @@ def cached_fact(
     verified fact is a cache hit - a fact that is waiting for a review is not
     an answer, and it is read again.
     """
-    row = session.execute(
+    rows = session.execute(
         select(
             fact.c.id,
             fact.c.value,
@@ -102,6 +103,11 @@ def cached_fact(
             fact.c.quote,
             attribute.c.canonical_term,
             product.c.is_family_level,
+            fact.c.operator,
+            fact.c.conditions,
+            product.c.category,
+            product.c.product_type,
+            fact.c.source_context,
         )
         .select_from(fact)
         .join(attribute, attribute.c.id == fact.c.attribute_id)
@@ -111,15 +117,15 @@ def cached_fact(
             attribute.c.canonical_term == canonical_term,
             fact.c.verification_status == FactVerificationStatus.VERIFIED.value,
         )
-        # A product can hold this attribute more than once, from two documents
-        # that do not agree, and a fact row has no timestamp to choose by. The
-        # id is arbitrary but stable, which is what keeps a re-run from
-        # reporting a different value for the same product.
+        # Equivalent readings retain a stable provenance choice.
         .order_by(fact.c.id)
-        .limit(1)
-    ).first()
-    if row is None:
+    ).all()
+    if not rows:
         return None
+    # A stable UUID does not resolve conflicting values or operating conditions.
+    if len({(r[1], r[2], r[3], r[9], r[10]) for r in rows}) != 1:
+        return None
+    row = rows[0]
     return {
         "id": str(row[0]),
         "value": row[1],
@@ -130,6 +136,11 @@ def cached_fact(
         "quote": row[6],
         "attribute": row[7],
         "is_family_level": bool(row[8]),
+        "category": row[11],
+        "product_type": row[12],
+        "operator": row[9],
+        "conditions": row[10],
+        "source_context": row[13],
     }
 
 
@@ -147,6 +158,7 @@ def store_fact(session: Session, stored: StoredFact) -> str:
             value_type=stored.value_type.value if stored.value_type else None,
             operator=stored.operator.value if stored.operator else None,
             conditions=stored.conditions,
+            source_context=stored.source_context,
             document_id=stored.document_id,
             page=stored.page,
             quote=stored.quote,

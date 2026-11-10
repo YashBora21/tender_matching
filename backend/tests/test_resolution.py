@@ -26,6 +26,11 @@ class FakeAliasRepo(AliasRepo):
     def _lookup(self, name):
         return self.rows.get(name)
 
+    def _normalized_rows(self, name):
+        from app.comparison.vocabulary import normalise_token
+        return [dict(alias=alias, canonical_term=row[0], confidence=row[1], approved=row[2])
+                for alias, row in self.rows.items() if normalise_token(alias) == normalise_token(name)]
+
 
 class EmptySession:
     """A session that answers every query with no rows.
@@ -43,6 +48,16 @@ class EmptySession:
                 return []
 
         return Result()
+
+
+def test_normalized_alias_collisions_are_not_first_hit():
+    repo = FakeAliasRepo(EmptySession(), {
+        'synthetic-name': ('nominal_size', 1.0, True),
+        'synthetic name': ('operating_pressure', 1.0, True),
+    })
+    result = repo.resolve('synthetic name', threshold=0.8)
+    assert result.needs_review and result.canonical_term is None
+    assert 'ambiguous' in result.reason
 
 
 def _session(rows=None):

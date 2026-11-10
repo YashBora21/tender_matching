@@ -125,3 +125,32 @@ def test_invalid_or_out_of_bounds_page_does_not_persist_context(tmp_path, page):
     with pytest.raises((ValueError, IndexError)):
         load(tmp_path, path, digest, page=page)
     assert not (tmp_path/'cache').exists()
+
+
+def test_same_session_adapter_rechecks_bytes_before_reusing_context(tmp_path, monkeypatch):
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
+    monkeypatch.setenv('DATA_DIR', str(tmp_path))
+    path, digest = source(tmp_path)
+    class Session:
+        info = {}
+        def execute(self, query):
+            class Row:
+                def first(self): return (str(path), digest)
+            return Row()
+    session = Session()
+    candidate = Candidate(chunk_id='synthetic', document_id='synthetic', text='Synthetic', page=1)
+    match._source_tables(session, candidate)
+    assert session.info['verification_context_cache'][('synthetic', 1)] == 'miss'
+    match._source_tables(session, candidate)
+    assert session.info['verification_context_cache'][('synthetic', 1)] == 'memory'
+    assert match._evidence_context(session, candidate)['document_sha256'] == digest
+    path.write_bytes(path.read_bytes() + b'\n% synthetic revision\n')
+    with pytest.raises(cache.SourceIntegrityError): match._source_tables(session, candidate)
+
+
+def test_run_snapshot_records_reader_and_pdf_engine_versions():
+    from app.services.output.runs import config_snapshot
+    snapshot = config_snapshot()
+    assert snapshot['page_context_reader'] == cache.READER_VERSION
+    assert snapshot['pdf_engine_version'] == pymupdf.VersionBind

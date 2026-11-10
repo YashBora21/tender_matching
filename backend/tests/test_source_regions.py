@@ -100,6 +100,18 @@ def test_malformed_geometry_is_not_used_to_infer_gutters(change):
     lines[2].update(change)
     assert not heading_regions(lines)
 
+
+def test_region_proposal_never_becomes_a_passed_verification():
+    from app.services.match.verify import check_source_anchor
+    context = {'tables': [], 'native_lines': source(), 'document_model': 'Synthetic A',
+        'passage': 'Synthetic A Coupling geometry: X7',
+        'claim': {'model_or_series': 'Synthetic A', 'quote': 'X7'}}
+    result = check_source_anchor(context, 'coupling geometry', 'X7')
+    assert result is not None and not result.passed
+    assert context['region_anchor_proposal']['review_required']
+    assert 'resolved_anchor' not in context
+
+
 def test_repeated_model_headings_are_ambiguous_even_when_value_occurs_once():
     lines = source()
     lines[1]['text'] = 'Synthetic A'

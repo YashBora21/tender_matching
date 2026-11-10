@@ -115,6 +115,7 @@
     },
     {
       "canonical_term": "nominal_size",
+      "normalization": "nominal",
       "value_type": "numeric",
       "synonyms": [
         {
