@@ -24,6 +24,7 @@ from typing import Any, Optional
 
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.schemas.enums import TenderReasonCode, TenderStatus
 
@@ -38,6 +39,7 @@ from app.repositories.schema import (
     tender_attachment,
     tender_item,
     tender_page,
+    tender_table,
 )
 
 logger = get_logger(__name__)
@@ -71,7 +73,10 @@ class StoredRequirement:
     model: Optional[str] = None
     prompt_version: Optional[str] = None
     input_hash: Optional[str] = None
+    source_table_id: Optional[str] = None
+    source_row_id: Optional[str] = None
     source_span: Optional[tuple[int, int]] = None
+    normalization: Optional[dict] = None
 
 
 class TenderRepo:
@@ -299,48 +304,49 @@ class TenderRepo:
 
     # --- the items ---
 
-    def _forget_results(self, tender_id: str) -> int:
-        """Remove the results of this tender's runs, and say how many.
+    def _preserve_run_inputs(self, tender_id: str) -> None:
+        """Keep actual result-linked legacy rows before changing current inputs.
 
-        A result names one requirement row. The items and the requirements are
-        both replaced by a re-read, and the foreign key refuses to delete a
-        requirement a result still points at - so a tender that had ever been
-        matched could never be read again, which is exactly what a
-        `rate_limited` tender needs to be. The results are not `carried over`
-        because a re-read is a new set: every requirement gets a new id (D-128).
+        Old runs did not record their complete input set. Do not claim that
+        today's unmatched rows or item labels belonged to those runs.
         """
-        removed = self.session.execute(
-            delete(result).where(
-                result.c.run_id.in_(
-                    select(run.c.id).where(run.c.tender_id == tender_id)
-                )
-            )
-        ).rowcount
-        if removed:
-            logger.warning(
-                "tender %s: %d result(s) removed with the rows they answered",
-                tender_id,
-                removed,
-            )
-        return removed
+        for run_id, config in self.session.execute(
+            select(run.c.id, run.c.config_snapshot).where(run.c.tender_id == tender_id)
+        ).all():
+            config = dict(config or {})
+            if "tender_inputs" in config:
+                continue
+            linked = self.session.execute(
+                select(result.c.requirement_id).where(result.c.run_id == run_id)
+            ).scalars().all()
+            rows = self.list_requirements(tender_id, requirement_ids=linked)
+            config["tender_inputs"] = {
+                "requirements": rows, "items": [], "complete": False,
+                "origin": "legacy_result_links", "tender_id": str(tender_id),
+            }
+            self.session.execute(update(run).where(run.c.id == run_id).values(config_snapshot=config))
+
+    def _supersede_requirements(self, tender_id: str) -> None:
+        self._preserve_run_inputs(tender_id)
+        self.session.execute(update(requirement).where(
+            requirement.c.tender_id == tender_id,
+            requirement.c.superseded_at.is_(None),
+        ).values(superseded_at=datetime.now(timezone.utc)))
 
     def replace_items(self, tender_id: str, items: list[dict]) -> int:
         """The tender's items, replacing what was there.
 
-        The requirements of the tender are removed first: they point at the
-        items, and an item that is gone takes its requirements with it.
+        Previous requirements are superseded and item rows are deactivated.
+        Recorded run inputs retain their original item labels.
 
         A number that appears twice is written once: the key is the tender
         and the number, and a bill of quantities that repeats a number is a
         document with a mistake in it, not a reason to lose the tender.
         """
-        self._forget_results(tender_id)
-        self.session.execute(
-            delete(requirement).where(requirement.c.tender_id == tender_id)
-        )
-        self.session.execute(
-            delete(tender_item).where(tender_item.c.tender_id == tender_id)
-        )
+        self._supersede_requirements(tender_id)
+        self.session.execute(update(tender_item).where(
+            tender_item.c.tender_id == tender_id
+        ).values(active=False))
         if not items:
             return 0
 
@@ -353,19 +359,16 @@ class TenderRepo:
             seen.add(key)
             unique.append(item)
 
-        self.session.execute(
-            insert(tender_item),
-            [
-                {
-                    "tender_id": tender_id,
-                    "item_id": item["item_id"],
-                    "name": item.get("name") or "",
-                    "category": item.get("category"),
-                    "boq_ref": item.get("boq_ref"),
-                }
-                for item in unique
-            ],
-        )
+        for item in unique:
+            values = {
+                "tender_id": tender_id, "item_id": item["item_id"],
+                "name": item.get("name") or "", "category": item.get("category"),
+                "boq_ref": item.get("boq_ref"), "active": True,
+            }
+            self.session.execute(pg_insert(tender_item).values(**values).on_conflict_do_update(
+                index_elements=[tender_item.c.tender_id, tender_item.c.item_id],
+                set_={key: value for key, value in values.items() if key not in {"tender_id", "item_id"}},
+            ))
         return len(unique)
 
     def list_items(self, tender_id: str) -> list[dict]:
@@ -375,7 +378,7 @@ class TenderRepo:
                 tender_item.c.name,
                 tender_item.c.category,
                 tender_item.c.boq_ref,
-            ).where(tender_item.c.tender_id == tender_id)
+            ).where(tender_item.c.tender_id == tender_id, tender_item.c.active.is_(True))
         ).all()
         return [
             {"item_id": row[0], "name": row[1], "category": row[2], "boq_ref": row[3]}
@@ -387,13 +390,9 @@ class TenderRepo:
     def replace_requirements(self, tender_id: str, requirements: list[StoredRequirement]) -> int:
         """The tender's requirements, replacing what was there.
 
-        The results that answered the old set go with it: a re-read is a new
-        set, and every requirement gets a new id.
+        Previous rows and their results remain addressable by their original IDs.
         """
-        self._forget_results(tender_id)
-        self.session.execute(
-            delete(requirement).where(requirement.c.tender_id == tender_id)
-        )
+        self._supersede_requirements(tender_id)
         if not requirements:
             return 0
         self.session.execute(
@@ -407,6 +406,7 @@ class TenderRepo:
                     "source_section": item.section,
                     "source_text": item.source_text,
                     "source_span": list(item.source_span) if item.source_span is not None else None,
+                    "normalization": item.normalization,
                     "text": item.text,
                     "type": item.requirement_type,
                     "attribute": item.attribute,
@@ -423,6 +423,8 @@ class TenderRepo:
                     "model": item.model,
                     "prompt_version": item.prompt_version,
                     "input_hash": item.input_hash,
+                    "source_table_id": item.source_table_id,
+                    "source_row_id": item.source_row_id,
                 }
                 for item in requirements
             ],
@@ -439,10 +441,10 @@ class TenderRepo:
         return self.session.execute(
             select(func.count())
             .select_from(requirement)
-            .where(requirement.c.tender_id == tender_id)
+            .where(requirement.c.tender_id == tender_id, requirement.c.superseded_at.is_(None))
         ).scalar_one()
 
-    def list_requirements(self, tender_id: str) -> list[dict]:
+    def list_requirements(self, tender_id: str, *, requirement_ids: Optional[list] = None) -> list[dict]:
         rows = self.session.execute(
             select(
                 requirement.c.id,
@@ -461,10 +463,14 @@ class TenderRepo:
                 requirement.c.operator,
                 requirement.c.extraction_confidence,
                 requirement.c.mandatory,
+                requirement.c.source_table_id,
+                requirement.c.source_row_id,
                 requirement.c.prompt_version,
                 requirement.c.source_span,
+                requirement.c.normalization,
             )
             .where(requirement.c.tender_id == tender_id)
+            .where(requirement.c.superseded_at.is_(None) if requirement_ids is None else requirement.c.id.in_(requirement_ids))
         ).all()
         return [
             {
@@ -486,13 +492,29 @@ class TenderRepo:
                 "operator": row[13],
                 "confidence": row[14],
                 "mandatory": bool(row[15]) if row[15] is not None else True,
-                "prompt_version": row[16],
-                "source_span": tuple(row[17]) if row[17] is not None else None,
+                "source_table_id": str(row[16]) if row[16] else None,
+                "source_row_id": row[17],
+                "prompt_version": row[18],
+                "source_span": tuple(row[19]) if row[19] is not None else None,
+                "normalization": row[20],
             }
             for row in rows
         ]
 
     # --- the page ledger ---
+
+    def store_ocr_table(self, tender_id, identifier, page, attachment_id, context):
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        self.session.execute(pg_insert(tender_table).values(
+            id=identifier, tender_id=tender_id, headers=context['headers'], rows=context['rows'],
+            page_range={'page': page, 'attachment_id': attachment_id, 'ocr': context['reading']}
+        ).on_conflict_do_nothing(index_elements=['id']))
+
+    def list_source_tables(self, tender_id):
+        rows = self.session.execute(select(tender_table.c.id, tender_table.c.page_range,
+                                            tender_table.c.headers, tender_table.c.rows)
+                                    .where(tender_table.c.tender_id == tender_id)).all()
+        return [{'id': str(row[0]), 'source': row[1], 'headers': row[2], 'rows': row[3]} for row in rows]
 
     def replace_pages(self, tender_id: str, pages: list[dict]) -> int:
         """The tender's page ledger, replacing what was there.
@@ -509,6 +531,7 @@ class TenderRepo:
                 {
                     "tender_id": tender_id,
                     "page": page["page"],
+                    "source_key": page.get('source_key') or page.get('attachment_id') or 'legacy',
                     "tags": page.get("tags", []),
                     "extraction_method": page.get("extraction_method"),
                     "quality_warnings": page.get("quality_warnings", []),
@@ -528,9 +551,10 @@ class TenderRepo:
                 tender_page.c.ledger_status,
                 tender_page.c.skip_reason,
                 tender_page.c.attachment_id,
+                tender_page.c.source_key,
             )
             .where(tender_page.c.tender_id == tender_id)
-            .order_by(tender_page.c.page)
+            .order_by(tender_page.c.source_key, tender_page.c.page)
         ).all()
         return [
             {
@@ -538,6 +562,7 @@ class TenderRepo:
                 "ledger_status": row[1],
                 "skip_reason": row[2],
                 "attachment_id": str(row[3]) if row[3] else None,
+                "source_key": row[4],
             }
             for row in rows
         ]

@@ -58,14 +58,17 @@ class FakeTenderRepo:
         stage = self.requirements_stage if section == "requirements" else self.stage
         return dict(stage) if stage is not None else None
 
-    def list_requirements(self, tender_id):
-        return list(self.requirements)
+    def list_requirements(self, tender_id, *, requirement_ids=None):
+        return [row for row in self.requirements if requirement_ids is None or row["id"] in requirement_ids]
 
     def list_items(self, tender_id):
         return list(self.items)
 
     def list_pages(self, tender_id):
         return list(self.pages)
+
+    def list_source_tables(self, tender_id):
+        return []
 
     def list_attachments(self, tender_id):
         return list(self.attachments)
@@ -194,22 +197,18 @@ def _report(
             {"page": 2, "ledger_status": "ocr", "skip_reason": None},
         ]
     run = dict(RUN)
+    from app.repositories.runs import tender_inputs
+    run["config_snapshot"] = {**run["config_snapshot"], "tender_inputs": tender_inputs(
+        requirements if requirements is not None else REQUIREMENTS, ITEMS, tender_id=TENDER_ID)}
     if metrics is not None:
         run["metrics"] = metrics
-    return build_report(
-        object(),
-        RUN_ID,
-        runs=FakeRunRepo(run, results),
-        tenders=FakeTenderRepo(
-            requirements if requirements is not None else REQUIREMENTS,
-            ITEMS,
-            pages,
-            tender,
-            stage,
-            attachments,
-            requirements_stage,
-        ),
-    )
+    tenders = FakeTenderRepo(requirements if requirements is not None else REQUIREMENTS,
+        ITEMS, pages, tender, stage, attachments, requirements_stage)
+    from app.services.output.report import capture_report_context
+    run["config_snapshot"]["tender_inputs"]["report_context"] = capture_report_context(
+        tenders, TENDER_ID, requirements if requirements is not None else REQUIREMENTS)
+    return build_report(object(), RUN_ID, runs=FakeRunRepo(run, results), tenders=tenders)
+
 
 
 def test_a_requirement_row_carries_its_evidence_and_its_flags():
@@ -281,7 +280,7 @@ def test_a_fully_read_tender_is_not_incomplete():
     assert pages["incomplete_ingestion"] is False
 
 
-def test_the_declared_count_is_the_specifications_not_the_wrappers():
+def test_wrapper_pages_missing_from_attachment_ledger_are_incomplete():
     """The ledger's pages come from the specification. A two-page
     specification inside a seventeen-page wrapper is two pages, and comparing
     it with seventeen would report fifteen pages nobody read (D-91)."""
@@ -310,9 +309,9 @@ def test_the_declared_count_is_the_specifications_not_the_wrappers():
     )
 
     pages = report["tender"]["pages"]
-    assert pages["declared"] == 2
-    assert pages["unaccounted"] == 0
-    assert pages["incomplete_ingestion"] is False
+    assert pages["declared"] == 19
+    assert pages["unaccounted"] == 17
+    assert pages["incomplete_ingestion"] is True
 
 
 def test_an_extraction_that_stopped_short_is_not_a_final_report():
@@ -603,3 +602,36 @@ def test_a_run_that_was_never_timed_says_so():
 
     assert report["metrics"] == {}
     assert "Not recorded" in render_html(report)
+
+
+def test_report_uses_bound_requirement_and_item_after_current_inputs_change():
+    from app.repositories.runs import tender_inputs
+    run = {**RUN, "config_snapshot": {**RUN["config_snapshot"],
+        "tender_inputs": tender_inputs(REQUIREMENTS, ITEMS, tender_id=TENDER_ID)}}
+    from app.services.output.report import capture_report_context
+    run["config_snapshot"]["tender_inputs"]["report_context"] = capture_report_context(
+        FakeTenderRepo(REQUIREMENTS, ITEMS, pages=[{"page": 1, "ledger_status": "parsed"}],
+                       stage={"status": "done"}), TENDER_ID, REQUIREMENTS)
+    current = FakeTenderRepo([], [{"item_id": "1", "name": "Changed item"}],
+                             stage={"status": "rate_limited"})
+    report = build_report(object(), RUN_ID, runs=FakeRunRepo(run, [
+        _result("r1", "mfr-a", "Acme", "full_match", evidence=EVIDENCE)]), tenders=current)
+    assert report["historical_inputs_complete"] is True
+    assert report["historical_context_complete"] is True
+    assert report["tender"]["extraction"]["status"] == "done"
+    assert report["tender"]["pages"]["accounted"] == 1
+    assert report["requirements"][0]["text"] == REQUIREMENTS[0]["text"]
+    assert report["requirements"][0]["item_title"] == ITEMS[0]["name"]
+
+
+def test_legacy_report_does_not_invent_item_labels():
+    current = FakeTenderRepo(REQUIREMENTS, [{"item_id": "1", "name": "New label"}])
+    report = build_report(object(), RUN_ID, runs=FakeRunRepo(RUN, [
+        _result("r1", "mfr-a", "Acme", "full_match", evidence=EVIDENCE)]), tenders=current)
+    assert report["historical_inputs_complete"] is False
+    assert report["historical_context_complete"] is False
+    assert report["incomplete_ingestion"] is True
+    assert report["tender"]["pages"]["accounted"] is None
+    assert "Historical source context unknown" in render_html(report)
+    assert report["requirements"][0]["item_title"] is None
+    assert report["unsupported_requirements"] == []

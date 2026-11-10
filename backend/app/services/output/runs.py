@@ -15,9 +15,7 @@ Two things it does **before** retrieval:
   kept out of the score (FR-14). `unknown` is unsupported too, and flagged
   for review, because nothing has established that it is technical.
 - **The item decides the category** (FR-16). An item whose category could
-  not be inferred is not filtered by a category at all, and the requirement
-  is flagged: a wrong filter would hide evidence and read as a missing
-  capability.
+  not be inferred stops retrieval and flags review until its scope is resolved.
 
 The state is written before the work each time, so a run interrupted
 mid-way is visibly interrupted rather than silently queued.
@@ -35,7 +33,7 @@ from app.core.config import get_settings
 from app.core.errors import ConflictError, NotFoundError, ValidationError
 from app.core.logging import get_logger
 from app.repositories.corpus import corpus_hash, list_manufacturers, manufacturer_id
-from app.repositories.runs import RunRepo
+from app.repositories.runs import RunRepo, tender_inputs, inputs_are_current
 from app.repositories.tender import TenderRepo
 from app.schemas.enums import (
     Applicability,
@@ -165,12 +163,24 @@ def config_snapshot() -> dict:
     """
     from app.services.requirement.extract import PROMPT_VERSION
     from app.services.match.score import SCORING_POLICY_VERSION
+    from app.services.match.facts import contract_version
+    from app.services.match.prose_binding import POLICY_VERSION
+    from app.services.match.page_context import READER_VERSION
+    from app.services.requirement.structured_values import fingerprint
+    from app.services.tender.classify import classification_policy_fingerprint
+    import pymupdf
 
     settings = get_settings()
     return {
         "app_version": settings.app_version,
         "schema_version": settings.schema_version,
         "prompt_version": PROMPT_VERSION,
+        "fact_prompt_version": contract_version(),
+        "model_binding_policy": POLICY_VERSION,
+        "page_context_reader": READER_VERSION,
+        "structured_value_policy": fingerprint(),
+        "clause_classification_policy": classification_policy_fingerprint(),
+        "pdf_engine_version": pymupdf.VersionBind,
         "scoring_policy_version": SCORING_POLICY_VERSION,
         "llm_model": settings.llm_model,
         # Which OpenAI-compatible endpoint answered: the same model name served
@@ -186,6 +196,8 @@ def config_snapshot() -> dict:
         # How many passages a requirement may be read against: a smaller cap
         # finds less evidence, so the report has to name it (D19).
         "match_max_candidates": settings.match_max_candidates,
+        "match_extraction_batch_size": settings.match_extraction_batch_size,
+        "match_extraction_batch_chars": settings.match_extraction_batch_chars,
         # What the run was allowed to spend. A run that stopped at its own
         # budget is reproducible only if the budget is on the record (D-110).
         "llm_call_budget": settings.llm_call_budget,
@@ -285,7 +297,11 @@ def create_run(
     # The snapshot this attempt would store, exactly as `create` stores it:
     # comparing it against one that lacks `manufacturers` would find the two
     # different on every tender and so never continue anything (D-130).
-    snapshot = {**config_snapshot(), "manufacturers": names}
+    from app.services.output.report import capture_report_context
+    bound_inputs = tender_inputs(requirements, tender_repo.list_items(tender_id), tender_id=tender_id)
+    bound_inputs["report_context"] = capture_report_context(tender_repo, tender_id, requirements)
+    snapshot = {**config_snapshot(), "manufacturers": names,
+                "tender_inputs": bound_inputs}
     # A run that a limit stopped is continued, not duplicated: it already paid
     # for the pairs it stored, and the command the caller runs again is the
     # same command - as long as it would ask the same questions (D-130).
@@ -336,13 +352,27 @@ def execute_run(
     run_repo = repo or RunRepo(session)
     tenders = tender_repo or TenderRepo(session)
     match = matcher or match_requirement
+    # Reuse each expanded query vector across manufacturers within this run.
+    if hasattr(session, "info"):
+        session.info["requirement_embeddings"] = {}
+        session.info["verification_tables"] = {}
+        session.info['verification_native_lines'] = {}
+        session.info['verification_sources'] = {}
+        session.info['verification_page_contexts'] = {}
+        session.info['verification_context_cache'] = {}
+        session.info['part_catalogue_evidence'] = {}
+        session.info['source_table_parts'] = {}
     write = store or store_match
 
     run = run_repo.get(run_id)
     if run is None:
         raise NotFoundError(f"no run with id {run_id}")
 
-    requirements = tenders.list_requirements(run["tender_id"])
+    current_requirements = tenders.list_requirements(run["tender_id"])
+    bound = run["config_snapshot"].get("tender_inputs")
+    requirements = (bound["requirements"] if bound is not None else
+                    tenders.list_requirements(run["tender_id"], requirement_ids=[
+                        row["requirement_id"] for row in run_repo.results(run_id)]))
     # Only the clauses that were typed are assessed. An unknown clause has no
     # attribute to compare, and a row for it would read as a result (D-92).
     to_assess = assessable(requirements)
@@ -379,6 +409,8 @@ def execute_run(
     started = time.monotonic() - float(spent.get("total", 0.0) or 0.0)
 
     try:
+        if not inputs_are_current(run["config_snapshot"], current_requirements):
+            raise ConflictError("run inputs are obsolete or unbound; create a new run for the active requirement revision", {})
         if _source_issues(run["tender_id"], tenders):
             raise ConflictError('tender source integrity must be restored before matching', {})
         _require_current_extraction(requirements)
@@ -399,7 +431,7 @@ def execute_run(
             _apply_costs(progress, held.get("metrics") or {})
             return progress
 
-        items = {item["item_id"]: item for item in tenders.list_items(run["tender_id"])}
+        items = {item["item_id"]: item for item in bound["items"]}
         # The pairs this pass must not ask about again. A run that stopped at a
         # limit kept its answers, and a resumed run pays only for the pairs
         # that are missing (D-110).
@@ -551,6 +583,34 @@ def _assess(
     if not text:
         return _unsupported(RequirementType.UNKNOWN, ""), category
 
+    from app.repositories.part_coverage import source_part, indexed_part_manufacturers
+    from app.services.match.match import MatchResult
+    normalized = requirement.get("normalization")
+    effective = requirement
+    if normalized is not None:
+        if normalized.get("review_required") or not normalized.get("attribute"):
+            reason = normalized.get("review_reason") or "unresolved structured attribute mapping"
+            return MatchResult(requirement_text=text, status=RequirementStatus.NO_EVIDENCE_FOUND,
+                               verification_outcome=VerificationOutcome.NOT_CHECKED,
+                               applicability=Applicability.UNKNOWN, review_required=True,
+                               review_reason=reason, reason=reason,
+                               reason_code=ReasonCode.REQUIREMENT_NOT_PARSED), category
+        effective = {**requirement, **{key: normalized[key] for key in ("attribute", "value", "unit") if key in normalized}}
+    part = source_part(session, requirement)
+    if part and manufacturer_name not in indexed_part_manufacturers(session, part):
+        reason = 'No indexed evidence for the required source part in this manufacturer catalogue; comparison was not run.'
+        return MatchResult(requirement_text=text, status=RequirementStatus.NO_EVIDENCE_FOUND,
+                           verification_outcome=VerificationOutcome.NOT_CHECKED,
+                           applicability=Applicability.UNKNOWN, review_required=True,
+                           review_reason=reason, reason=reason, reason_code=ReasonCode.CORPUS_GAP), category
+    if category is None:
+        reason = ('The BOQ item was not found; its scope is unresolved.' if not item else
+                  'The BOQ item category is unresolved; classify it before manufacturer retrieval.')
+        return MatchResult(requirement_text=text, status=RequirementStatus.NO_EVIDENCE_FOUND,
+                           verification_outcome=VerificationOutcome.NOT_CHECKED,
+                           applicability=Applicability.UNKNOWN, review_required=True,
+                           review_reason=reason, reason=reason, reason_code=ReasonCode.SCOPE_UNRESOLVED), category
+
     outcome = matcher(
         session,
         text,
@@ -558,9 +618,9 @@ def _assess(
         # retrieval query is built from all three, so a bare fragment is not
         # searched for on its own (D-96).
         item_title=item.get("name"),
-        requirement_attribute=requirement.get("attribute"),
-        requirement_value=requirement.get("value"),
-        requirement_unit=requirement.get("unit"),
+        requirement_attribute=effective.get("attribute"),
+        requirement_value=effective.get("value"),
+        requirement_unit=effective.get("unit"),
         # The stored operator is what makes "minimum 1500 RPM" a `gte`
         # comparison instead of a text one (D17). Dropping it silently
         # downgraded every numeric requirement.
@@ -570,27 +630,6 @@ def _assess(
         client=client,
     )
 
-    # The item's category is what scopes the search. When it is unknown the
-    # search ran unfiltered, and that is a fact the reviewer needs: the answer
-    # is weaker than it looks. The reason is inferred from the item's own
-    # words again, so the flag says why and not only that.
-    if category is None:
-        from app.services.match.category import infer_category
-
-        if item:
-            reason = infer_category(item.get("name") or "").reason
-            reason = reason or "the item's category was not recognised"
-        else:
-            # The requirement hangs from no item, so nothing scoped the
-            # search. That is an unresolved item assignment, not a category
-            # the tender declared (FR-T9): it is flagged, never guessed.
-            reason = "the requirement's bill-of-quantities item was not found"
-        outcome.review_required = True
-        outcome.review_reason = "; ".join(
-            part
-            for part in (outcome.review_reason, f"{reason}; retrieved without a category filter")
-            if part
-        )
     if (
         outcome.status is RequirementStatus.NO_EVIDENCE_FOUND
         and not (requirement.get("attribute") or "").strip()
@@ -704,7 +743,10 @@ def progress(session: Session, run_id: str, *, repo: Optional[RunRepo] = None) -
     if run is None:
         raise NotFoundError(f"no run with id {run_id}")
 
-    requirements = TenderRepo(session).list_requirements(run["tender_id"])
+    bound = run["config_snapshot"].get("tender_inputs")
+    requirements = (bound["requirements"] if bound is not None else
+                    TenderRepo(session).list_requirements(run["tender_id"], requirement_ids=[
+                        row["requirement_id"] for row in run_repo.results(run_id)]))
     state = RunProgress(
         run_id=run_id,
         status=run["status"],

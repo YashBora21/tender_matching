@@ -29,7 +29,7 @@ def test_resumed_run_stops_before_claim_or_matching_on_bad_sources(monkeypatch):
         def rollback(self):pass
         def commit(self):pass
     class Repo:
-        def get(self,run_id):return {'status':'rate_limited','tender_id':'synthetic','manufacturers':['Synthetic'],'error':None}
+        def get(self,run_id):return {'status':'rate_limited','tender_id':'synthetic','manufacturers':['Synthetic'],'error':None, 'config_snapshot':{'tender_inputs':{'requirements':[], 'items':[], 'complete':True}}}
         def count_results(self,run_id):return 0
         def set_status(self,run_id,status,**kwargs):self.status=status.value
         def claim(self,*args):raise AssertionError('do not claim a run with invalid sources')

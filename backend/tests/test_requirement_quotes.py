@@ -183,12 +183,12 @@ def test_repository_writes_and_returns_existing_source_span_column_without_live_
                         type='technical', attribute=None, review_required=False, review_reason=None,
                         value=None, unit=None, operator=None, extraction_confidence=None, mandatory=True,
                         source_table_id=None, source_row_id=None, prompt_version='synthetic-version',
-                        source_span=[10, len(source)])
+                        source_span=[10, len(source)], normalization=None)
                     return [tuple(values[column.name] for column in statement.selected_columns)]
             return Rows()
     session = Session()
     repo = TenderRepo(session)
-    repo._forget_results = lambda *args: None
+    repo._supersede_requirements = lambda *args: None
     repo.replace_requirements('synthetic-tender', [record])
     assert session.written[0]['source_span'] == [10, len(source)]
     assert repo.list_requirements('synthetic-tender')[0]['source_span'] == record.source_span

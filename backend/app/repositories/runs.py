@@ -35,6 +35,21 @@ def _answers_alike(stored: dict, current: dict) -> bool:
     return comparable(stored) == comparable(current)
 
 
+def tender_inputs(requirements: list[dict], items: list[dict], *, tender_id: str) -> dict:
+    """Immutable JSON input binding shared by execution and historical reports."""
+    from copy import deepcopy
+    return deepcopy({"requirements": requirements, "items": items,
+                     "tender_id": str(tender_id), "complete": True,
+                     "origin": "run_creation"})
+
+
+def inputs_are_current(snapshot: dict, requirements: list[dict]) -> bool:
+    stored = (snapshot or {}).get("tender_inputs")
+    return bool(stored and stored.get("complete") and
+                {row["id"] for row in stored["requirements"]} ==
+                {row["id"] for row in requirements})
+
+
 class RunRepo:
     """The runs, and what each of them found."""
 
@@ -206,6 +221,7 @@ class RunRepo:
                 document.c.doc_type,
                 document.c.sha256,
                 document.c.url,
+                fact.c.source_context,
             )
             .select_from(result)
             .join(manufacturer, manufacturer.c.id == result.c.manufacturer_id)
@@ -247,6 +263,7 @@ class RunRepo:
                             # Where the document came from, so the report can
                             # offer the source page rather than only its name.
                             "url": row[20],
+                            "source_context": row[21],
                         }
                     ),
                 }

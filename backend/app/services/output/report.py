@@ -95,32 +95,10 @@ def _pages(tender_repo: TenderRepo, tender_id: str, page_count: Optional[int]) -
     come from the specification. The wrapper PDF's own page count is only the
     fallback, for a tender read before the ledger existed (D-91).
     """
-    pages = tender_repo.list_pages(tender_id)
-    declared = _declared_pages(tender_repo, tender_id, pages)
-    if declared is None:
-        declared = page_count
-    counts: dict[str, int] = {}
-    unresolved: list[dict] = []
-    skipped: list[dict] = []
-    for page in pages:
-        status = page.get("ledger_status") or ""
-        counts[status] = counts.get(status, 0) + 1
-        if status == LedgerStatus.FAILED.value:
-            unresolved.append({"page": page.get("page")})
-        elif status == LedgerStatus.SKIPPED.value:
-            skipped.append({"page": page.get("page"), "reason": page.get("skip_reason")})
-
-    accounted = len(pages)
-    unaccounted = max(0, (declared or 0) - accounted)
-    return {
-        "declared": declared,
-        "accounted": accounted,
-        "unaccounted": unaccounted,
-        "counts": counts,
-        "unresolved": unresolved,
-        "skipped": skipped,
-        "incomplete_ingestion": bool(unresolved or unaccounted),
-    }
+    from app.services.tender.completeness import page_coverage
+    tender = tender_repo.get_tender(tender_id) or {}
+    tender = {**tender, 'page_count': page_count}
+    return page_coverage(tender, tender_repo.list_attachments(tender_id), tender_repo.list_pages(tender_id))
 
 
 def _declared_pages(
@@ -224,6 +202,30 @@ def _type_of(requirement: dict) -> RequirementType:
         return RequirementType.UNKNOWN
 
 
+def capture_report_context(tender_repo: TenderRepo, tender_id: str, requirements: list[dict]) -> dict:
+    """Capture source accounting at run creation, before any refresh can change it."""
+    from copy import deepcopy
+    tender = tender_repo.get_tender(tender_id) or {}
+    return deepcopy({
+        "tender": tender,
+        "pages": _pages(tender_repo, tender_id, tender.get("page_count")),
+        "extraction": _extraction(tender_repo, tender_id),
+        "unknown_requirements": _unknown_requirements(requirements, tender_repo, tender_id),
+        "source_tables": tender_repo.list_source_tables(tender_id),
+        "complete": True,
+    })
+
+
+def _unknown_report_context(tender_id):
+    from app.services.tender.completeness import page_coverage
+    pages = page_coverage({}, [], [])
+    pages.update(accounted=None, unaccounted=None, incomplete_ingestion=True)
+    return {"tender": {"id": tender_id}, "pages": pages,
+            "extraction": {"status": "unknown", "complete": False,
+                           "detail": "Historical source accounting was not recorded."},
+            "unknown_requirements": {}, "source_tables": [], "complete": False}
+
+
 def build_report(
     session: Session,
     run_id: str,
@@ -243,12 +245,20 @@ def build_report(
     if run is None:
         raise NotFoundError(f"no run with id {run_id}")
 
-    tender = tender_repo.get_tender(run["tender_id"]) or {}
-    requirements = tender_repo.list_requirements(run["tender_id"])
-    items = {
-        item["item_id"]: item for item in tender_repo.list_items(run["tender_id"])
-    }
+    inputs = run["config_snapshot"].get("tender_inputs")
     results = run_repo.results(run_id)
+    from copy import deepcopy
+    context = deepcopy((inputs or {}).get("report_context") or _unknown_report_context(run["tender_id"]))
+    tender = context["tender"]
+    if inputs is not None:
+        requirements = inputs["requirements"]
+        items = {item["item_id"]: item for item in inputs["items"]}
+    else:
+        # Legacy reports have no immutable item binding. Keep their actual
+        # result-linked requirements; never borrow new labels after a refresh.
+        linked = {row["requirement_id"] for row in results}
+        requirements = tender_repo.list_requirements(run["tender_id"], requirement_ids=list(linked))
+        items = {}
 
     by_requirement: dict[str, list[dict]] = {}
     for row in results:
@@ -278,6 +288,8 @@ def build_report(
             "category": item.get("category"),
             "text": requirement.get("text") or requirement.get("source_text"),
             "source_text": requirement.get("source_text"),
+            "source_table_id": requirement.get('source_table_id'),
+            "source_row_id": requirement.get('source_row_id'),
             "type": requirement.get("type"),
             "mandatory": requirement.get("mandatory", True),
             "page": requirement.get("page"),
@@ -337,9 +349,9 @@ def build_report(
                 )
 
     expected = len(assessable(requirements)) * len(run["manufacturers"])
-    pages = _pages(tender_repo, run["tender_id"], tender.get("page_count"))
-    extraction = _extraction(tender_repo, run["tender_id"])
-    unknown = _unknown_requirements(requirements, tender_repo, run["tender_id"])
+    pages = context["pages"]
+    extraction = context["extraction"]
+    unknown = context["unknown_requirements"]
     # Either half of the reading can be short, and one is enough to make the
     # report a partial one.
     incomplete = pages["incomplete_ingestion"] or not extraction["complete"]
@@ -366,6 +378,8 @@ def build_report(
         # word on that tender: it says so at the top, where a consumer looks
         # before it reads a score (PRD 4, D16).
         "incomplete_ingestion": incomplete,
+        "historical_inputs_complete": bool(inputs and inputs.get("complete")),
+        "historical_context_complete": bool(context.get("complete")),
         # The config is the run's own snapshot: what it was scored with, not
         # what the settings say now (FR-34).
         "config": run["config_snapshot"],
@@ -373,6 +387,7 @@ def build_report(
         # client reported. A run made before stages were timed has nothing
         # (D-131).
         "metrics": run.get("metrics") or {},
+        "source_tables": context["source_tables"],
         "results": {
             "stored": len(results),
             "expected": expected,
@@ -662,6 +677,8 @@ def _cost_table(report: dict) -> str:
 def _banner(report: dict) -> str:
     parts: list[str] = []
     pages = report["tender"]["pages"]
+    if not report.get("historical_context_complete", True):
+        parts.append('<div class="banner warning"><strong>Historical source context unknown:</strong> page and extraction accounting were not recorded for this run.</div>')
     extraction = report["tender"].get("extraction") or {}
     unknown = report.get("unknown_requirements") or {}
     if unknown.get("unknown"):

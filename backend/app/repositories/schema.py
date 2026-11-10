@@ -196,6 +196,7 @@ fact = Table(
     Column("value_type", _enum(ValueType, "fact_value_type")),
     Column("operator", _enum(Operator, "fact_operator")),
     Column("conditions", Text),
+    Column("source_context", JSONB),
     Column("document_id", Uuid(), ForeignKey("document.id"), nullable=False),
     Column("page", Integer),
     Column("quote", Text),
@@ -253,6 +254,7 @@ tender_item = Table(
     Column("name", String(255), nullable=False),
     Column("category", String(255)),
     Column("boq_ref", String(64)),
+    Column("active", Boolean, nullable=False, server_default="true"),
     Index("ix_tender_item_tender_id", "tender_id"),
 )
 
@@ -283,6 +285,7 @@ tender_page = Table(
     "tender_page",
     metadata,
     Column("tender_id", Uuid(), ForeignKey("tender.id"), primary_key=True),
+    Column("source_key", String(64), primary_key=True, nullable=False, server_default="legacy"),
     Column("page", Integer, primary_key=True),
     Column("tags", JSONB, nullable=False, server_default="[]"),
     Column("extraction_method", _enum(ExtractionMethod, "page_extraction_method")),
@@ -324,6 +327,8 @@ requirement = Table(
     Column("parent_clause", String(512)),
     Column("source_text", Text, nullable=False),
     Column("source_span", JSONB),
+    Column("normalization", JSONB),
+    Column("superseded_at", DateTime(timezone=True)),
     Column("extraction_method", _enum(ExtractionMethod, "requirement_extraction_method"), nullable=False),
     Column("text", Text),
     Column("type", _enum(RequirementType, "requirement_type"), nullable=False),

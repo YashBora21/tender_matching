@@ -22,10 +22,20 @@ from app.services.match.match import MatchResult
 from app.services.output.runs import (
     _manufacturer_names,
     create_run,
-    execute_run,
+    execute_run as _production_execute_run,
     progress,
     summarise,
 )
+
+def execute_run(run_id, **kwargs):
+    """Model create_run's binding for synthetic execution fixtures only."""
+    repo, tenders = kwargs.get("repo"), kwargs.get("tender_repo")
+    if repo is not None and tenders is not None and "tender_inputs" not in repo.run["config_snapshot"]:
+        from app.repositories.runs import tender_inputs
+        repo.run["config_snapshot"]["tender_inputs"] = tender_inputs(
+            tenders.list_requirements(TENDER_ID), tenders.list_items(TENDER_ID), tender_id=TENDER_ID)
+    return _production_execute_run(run_id, **kwargs)
+
 
 RUN_ID = "11111111-1111-4111-8111-111111111111"
 TENDER_ID = "22222222-2222-4222-8222-222222222222"
@@ -123,14 +133,20 @@ class FakeTenderRepo:
     def get_tender(self, tender_id):
         return self.tender
 
-    def list_requirements(self, tender_id):
-        return list(self.requirements)
+    def list_requirements(self, tender_id, *, requirement_ids=None):
+        return [row for row in self.requirements if requirement_ids is None or row["id"] in requirement_ids]
 
     def list_items(self, tender_id):
         return list(self.items)
 
     def list_pages(self, tender_id):
         return list(self.pages)
+
+    def list_attachments(self, tender_id): return []
+
+    def list_source_tables(self, tender_id): return []
+
+    def get_stage(self, tender_id, section): return None
 
     def count_requirements(self, tender_id):
         return len(self.requirements)
@@ -288,7 +304,7 @@ def test_the_stored_operator_reaches_the_comparison():
     assert calls[0]["requirement_operator"] == "gte"
 
 
-def test_an_item_with_no_category_is_searched_unfiltered_and_flagged():
+def test_an_item_with_no_category_stops_before_retrieval():
     """A wrong filter would hide evidence and read as a missing capability."""
     repo = FakeRunRepo()
     tenders = FakeTenderRepo(
@@ -304,13 +320,13 @@ def test_an_item_with_no_category_is_searched_unfiltered_and_flagged():
         _recording_store(repo, {"mfr-Acme": "Acme"}),
     )
 
-    assert calls[0]["category"] is None
+    assert calls == []
     row = repo.stored[0]
     assert row["review_required"] is True
-    assert "retrieved without a category filter" in (row["review_reason"] or "")
+    assert row["reason_code"] == "scope_unresolved"
 
 
-def test_a_requirement_with_no_item_is_searched_unfiltered_and_flagged():
+def test_a_requirement_with_no_item_stops_before_retrieval():
     """An unresolved item assignment is flagged, not given the tender's guess.
 
     Nothing links the requirement to an item, so nothing can say which
@@ -328,7 +344,7 @@ def test_a_requirement_with_no_item_is_searched_unfiltered_and_flagged():
         _recording_store(repo, {"mfr-Acme": "Acme"}),
     )
 
-    assert calls[0]["category"] is None
+    assert calls == []
     assert repo.stored[0]["review_required"] is True
     assert "was not found" in (repo.stored[0]["review_reason"] or "")
 
@@ -1183,6 +1199,9 @@ def test_progress_counts_what_is_stored(monkeypatch):
         "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo(REQUIREMENTS)
     )
 
+    from app.repositories.runs import tender_inputs
+    repo.run["config_snapshot"]["tender_inputs"] = tender_inputs(
+        REQUIREMENTS, ITEMS, tender_id=TENDER_ID)
     state = progress(object(), RUN_ID, repo=repo)
 
     assert state.requirements == 2
@@ -1200,6 +1219,8 @@ def test_progress_expects_only_the_assessable_requirements(monkeypatch):
         "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo(requirements)
     )
 
+    from app.repositories.runs import tender_inputs
+    repo.run["config_snapshot"]["tender_inputs"] = tender_inputs(requirements, ITEMS, tender_id=TENDER_ID)
     state = progress(object(), RUN_ID, repo=repo)
 
     assert state.requirements == 3
@@ -1256,6 +1277,7 @@ def _evidence_row(path, url):
         "catalogue",
         "b" * 64,
         url,
+        {"version": 1, "tables": []},
     )
 
 
@@ -1312,5 +1334,44 @@ def test_a_document_with_no_path_is_named_by_its_address():
 
 @pytest.fixture(autouse=True)
 def isolated_source_integrity(monkeypatch):
-    """Run orchestration fakes have no filesystem; source guards have dedicated tests."""
+    """Orchestration fakes have no filesystem; integrity has dedicated synthetic tests."""
     monkeypatch.setattr('app.services.output.runs._source_issues', lambda *args: [])
+
+
+def test_pending_run_with_superseded_input_ids_stops_before_matching():
+    from app.repositories.runs import tender_inputs
+    repo = FakeRunRepo()
+    repo.run["config_snapshot"]["tender_inputs"] = tender_inputs(
+        [dict(REQUIREMENTS[0], id="old-revision")], ITEMS, tender_id=TENDER_ID)
+    calls = []
+    outcome = _production_execute_run(RUN_ID, session=FakeSession(), repo=repo,
+        tender_repo=FakeTenderRepo(REQUIREMENTS, ITEMS), matcher=_recording_matcher(calls))
+    assert outcome.status == "failed"
+    assert "obsolete or unbound" in outcome.error
+    assert calls == []
+
+
+def test_normalized_fields_reach_matcher_without_changing_original_source():
+    from app.services.output.runs import _assess
+    raw = dict(REQUIREMENTS[0], attribute="synthetic size alias", value='2"', unit=None,
+        normalization={"attribute": "nominal_size", "value": "2", "unit": "inch", "review_required": False})
+    calls = []
+    _assess(FakeSession(), raw, {item["item_id"]: item for item in ITEMS},
+            manufacturer_name="Acme", matcher=_recording_matcher(calls), client=None)
+    assert calls[0]["requirement_attribute"] == "nominal_size"
+    assert calls[0]["requirement_value"] == "2"
+    assert calls[0]["requirement_unit"] == "inch"
+    assert raw["value"] == '2"'
+
+
+def test_unresolved_normalization_abstains_before_retrieval():
+    from app.services.output.runs import _assess
+    raw = dict(REQUIREMENTS[0], normalization={"attribute": None, "review_required": True,
+                                              "review_reason": "ambiguous attribute mapping"})
+    calls = []
+    result, _ = _assess(FakeSession(), raw, {item["item_id"]: item for item in ITEMS},
+        manufacturer_name="Acme", matcher=_recording_matcher(calls), client=None)
+    assert calls == []
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert result.reason_code is ReasonCode.REQUIREMENT_NOT_PARSED
+    assert result.review_reason == "ambiguous attribute mapping"

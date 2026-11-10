@@ -82,7 +82,7 @@ def _a_run_with_one_result(session: Session, tender_id: str, label: str) -> tupl
     return run_id, requirement_id
 
 
-def test_a_reread_replaces_the_requirements_and_the_results_that_answered_them(
+def test_a_reread_supersedes_requirements_and_preserves_results(
     rollback_session,
 ):
     repo = TenderRepo(rollback_session)
@@ -103,17 +103,19 @@ def test_a_reread_replaces_the_requirements_and_the_results_that_answered_them(
     kept = rollback_session.execute(
         select(result.c.id).where(result.c.run_id == run_id)
     ).all()
-    assert kept == []
+    assert len(kept) == 1
     remaining = rollback_session.execute(
         select(func.count()).select_from(requirement).where(
             requirement.c.tender_id == tender_id
         )
     ).scalar_one()
-    assert remaining == 1
+    assert remaining == 2
+    assert repo.count_requirements(tender_id) == 1
     survivors = rollback_session.execute(
         select(requirement.c.id).where(requirement.c.tender_id == tender_id)
     ).scalars().all()
-    assert old_requirement not in survivors
+    assert old_requirement in survivors
+    assert str(old_requirement) not in {row["id"] for row in repo.list_requirements(tender_id)}
 
 
 def test_the_items_stage_can_also_replace_a_tender_that_was_already_matched(
@@ -141,4 +143,4 @@ def test_the_items_stage_can_also_replace_a_tender_that_was_already_matched(
     kept = rollback_session.execute(
         select(result.c.id).where(result.c.run_id == run_id)
     ).all()
-    assert kept == []
+    assert len(kept) == 1
