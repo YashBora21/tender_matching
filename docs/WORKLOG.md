@@ -3913,3 +3913,8 @@ Twelve saved proposals replayed without LLM/network calls: six canonical mapping
 ## 2026-11-10 — Release candidate gate passed
 
 Consolidated integration into seven logical commits. Tagged rc-2026-11-10.1 at db15dab91ff9904478d0526ae26e2d6bdbeb4b4c. Full offline unit suite backend/tests + collect + eval: 1,128 passed, zero failures/errors/skips, 59.333 seconds. One sandbox socketpair stall was stopped; the only completed full run passed outside the socket-restricted sandbox with synthetic provider settings and offline model loading. Audit is eval/audit/release-candidate-2026-11-10/rc.json. Exact private-value tracked-file scan: ten values checked, zero matching files. Compose quiet validation and image-checker synthetic self-test passed. No API spend, live migration, refresh, image build or publication. Pump input and full-tender labels remain pending user confirmation; grouping stays off. Subsequent audit commit records the tested hash without moving the tag.
+
+
+## 2026-11-10 — Local requirements endpoint schema repair
+
+User startup/request log showed UndefinedColumn tender_item.active. Confirmed local runtime database was still at 0020_corpus_scope; committed source already included migration0021. Applied existing additive 0021_requirement_history transactionally with lock/statement timeouts. Before/after counts unchanged: 1,043 requirements, 1,743 results, 23 runs, 112 tender items. Verified live /api/health and the exact failing /requirements endpoint both return HTTP200. No application code change, extraction retry, provider call or result deletion. Audit: eval/audit/release-candidate-2026-11-10/runtime-schema-repair.json. Original RC creation-time migration status remains historical, not overwritten.

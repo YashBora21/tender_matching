@@ -1,0 +1,21 @@
+{
+  "date": "2026-11-10",
+  "issue": "requirements endpoint failed because tender_item.active was absent",
+  "cause": "runtime database remained at 0020_corpus_scope while committed source expected 0021_requirement_history",
+  "repair": "applied existing additive migration in one transaction with lock/statement timeouts",
+  "revision_before": "0020_corpus_scope",
+  "revision_after": "0021_requirement_history",
+  "row_counts_before_and_after": {
+    "requirement": 1043,
+    "result": 1743,
+    "run": 23,
+    "tender_item": 112
+  },
+  "row_counts_unchanged": true,
+  "requirements_endpoint_http_status": 200,
+  "health_http_status": 200,
+  "llm_calls": 0,
+  "extraction_retried": false,
+  "application_source_changed": false,
+  "scope": "local runtime repair after RC creation; original RC audit records creation-time state"
+}
