@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.errors import AppError, app_error_handler
 from app.core.logging import configure_logging, get_logger
 from app.services.llm import embed
+from app.services.tender.ocr import warm_ocr, close_ocr
 
 logger = get_logger(__name__)
 
@@ -60,11 +61,13 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             _reconcile_until_it_works(get_settings().reconcile_retry_seconds)
         )
     try:
+        await asyncio.to_thread(warm_ocr)
         if get_settings().embedding_backend.strip().lower() == "sentence-transformers":
             # Load and exercise the shared local model before accepting tender runs.
             await asyncio.to_thread(embed, ["Synthetic embedding readiness check."])
         yield
     finally:
+        await asyncio.to_thread(close_ocr)
         if task is not None:
             task.cancel()
             with suppress(asyncio.CancelledError):

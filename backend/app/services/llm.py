@@ -79,9 +79,10 @@ class _RateLimited(Exception):
 
 NO_MODEL = "no LLM model is configured (set LLM_MODEL)"
 NO_API_KEY = "no LLM api key is configured (set LLM_API_KEY)"
+NO_BASE_URL = "no LLM endpoint is configured (set LLM_BASE_URL)"
 
 
-def _missing(model: Optional[str], api_key: Optional[str]) -> Optional[str]:
+def _missing(model: Optional[str], api_key: Optional[str], base_url: str) -> Optional[str]:
     """The reason this configuration cannot be called, or None.
 
     One answer for both the preflight and the client, so they cannot drift
@@ -91,6 +92,8 @@ def _missing(model: Optional[str], api_key: Optional[str]) -> Optional[str]:
         return NO_MODEL
     if not api_key:
         return NO_API_KEY
+    if not base_url.strip():
+        return NO_BASE_URL
     return None
 
 
@@ -103,7 +106,7 @@ def config_error() -> Optional[str]:
     model are refused for the same reason - there is nothing to call.
     """
     settings = get_settings()
-    return _missing(settings.llm_model, settings.llm_api_key)
+    return _missing(settings.llm_model, settings.llm_api_key, settings.llm_base_url)
 
 
 # A wait is told in one of three places, and none of them is a vendor's
@@ -323,7 +326,7 @@ class LLMClient:
         # first and a client built without checking refuse for one reason.
         # The resolved values are checked, not the settings: a caller that
         # named a model on the call is configured even when the env is empty.
-        reason = _missing(self.model, self.api_key)
+        reason = _missing(self.model, self.api_key, self.base_url)
         if reason:
             raise LLMError(reason)
         # What this client has spent. Kept here so a caller can report the
@@ -438,15 +441,14 @@ class LLMClient:
             body = exc.read(_LIMIT_BODY_BYTES).decode("utf-8", "replace")
             if exc.code == 429:
                 raise _RateLimited(
-                    f"the model is rate limited: {body[:300]}",
+                    "the model is rate limited (HTTP 429)",
                     wait=_limit_seconds(exc.headers, body),
-                ) from exc
+                ) from None
             raise LLMError(
-                f"{self.model} at {self.base_url} returned HTTP {exc.code}: "
-                f"{body[:300]}"
-            ) from exc
+                f"the configured LLM returned HTTP {exc.code}"
+            ) from None
         except Exception as exc:  # noqa: BLE001 - the reason is reported, not raised past
-            raise LLMError(f"{type(exc).__name__}: {exc}") from exc
+            raise LLMError(f"LLM transport failed ({type(exc).__name__})") from None
 
         try:
             message = data["choices"][0]["message"]
@@ -493,8 +495,11 @@ def _sentence_transformer(name: str):
     if model is None:
         from sentence_transformers import SentenceTransformer
 
-        logger.info("loading the embedding model %s", name)
-        model = SentenceTransformer(name)
+        logger.info("loading the configured embedding model")
+        try:
+            model = SentenceTransformer(name)
+        except Exception as exc:
+            raise LLMError(f"embedding model loading failed ({type(exc).__name__})") from None
         _LOCAL_MODELS[name] = model
     return model
 
@@ -520,15 +525,20 @@ def embed(texts: list[str]) -> list[list[float]]:
         # bge models are trained for cosine similarity; normalising here makes
         # the vector's length irrelevant, which is what the cosine operator
         # assumes. The batch size keeps a large corpus within memory.
-        vectors = model.encode(
-            texts,
-            batch_size=settings.embedding_batch_size,
-            normalize_embeddings=True,
-            show_progress_bar=False,
-        )
+        try:
+            vectors = model.encode(
+                texts,
+                batch_size=settings.embedding_batch_size,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
+        except Exception as exc:
+            raise LLMError(f"embedding encoding failed ({type(exc).__name__})") from None
         return [[float(value) for value in vector] for vector in vectors]
     if backend != "http":
         raise LLMError(f"unknown embedding backend {settings.embedding_backend!r}")
+    if not settings.embedding_base_url.strip():
+        raise LLMError("no embedding endpoint is configured (set EMBEDDING_BASE_URL)")
 
     body = json.dumps({"model": settings.embedding_model, "input": texts}).encode("utf-8")
     request = urllib.request.Request(
@@ -540,10 +550,9 @@ def embed(texts: list[str]) -> list[list[float]]:
         with urllib.request.urlopen(request, timeout=settings.llm_timeout_seconds) as response:
             data = json.loads(response.read())
     except urllib.error.HTTPError as exc:
-        detail = exc.read()[:200].decode("utf-8", "replace")
-        raise LLMError(f"the embedding model returned HTTP {exc.code}: {detail}") from exc
+        raise LLMError(f"the embedding model returned HTTP {exc.code}") from None
     except Exception as exc:  # noqa: BLE001
-        raise LLMError(f"{type(exc).__name__}: {exc}") from exc
+        raise LLMError(f"embedding transport failed ({type(exc).__name__})") from None
 
     items = data.get("data") or []
     # The order of the response is by index, not by position.

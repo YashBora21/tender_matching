@@ -24,12 +24,19 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 @pytest.fixture(autouse=True)
-def fresh_settings() -> None:
+def fresh_settings(monkeypatch) -> None:
     """Drop the cached Settings around every test.
 
     `get_settings` is lru_cached because config is read once at startup, but a test
     that changes an env var must see the change.
     """
+    monkeypatch.setenv('OCR_BACKEND', 'tesseract')
+    # Synthetic endpoint: unit tests must never depend on private host config.
+    monkeypatch.setenv('LLM_BASE_URL', 'https://synthetic-llm.example.test/v1')
+    monkeypatch.setenv('LLM_CALL_BUDGET', '0')
+    monkeypatch.setenv('LLM_TOKEN_BUDGET', '0')
+    monkeypatch.setenv('LLM_MAX_RETRIES', '3')
+    monkeypatch.setenv('LLM_RETRY_SECONDS', '0')
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

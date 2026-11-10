@@ -41,6 +41,43 @@ def test_a_client_without_a_model_is_refused(monkeypatch):
         LLMClient()
 
 
+def test_missing_endpoint_is_refused_before_network_work(monkeypatch):
+    """Synthetic configuration: preflight and client agree without a request."""
+    from app.core.config import get_settings
+    from app.services.llm import NO_BASE_URL, config_error
+
+    monkeypatch.setenv('LLM_MODEL', 'synthetic-model')
+    monkeypatch.setenv('LLM_API_KEY', 'synthetic-key')
+    monkeypatch.setenv('LLM_BASE_URL', '   ')
+    get_settings.cache_clear()
+    assert config_error() == NO_BASE_URL
+    with pytest.raises(LLMError, match='LLM_BASE_URL'):
+        LLMClient()
+
+
+@pytest.mark.parametrize('status', [401, 429])
+def test_provider_error_does_not_publish_synthetic_private_values(monkeypatch, status):
+    import io
+    import traceback
+    import urllib.error
+    from app.core.config import get_settings
+
+    private = 'synthetic-private-provider-detail'
+    monkeypatch.setenv('LLM_MODEL', private)
+    monkeypatch.setenv('LLM_API_KEY', private)
+    monkeypatch.setenv('LLM_MAX_RETRIES', '0')
+    get_settings.cache_clear()
+
+    def fail(request, timeout=None):
+        raise urllib.error.HTTPError(request.full_url, status, private, {}, io.BytesIO(private.encode()))
+
+    monkeypatch.setattr('app.services.llm.urllib.request.urlopen', fail)
+    with pytest.raises(LLMError) as caught:
+        LLMClient().chat('synthetic system', 'synthetic user')
+    assert private not in ''.join(traceback.format_exception(caught.value))
+    assert str(status) in str(caught.value)
+
+
 def test_the_client_asks_for_json_and_reads_the_answer(monkeypatch):
     """The client sends the model a question and returns what it said."""
     sent: dict = {}
@@ -192,9 +229,8 @@ def test_a_limit_answered_with_a_header_stops_the_run_with_that_wait(monkeypatch
     assert caught.value.retry_after == 9.0
 
 
-def test_a_refused_call_names_the_model_and_the_address_it_was_sent_to(monkeypatch):
-    """A key that does not match the host is the likeliest mistake when the
-    provider is changed by env, and `HTTP 401` alone does not say so."""
+def test_a_refused_call_reports_http_status_without_private_configuration(monkeypatch):
+    """Synthetic provider identifiers and bodies must not reach reports/logs."""
     import io
     import urllib.error
 
@@ -216,8 +252,11 @@ def test_a_refused_call_names_the_model_and_the_address_it_was_sent_to(monkeypat
     with pytest.raises(LLMError) as raised:
         LLMClient().chat("system", "user")
 
-    assert "a-model" in str(raised.value)
-    assert "api.example.test" in str(raised.value)
+    assert "HTTP 401" in str(raised.value)
+    assert "a-model" not in str(raised.value)
+    assert "api.example.test" not in str(raised.value)
+    assert "bad key" not in str(raised.value)
+    assert raised.value.__suppress_context__
 
 
 def test_a_body_is_read_past_its_first_sentence_for_the_wait(monkeypatch):
@@ -271,7 +310,8 @@ def test_a_model_error_is_reported_not_raised_past(monkeypatch):
 
     with pytest.raises(LLMError) as caught:
         LLMClient().chat("system", "user")
-    assert "connection reset" in str(caught.value)
+    assert "OSError" in str(caught.value)
+    assert "connection reset" not in str(caught.value)
 
 
 def test_a_rate_limited_call_is_retried(monkeypatch):

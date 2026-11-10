@@ -85,8 +85,8 @@ class Settings(BaseSettings):
     llm_api_key: Optional[str] = None
     # gpt-oss-20b over gpt-oss-120b: the provider's daily token limit is
     # per model, and 20b is the cheaper and faster of the two.
-    llm_model: Optional[str] = "openai/gpt-oss-20b"
-    llm_base_url: str = "https://api.groq.com/openai/v1"
+    llm_model: Optional[str] = None
+    llm_base_url: str = ""
     # How many times a rate-limited call is retried, and how long it waits.
     llm_max_retries: int = 3
     llm_retry_seconds: float = 5.0
@@ -107,9 +107,9 @@ class Settings(BaseSettings):
     # alternative is `http`, which speaks the OpenAI embeddings shape and is
     # what a local Ollama serves.
     embedding_backend: str = "sentence-transformers"
-    embedding_model: Optional[str] = "BAAI/bge-small-en-v1.5"
+    embedding_model: Optional[str] = None
     # Only the `http` backend reads this.
-    embedding_base_url: str = "http://localhost:11434"
+    embedding_base_url: str = ""
     # The dimension of the embedding model's vectors. It is a property of the
     # model, and the migrated column is vector(384): changing the model means
     # a migration and re-embedding (D-6).
@@ -125,6 +125,8 @@ class Settings(BaseSettings):
     # passage is a model call, so this is the cost ceiling of a match, and a
     # smaller number is a recall/cost trade the report has to name (FR-22).
     match_max_candidates: int = 20
+    match_extraction_batch_size: int = 1
+    match_extraction_batch_chars: int = 12000
     # A short document is read whole: when one page of a document with at most
     # this many pages is retrieved, its sibling pages are added to the result
     # in page order. A datasheet's specification page rarely repeats the words
@@ -213,6 +215,8 @@ class Settings(BaseSettings):
     evidence_priority: str = "compliance_schedule,technical_offer,datasheet"
 
     # --- document ingestion ---
+    requirement_classification_enabled: bool = False
+    requirement_classification_max_chars: int = Field(default=4000, gt=0)
     # A page with less text than this has no usable text layer and is read
     # through OCR instead (FR-9). Kept low: a scanned page yields almost
     # nothing, while a short page of real prose is still a text page.
@@ -223,6 +227,26 @@ class Settings(BaseSettings):
     # Where Tesseract keeps its language data. PyMuPDF's OCR needs it to find
     # the trained data, and it is not on the default search path on Windows.
     tessdata_prefix: Optional[str] = None
+    # Paddle runs in a persistent isolated interpreter; its CUDA libraries do not mix with torch.
+    ocr_backend: str = "tesseract"
+    ocr_worker_python: Optional[Path] = None
+    ocr_worker_extra_sites: str = ""
+    ocr_cuda_dll_dir: Optional[Path] = None
+    ocr_weights_dir: Optional[Path] = None
+    ocr_timeout_seconds: float = Field(default=180, gt=0)
+    paddle_ocr_device: str = "cpu"
+    paddle_ocr_language: str = "en"
+    paddle_ocr_max_side: int = Field(default=1280, gt=0)
+    ocr_line_overlap: float = Field(default=0.3, gt=0, le=1)
+    ocr_table_min_columns: int = Field(default=3, ge=2)
+
+    @field_validator('ocr_backend')
+    @classmethod
+    def _known_ocr_backend(cls, value):
+        value = value.strip().casefold()
+        if value not in {'tesseract', 'paddle'}:
+            raise ValueError('OCR_BACKEND must be tesseract or paddle')
+        return value
     # The OCR language and resolution. A non-English tender needs its own
     # language, and the resolution is a quality/speed trade-off.
     ingest_ocr_language: str = "eng"
@@ -240,6 +264,8 @@ class Settings(BaseSettings):
     # An alias below this confidence does not resolve a name: the requirement
     # goes to review instead of being matched on a weak mapping.
     alias_confidence_threshold: float = 0.8
+    normalization_policy_path: Optional[str] = None
+    nominal_size_tolerance: float = Field(default=0.001, ge=0.0)
 
     # --- pipeline ---
     # The version of the stored record's shape. A change to it invalidates
