@@ -97,7 +97,7 @@ The image migrates the schema but does not ingest the corpus. Once the stack is
 up, `make ingest` parses `backend/data/manufacturers/` into PostgreSQL and
 `make embed` builds the vectors; both stay explicit steps because they need the
 corpus on disk and the embedding model's weights (the first `make embed`
-downloads them, ~130 MB for the default `BAAI/bge-small-en-v1.5`). Without them
+downloads them, ~130 MB for the default `[runtime-config-redacted]`). Without them
 the app starts with an empty corpus and reports it as empty.
 
 A fresh clone has the manifests and none of the PDFs. `make corpus-restore`

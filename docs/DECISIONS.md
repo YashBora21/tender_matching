@@ -72,7 +72,7 @@ dimension. An index is a Phase 1/retrieval-phase decision once the model is fixe
 *Shortcut:* no ANN index and no dimension means brute-force cosine only; add the
 dimension and an HNSW index in the retrieval phase, and backfill existing chunks.
 *Resolved:* migration 0009 fixes the column at `vector(384)` for the local
-`BAAI/bge-small-en-v1.5` model and creates the HNSW index — see D-68.
+`[runtime-config-redacted]` model and creates the HNSW index — see D-68.
 
 ---
 
@@ -1034,7 +1034,7 @@ image that does not exist would be a lie.
 
 **D-68 — Embeddings are computed locally by `sentence-transformers`.**
 *Decision:* `EMBEDDING_BACKEND=sentence-transformers` is the default. The
-backend loads `BAAI/bge-small-en-v1.5` in its own process and encodes with
+backend loads `[runtime-config-redacted]` in its own process and encodes with
 `normalize_embeddings=True`; the vectors are 384-dimensional. `embed()` keeps an
 `http` backend for an OpenAI-compatible endpoint (a local Ollama is one).
 Migration `0009_embedding_384` drops the old HNSW index, clears the 768-dim
@@ -4461,10 +4461,84 @@ with it, and the full unit suite before the commit.
 
 What is not verified is the restart that motivated it: the local Postgres is up,
 and the next wedged row will be the first real exercise of the retry.
+# Cache conflict guard — 2026-11-05
+
+A verified fact cache hit requires agreement on value, unit, value type, operator and conditions across the product's verified readings for that attribute. Disagreement returns a cache miss and uses the existing evidence path. UUID ordering only selects provenance among equivalent readings. This deliberately treats different textual representations conservatively.
+
+## Scoped query reuse and applicability — 2026-11-05
+
+## Bounded passage extraction — 2026-11-05
+
+## Source-table column rejection — 2026-11-05
+
+## Evidence audit diagnostics are not gold — 2026-11-05
+
+## Reviewed fact quarantine and range endpoints — 2026-11-05
+
+## Fact source context storage — 2026-11-05
+
+## Exact numeric requirements inside capability ranges — 2026-11-05
+
+## Adjacent label/value evidence anchors — 2026-11-06
+
+Accept exact value cells under either a recognized column header or an immediately adjacent attribute label. A label-cell proposal is resolved to its immediate right-hand value only when both the requested attribute label and claimed value match exactly; retain the original proposal and store resolved_anchor separately. Do not bridge empty cells, override conflicting recognized column headers, accept invalid indices or relax model/condition checks. The first row remains ambiguous and requires review. No prompt or cache-key change, no provider configuration values committed. This change depends on existing uncommitted source-context work; do not stage that history as one unrelated commit.
+
+For an equality requirement with a numeric value, treat it as a point interval when comparing with a documented capability range. Convert capability bounds into requirement units first; incomplete or incompatible units require review. Do not infer gte/lte range semantics from this equality rule. Explicit capability conditions not established by the requirement remain unconfirmed in both fresh and cached matching. This preserves a 10–16-inch capability instead of reducing it to 10. Re-extraction proposals are saved beside existing facts; no automatic promotion from these diagnostics.
+
+Migration 0018 adds nullable JSONB fact.source_context without rewriting existing facts. New extraction receives bounded local source tables, document hash, page/chunk, model/family metadata and passage. Claims retain selected table/row/column coordinates, complete value text, parsed range, claimed model/series, conditions and operator. The stored context and JSON report expose these separately from business verdicts. Conditions are actual extracted conditions, no longer the linked model name. Failed claims retain their proposed values and context for review.
+
+A table claim must select an exact supporting cell and recognized attribute header. Ambiguous/merged headers fail to review rather than inherit flattened text. Claimed model disagreement or conditions absent from the source context also fail. This deliberately sacrifices coverage pending better row/column handling. Existing no-context facts are not reused as verified cache answers; they require re-extraction. Source snapshots of all 11 quarantined facts are separate, do not overwrite labels or promote facts, and cannot be called newly verified evidence. Grouping remains opt-in.
+
+Apply eight explicitly reviewed status downgrades with complete before-images and all supplied labels retained in a separate JSON record. Preserve original values/quotes and historical results. Do not infer product mappings or reconstruct conditions from a reviewer note automatically. Reject scalar claims that collapse a quoted nonzero range endpoint, including cache reuse. Preserve disputed Flowserve labels but record the original page's nominal-size/actuator geometry separately; no automatic promotion or label rewrite. Full model/condition-linked range normalization remains open.
+
+Export source-bound stored facts with separate machine diagnostics and blank human attribute/value/scope labels. Report rows and unique pages separately so repeated facts cannot imply diverse validation coverage. Only demonstrable failed checks qualify for quarantine; no new failures among verified facts means no database update. Full-tender quality claims wait for human labels; no automated non-rejection becomes a correctness label.
+
+The Flowserve integral-flange example is a wrong-column extraction admitted by the semantic verifier, not justification for a connection alias. Reject value-cell matches exclusively under other columns when the source table has a recognized requested-attribute header. Apply the same guard to cached facts; retain existing review behavior on verification failure. Original PDF table structure is read locally and cached per page within a run. This is a bounded contradiction check, not a general solution to table semantics or evidence of perfect semantic verification. No vocabulary edit or historical-result rewrite.
+
+Group passages for one requirement only, with independent passage IDs and strict response completeness. Quotes must occur in their assigned passage before the existing verifier runs. Keep the original single-passage path at the default batch size of one until reviewed real-passage comparisons establish accuracy. Both count and character limits come from environment settings and are recorded in run snapshots. Missing/duplicate/unknown IDs fail the batch visibly; rate limits propagate to the existing run retry/resume state. No automatic single-passage retry multiplies calls after malformed output. Grouping may spend more tokens than early-exit single reads; measure this before rollout.
+
+Reuse successful query vectors only within an execution's SQLAlchemy session, resetting at run start. Include expanded query and embedding configuration in the key; do not cache failures. Existing SentenceTransformer auto-selection uses CUDA on this host. Explicit product cache hits must agree with requested category/type metadata; unknown metadata falls through. Cached candidate hits retain uncertain applicability. Three ambiguous Flowserve nominal-size facts were separately downgraded to review with provenance preserved; see `docs/FLOWServe_PERFORMANCE.md` for exact scope, measurements and limitations.
+
+
+## Local database connectivity recovery — 2026-11-08
+
+Windows refused binding the previous local host port. Resetting the original network endpoint and restarting did not repair publication. Retain the original database container stopped for rollback; run tender-pg-local on the same existing PostgreSQL volume, bound only to 127.0.0.1:15432. Change only the ignored root .env database port; no application, LLM prompt, provider configuration or cache-key change. Never run both containers against that volume concurrently. Application read confirms 11 tenders and 244 facts. Sandbox-denied host connections are separate from database availability: elevated local validation succeeds.
 
 ## Warm local embeddings before serving — 2026-11-08
 
 Exercise the existing shared local embedding model during API lifespan startup, off the event loop, before accepting requests. Reuse the current per-process model cache; no new worker framework, dependency, configuration option or model identifier. Skip remote embedding backends so startup never introduces a remote request. Local initialization failure prevents ready startup instead of charging its failure/latency to the first tender. This moves cold loading to startup; it does not eliminate it or establish a full-tender SLA. No extraction prompt or cache-key changes.
+
+## Isolated vision OCR comparison prompt — 2026-11-08
+
+Version ocr-comparison-v1 transcribes the same two scanned specification pages into source rows only: row_id, section_or_vehicle, part_number, nomenclature, unit, quantity. Image contents are data, never instructions; retain punctuation, zeros, duplicates and source spelling; unreadable/absent cells are null. No inferred specifications or capability verdicts. Exact prompt retained locally in .audit_tmp/vision-ocr-prompt.txt. Separate benchmark configuration is read only from ignored OCR_VISION_* environment values; active application provider remains unchanged. No production extraction prompt or cache key changed. User explicitly authorized the designated free-tier Groq key and these pages; stop on authentication/rate errors, without retries or paid-provider fallback.
+
+## Production OCR, document ledger and corpus preflight — 2026-11-08
+
+Use a persistent isolated local Paddle interpreter, configured by environment, to avoid CUDA-library conflicts with the embedding runtime. Preserve all OCR boxes, confidence, orientation, exact inverse transforms and original PDF coordinates. Cache only source-pixel readings, keyed by rendered image, worker code/runtime/weights fingerprint and source schema; attach document provenance after cache reuse. Requirement-stage keys now also include reader version4, OCR signature, geometry thresholds, layout-code hash and the wrapper content hash, so changed wrapper clauses cannot reuse stale requirements. Source-table snapshot IDs include source scope, source image key, reader version, headers and reconstructed rows, retaining previous snapshots. Extraction-stage keys include the corpus fingerprint because corpus eligibility can now defer expensive reading. No LLM extraction prompt changed.
+
+Use existing tender_table JSON and requirement source_table_id/source_row_id fields to retain page context and row links; never collapse duplicate parts across BOQ items. Migration0019 adds source_key to the page-ledger primary key, preserving old rows and preventing wrapper/attachment page-number collisions. Read and clause-classify distinct package PDFs locally, including wrapper terms; deduplicate identical bytes while keeping manifest references. A shared completeness gate covers unreadable/unaccounted pages, invalid skips, unknown clauses and unresolved item/source interpretation. Recovery must not promote such records to done.
+
+For explicit source part numbers, query the existing full-text index and verify the normalized identifier in candidate text before spending embedding/LLM work. Absence is a corpus-gap review abstention, never Missing capability. Keep item assignments and catalogue coverage separate from ingestion certainty. Unknown BOQ category/item scope stops before unfiltered matching. Migration0020 names corpus_gap and scope_unresolved reason codes. Short-lived evidence-query caches are scoped to the current execution and query spelling. This first integration conservatively flags ambiguous geometry and retains source disagreements; it does not claim complete table understanding or supply equivalence.
+
+
+## Exact source-part BOQ binding — 2026-11-08
+
+Before title fallback, use a unique exact part-number token in the BOQ title to resolve nomenclature spelling differences. Preserve punctuation and leading zeros; reject substring-only matches, duplicate identifier candidates and disagreement with an explicit serial assignment. Do not repair corrupted serials or reconcile differing PDF/CSV identifiers automatically. Reader version5 invalidates item/requirement stages and downstream extraction caches; LLM prompts are unchanged. Preserve previous review reasons during deterministic technical reclassification. Historical source-table snapshots remain stored; validation counts only snapshots referenced by current requirements.
+
+
+## Bounded wrapper catalogue-discovery classification — 2026-11-08
+
+Reader version6 identifies only an explicitly closed wrapper search section: a GeMARPTS searched-strings/search heading followed by Categories selected for notification. It retains each source span as informational with catalogue_discovery provenance, including continuation pages. Text before and after the section is clause-classified normally; attached specifications do not use this wrapper-only rule. Missing boundaries leave text eligible for review. No blanket page skipping, catalogue value inference or LLM prompt change. Reader-version cache invalidation reruns affected stages. Existing non-technical gating prevents these informational spans from becoming verified requirements through deterministic retyping.
+
+
+## Wrapper metadata roles from source geometry — 2026-11-08
+
+Visual review of the second unseen wrapper pages1/2/10 identifies the remaining keyword-derived technical fragments as an Item Category table value, search-strings table value and repeated BOQ item heading next to attachment links. For wrappers only, retain labelled Item Category and GeMARPTS search-string table rows as informational using their actual row bounding boxes. Exact complete BOQ-title text lines are informational headings, not newly stated capability attributes. Keep source bounding boxes in the page snapshot. Crop only these metadata bands before prose clause assembly; process everything outside them normally. This prevents joining item headings and metadata cells to neighbouring obligations. No inferred part correction or keyword-based technical exclusions. Attached specifications retain their existing path. Reader version7 invalidates item/requirements/downstream caches; no LLM prompt change.
+
+
+## Bounded unscoped-clause classification probe — 2026-11-08
+
+Before changing production classification order, test at most5 readable unresolved wrapper clauses with the existing requirement extraction system prompt unchanged. Use only the already configured dedicated free-tier connection, resolved from ignored OCR_VISION_* and GROQ_API_KEY configuration in an isolated process; do not change the active application provider. No retries, paid fallback, database writes or capability verdicts. Keep raw clause text/page/source references, validated spans, token totals and elapsed time; record no credentials, configured model identifier or endpoint. Provider/error/malformed output stops the probe. This is a small diagnostic sample, not whole-tender classification or human-confirmed gold. No prompt or production cache-key change.
 
 
 ## Preserve interleaved bilingual English runs — 2026-11-08
@@ -4472,9 +4546,61 @@ Exercise the existing shared local embedding model during API lifespan startup, 
 The five-call free-tier wrapper probe completed but exposed unsafe empty extraction and total-order-quantity classification; do not apply its answers to requirements or generalize its accuracy. The shared English selector discarded everything before the last Hindi run, losing earlier English clauses in flattened bilingual tables. Retain all English/value runs in source order, remove only Devanagari runs, PDF CID encoding markers and control characters, normalize whitespace and separators, and preserve source identifier punctuation/zeros/operators. Retain original source text separately. Reader version8 invalidates affected stages; normalized input already participates in per-clause extraction hashes so old truncated-input answers cannot collide with corrected inputs. No LLM prompt changes and no further remote probe calls.
 
 
+## Opt-in unscoped clause classification — 2026-11-08
+
+Introduce a distinct clause-type-only prompt clause-type-1, returning one enum label and exact supporting source quote. Document contents are data, never instructions. No specification values, item assignments or capability verdicts are accepted. A mixed fragment with technical content must not be excluded as non-technical; uncertainty returns unknown. Preserve original text, source table/row/page and unresolved-scope warnings for every proposed label. Invalid/empty/malformed answers remain reviewable failures, never empty requirement output.
+
+Use REQUIREMENT_CLASSIFICATION_ENABLED=false by default until bounded real-source validation supports rollout. When enabled, classify readable unknown/unassigned clauses after metadata/corpus gates and before the item-scope gate; no subsequent capability extraction or matching is performed for an unassigned item. Keep review_required on every classification proposal. Cache only validated labels/quotes; key includes normalized text, model configuration, schema and full prompt/version signature. Disabled classification preserves existing extraction-stage keys. Enabling it appends its state and prompt signature; upstream item/reader keys stay unchanged. Budget/rate stops preserve the unread tail for resume. REQUIREMENT_CLASSIFICATION_MAX_CHARS bounds each input (default4000); oversize/empty input is retained as a failed classification without a request. The enabled stage key includes this limit. Existing per-run client limits apply. No paid/live calls in implementation tests; do not enable whole-tender processing from this phase alone.
+
+
+## Fixed classifier probe scope — 2026-11-08
+
+Use the unchanged clause-type-1 prompt on a fixed five-case sample recorded before calls:3 source clauses with assistant-reviewed eligibility/commercial/informational labels, plus2 explicitly synthetic technical/mixed-content controls. This is not human-confirmed gold or a random whole-tender sample. At most5 already-authorized free-tier requests, no retries, database writes, automatic enablement or paid fallback. Retain labels, exact supporting quote, latency/token totals and prompt signature without provider credentials/model identifiers/endpoints. Stop on provider/validation error. No prompt or production cache-key change.
+
+
+## Labelled wrapper fields and contextual classification — 2026-11-08
+
+Reader version9 preserves each two-column labelled wrapper field as an intact table row with original cell values, requesting label, bounds and stable page-local row ID. Do not split sentences or atomize away its label. Persist field/value cells in the existing source-table snapshot; unchanged source item references remain separate. Explicit catalogue-discovery boundary fields stay with the cross-page segmenter; unlabelled/multi-column areas retain their existing reader rather than guessing row scope.
+
+Clause-type-2 receives JSON containing the complete clause and requesting source section. Bidder authorization/admin qualification is eligibility; an unidentified certificate or unavailable reference alone stays unknown; informational cannot hide a submission obligation. Mixed product/administrative content remains technical; unresolved mixed non-technical roles stay unknown. Returned quote must occur in the clause itself, not merely supplied context. Classifier cache keys now include context as well as prompt signature; reader9 and enabled classifier signature invalidate affected stage outputs. No paid or live calls in this implementation phase, no automatic enablement or proposal application.
+
+
+## General source-region isolation — 2026-11-08
+
+Do not tune technical extraction to a tender ID, part number or a disputed phrase. Reader version10 fixes a layout-level issue: remove only characters fully contained in actual source row/heading rectangles, never a full-width horizontal band. Preserve neighbouring columns, wrapped values, duplicate values with separate row identity and unlabeled/empty-cell fallback. Exact duplicate rectangles are not emitted twice. Validate against independently authored synthetic non-GeM labels/layouts. Named GeM discovery/metadata fields are format adapters, not product-capability rules; unknown labels remain unresolved for contextual classification. No new classifier prompt or classifier cache semantics in this phase; reader version invalidates affected stage/source snapshots.
+
+
+## Generality validation scope — 2026-11-08
+
+Freeze classifier clause-type-2 before a bounded7-call free-tier probe:4 historical disputed source fragments with actual requesting context,3 independently authored synthetic holdouts (different product domain, unresolved reference, injected document instructions). Record acceptable label sets before calls, permitting explicit unknown abstention where source ambiguity remains. No per-case business guards, prompt edits during testing, automatic retries, paid fallback, database writes or enabling classification. Stop on provider/validation failure. Source regressions are not held-out generalization evidence; synthetic holdouts are not human-confirmed gold.
+
+
+## Classification proposals cannot settle business types — 2026-11-08
+
+Repeated semantic misclassification demonstrates that exact source-quote validation does not establish a clause label. The opt-in unscoped classifier must retain the original unknown requirement type and record its proposed label only in the persisted review reason/cache. Never let a proposed informational/commercial label remove a potentially technical source clause from unresolved coverage. Preserve this review reason in manufacturer outcomes for unknown clauses. Existing deterministic technical retyping and item-scope gates remain separate; unresolved item assignments still cannot reach matching. No new phrase-specific guards, LLM prompt changes or schema migrations. Enabled extraction-stage keys include policy version proposal-only-1; disabled keys and valid classifier response caches are unchanged. No further live calls or automatic type approval in this phase.
+
+
 ## Preserve unknown-clause review notes — 2026-11-08
 
 Keep existing source/proposal review notes in manufacturer outcomes for unknown clauses. This changes reporting only: unknown remains review-required, no retrieval or business-type approval is introduced. No prompt or cache-key change.
+
+
+## Frozen input integrity and recovered attachment — 2026-11-08
+
+Verify every declared source path/SHA-256 and wrapper before ingestion stage/cache lookup. Missing/invalid checksums, missing bytes and mismatches stop the run; known affected PDF pages become failed, while unrelated ledger entries and historical requirements/results are preserved. Include extensionless PDFs identified by page metadata in package reading. Matching creation/resumption validates the frozen package before using old requirements or answered pairs. Historical completed reports are not rewritten.
+
+Recovered one overwritten historical attachment from its recorded public source only after an exact match to its original SHA-256; saved under a unique content-addressed PDF name and updated only that existing attachment record/manifest path. Backed up the manifest and retained the surviving original file unchanged. All original package attachment hashes now match. No inferred replacement bytes or new catalogue evidence.
+
+## General source-facet coverage policy — 2026-11-08
+
+Requirement extraction prompt2 asks for separate distinct attributes, including nonnumeric content, minimal supporting spans and no inferred units. Preserve the complete normalized source clause in source_text rather than replacing it with model paraphrases; retain native table cells, inherited headers/header page, row identity and page snapshots. Check structured attribute/value/unit/operator token representation, never count paraphrase or broad span alone as proof that all facets were represented. Unrepresented tokens, rejected spans, failed/empty extraction remain explicit review gaps and keep ingestion incomplete. Function-word exclusions live in the shared vocabulary data, not tender-specific guards. This is conservative lexical coverage, not semantic accuracy proof; synonyms/product nouns can require review.
+
+Per-clause cache is invalidated by prompt2; extraction-stage keys also include structured-source-coverage-1 and the vocabulary hash. Reader11 invalidates source-context snapshots. New/resumed matching rejects stored requirement prompt versions predating this policy; refresh must preserve historical run data rather than silently reuse unvalidated old rows. No requirement-specific aliases or source-value exceptions are added.
+
+
+## Bounded post-fix live validation — 2026-11-09
+
+After offline regressions pass, allow at most4 configured free-tier requests total in an isolated process: two complete known source clauses under requirement prompt2, then one bounded matching case using the same production retrieval/extractor/verifier/comparator path. No retries, provider changes outside the process, paid fallback, requirement/fact writes or published reports. PostgreSQL begin hooks enforce read-only transactions even if matching commits before model reads. Record source preservation, coverage warnings and per-candidate outcomes; a local budget stop remains pending rather than manufacturer silence. Source cases are regression fixtures, not independent human gold or a general accuracy estimate.
 
 
 ## Reusable frozen-source checksum validator — 2026-11-09
@@ -4491,25 +4617,59 @@ Source content is represented only by approved attribute names and structured va
 
 Before creating/reusing a matching run or resuming unanswered pairs, validate frozen source bytes and stored requirement prompt versions. Stop with a source-integrity/refresh conflict before model construction, run claim or matching. Repository reads expose the stored prompt version; historical completed reports remain historical and are not rewritten. This gate does not change LLM prompts or report verdicts.
 
+## Validation boundary after recovered-source replay — 2026-11-09
+
+A local page-accounting pass, lexical source-coverage review and cached-only retrieval diagnostic are separate checks; none constitutes a successful end-to-end match. Stop bounded live probes after malformed proposals, retain source warnings and publish no confirmed claim. Do not repair unexpected model fields with silent aliases. Preserve historical results while designing validated extraction refresh. This checkpoint changes neither prompts nor cache keys; the prompt2 and coverage-key changes remain documented in their integration entries.
+
+## Validator-derived proposal contracts — 2026-11-09
+
+Supply each response's Pydantic JSON Schema in the corresponding requirement, single-passage fact or grouped-passage prompt. Require the requirements envelope explicitly: an omitted envelope is malformed output, whereas an explicit empty list remains a valid proposal. Unknown fields, including operation, remain rejected without aliases or repair calls. This is a provider-independent prompt contract, not a guarantee of schema-constrained generation.
+
+Requirement prompt version changes from 2 to 3, invalidating requirement proposal/stage caches through the existing version keys and requiring current stored extraction for new matching. Matching snapshots and fact source provenance now include a digest of the fact instructions, grouping instructions and both response schemas, preventing automatic run resumption under a changed fact contract. Independently verified fact-cache claims still pass the existing evidence gates; this prompt change alone does not delete them or historical reports. No provider, endpoint, configured model or retry policy changes.
+
+## Live contract acceptance is not evidence acceptance — 2026-11-09
+
+Record response-schema acceptance separately from span support, source coverage, model/condition binding and four-layer verification. Preserve review when a value lies outside its cited span or the attribute lacks approval; do not repair offsets, add source-specific vocabulary or publish a claim because a response is valid JSON. Reuse retained proposals for the next offline regression phase instead of making additional remote calls. This evaluation adds no prompt, cache-key or provider changes.
+
 ## Source-span value support utility — 2026-11-09
 
 Use literal source support with Unicode/case/whitespace normalization and exact decimal-number comparison. Require complete numeric tokens and range limits inside the cited offsets; reject a quoted range endpoint proposed as the whole scalar even when offsets clip to that endpoint. Recognize explicit dash/to/between ranges, not a plain discrete and-list. Do not infer semantic aliases, repair offsets or promote claims. Conservative textual rejection can require human review for legitimate paraphrases. The reusable utility itself makes no prompt, cache, database or provider changes; extraction integration and version invalidation are recorded separately.
+
+## Extraction span-gate integration and version invalidation — 2026-11-09
+
+The shared extractor passes each proposed value into the source-span gate. Any rejected proposal makes the existing pipeline retain the original clause as a source_coverage_gap and avoid caching the partial output. Advance the existing extraction/prompt lineage from 3 to 4 because the deterministic acceptance policy changed; model instructions are unchanged in this phase. This invalidates prior proposal/stage caches and blocks old stored extraction at matching admission. No offset repair, vocabulary approval, semantic alias inference or historical database refresh. A span check does not establish attribute/model/condition applicability or prevent every endpoint-as-comparison-operator ambiguity.
 
 ## Conservative inline model-binding utility — 2026-11-09
 
 An explicit native line in the form model; attribute: value (or pipe/equal separators) can bind a candidate to one model without page-wide inference. Require exact model identity, an exact supplied attribute label/value, valid source coordinates, and a unique matching line. Reject repeated anchors, extra fields, wrong models, malformed geometry and unresolved conditions. Do not infer column ownership or semantic aliases. Complex headings, paragraph layouts and scans remain unbound until a separate explicit region-binding method is validated. This pure utility changes no provider, prompt, cache or database behavior by itself.
 
+## Native-line binding integration and exclusion gate — 2026-11-09
+
+Retain native horizontal line IDs, coordinates and text in source context version2, alongside the native-inline-model-1 policy. Non-table claims must resolve explicit native-line model/attribute/value ownership; missing/legacy bindings remain reviewable and cached claims cannot bypass this source gate. Record the binding policy in run snapshots to prevent automatic resumption across changed verification semantics. Native geometry is omitted from single/grouped model payloads; no extra generation, retry or offset/heading inference is introduced. Requirement extraction version remains4; fact prompt instructions are unchanged, while source-context metadata records the new version/policy. Deterministic offered-set exclusions must pass verification and the same source-binding gate before Missing capability can be published. Complex heading/column layouts and scanned prose stay unconfirmed until explicit region ownership is validated.
+
 ## Review-only heading-region resolver — 2026-11-09
 
 Use native text/font geometry to propose source regions, never to approve applicability. A unique dominant body font supplies a relative heading tier. Overlapping aligned heading/caption boxes can group; disjoint peer headings establish candidate columns only when native body rectangles leave a clear gutter. Stop at later competing headings, reject gutter-crossing text and keep repeated anchors ambiguous. Require exact model-heading identity plus an explicit attribute/value field, or a value-only line explicitly present among the supplied approved attribute labels. Retain heading/evidence IDs and coordinates. Font hierarchy and gutters are layout heuristics, not proof; every result carries review_required and cannot pass the verifier. No model calls, source-specific names, thresholds or new dependencies in this pure utility.
+
+## Review-only heading-region integration and source lineage — 2026-11-09
+
+Retain native font sizes alongside nonempty line coordinates/text in source context version3. If inline binding fails, a unique heading-region candidate is stored as region_anchor_proposal, but the verifier still fails with review required; the proposal never becomes resolved_anchor. Change the run snapshot binding policy to native-inline-1-heading-proposals-1 so resumed runs cannot silently mix this review behavior. The region records heading-regions-review-1. Native geometry remains excluded from single/grouped prompts, requirement extraction version stays4, and model instructions do not change. Region heuristics must be validated against independently reviewed layouts before any automatic promotion policy is considered.
 
 ## Ambiguous heading provenance rejection — 2026-11-09
 
 Require unique native line IDs before proposing source regions, and require the requested model heading to occur exactly once on the page even if its proposed value appears only once. Duplicate IDs or repeated model headings do not establish unique source ownership. Advance the region policy to heading-regions-review-2 and the run binding lineage to native-inline-1-heading-proposals-2. These remain review-only proposals; no model instructions, requirement extraction version or provider settings change. Record broader layout coverage separately from independent gold matching accuracy.
 
+## Wider layout validation does not authorize promotion — 2026-11-09
+
+Geometric region counts are coverage diagnostics, not independent model-binding labels. Corporate headings, diagram labels and accessory/component sections observed during assistant visual review remain data for review, never source-specific business guards or automatic model identities. Keep region verification disabled. Local page/table preparation dominates region resolution in this survey; a future persistent context cache must bind to frozen document hash/page and reader/binding lineage and preserve verification/conditions. This records the next phase direction only; no persistent cache or automatic promotion is introduced here.
+
 ## Verified persistent page-context cache utility — 2026-11-09
 
 Cache only native PDF tables and nonempty horizontal line geometry, not facts, model decisions or verification verdicts. Key entries by actual frozen source SHA-256, one-based page, native-page-context-1 reader policy, PDF engine version and caller-supplied binding policy. Validate recorded source identity and re-hash source bytes before every memory/disk hit; parse those same verified bytes to avoid a hash/read race. Source mismatch/unavailability fails visibly before reuse. Validate cache payload checksums, strict table/line structure, finite ordered coordinates and unique IDs; malformed cache is a miss, never an empty successful extraction. Cache writes use an atomic temporary-file replacement and are disposable if storage is unavailable. This standalone utility changes no model prompts or provider configuration and performs no database writes. Retention/pruning is not introduced.
+
+## Persistent page-context matching integration — 2026-11-09
+
+Use the verified native-page-context-1 cache from matching under the existing DATA_DIR/tmp/page_context. Revalidate source bytes even before a same-session memory hit; preserve the frozen source metadata for the run and record its verified hash in evidence context. Add reader and PDF engine versions to run snapshots so automatic resumption does not silently mix changed readers. Source, page, reader, engine and binding policy identify cache entries; no prompt instructions, requirement extraction version or automatic region promotion change. The cache persists only tables/native geometry and keeps them outside model prompts. No new configuration, database table or dependency. Cache-write failure falls back to the valid local reading; source-integrity failure stops visibly. Retention pruning remains out of scope.
 
 ## Read-only fixed diagnostic and extraction contract boundary — 2026-11-09
 
@@ -4524,3 +4684,39 @@ Persist the same source_text and code-derived source_span through the structured
 ## Quote support and extraction acceptance remain separate — 2026-11-10
 
 The bounded live quote probe may pass schema, unique-source location and value support without approving vocabulary, type labels or canonical numeric values. Keep the production review flags and do not promote the twelve quote-supported proposals as twelve verified technical facts. No vocabulary aliases, numeric stripping, source-model claims, prompts or cache keys change in this evaluation. Next work should canonicalize values by approved type while retaining raw source provenance, review attribute/type gaps, and preserve historical data during refresh. Plan completion around four acceptance gates rather than an unsupported overall percentage.
+
+
+### 2026-11-10 — Requirement refresh retains history
+Refresh marks active requirements superseded and deactivates/upserts current item rows; it never deletes requirements or run results. Migration 0021 follows 0020 and also stores normalized values beside source quotes. New runs bind immutable requirement and item inputs in their config snapshot; a different active requirement-ID set prevents resumption. Historical reports use this binding. Legacy runs without one retain actual result-linked rows only and explicitly report incomplete historical inputs; historical item labels are left unknown instead of being reconstructed from current items. No historical refresh or migration is executed before the release candidate gate.
+
+
+### 2026-11-10 — Derived normalization and run-input lineage
+Matching consumes approved derived attribute/value/unit fields without altering raw requirement values or quotes. Derived mappings that require review abstain before retrieval with requirement_not_parsed. Legacy rows without derived fields retain the previous path. Structured-value and clause-classification policy digests join the run configuration snapshot, so resumption cannot combine answers from different deterministic policies. Every newly created run binds its complete requirement/item input set; obsolete or unbound pending runs stop before claim. Progress and execution read this stored set; legacy completed runs expose only result-linked requirements rather than borrowing a refreshed input set.
+
+
+## Structured source normalization and clause lineage — 2026-11-10
+
+Keep raw attribute/value/unit, original source text and source span unchanged; persist deterministic normalized fields beside them. Exact aliases and normalization collisions are resolved from approved vocabulary and alias data; ambiguous, unapproved and unmapped names require review, with no product-category fallback. Normalized attribute collisions are checked together rather than first-hit lookup. A reviewer database alias overrides its shipped synonym approval.
+
+Nominal-size normalization is selected by vocabulary metadata and uses the referenced DN/NPS table in normalization_policy.json, with absolute label tolerance NOMINAL_SIZE_TOLERANCE. Labels not uniquely present in that table require review. This tolerance recognizes label notation, never an engineering fit tolerance. Nominal comparisons and verifier layer four use table identities, not physical millimetre/inch conversion. Preserve both range endpoints; known incompatible nominal identities fail equality rather than receiving a near-size partial match. Other measurements retain ordinary unit semantics.
+
+Clause position and the subject of the obligation select technical versus bidder eligibility, including within ATC. Policy regexes/cues are versioned JSON data; original narrow source context wins over broad page tags. Decisive eligibility clauses need no extraction call; ambiguous classification stays review. Requirement prompts are unchanged in this phase. Clause cache identity now includes classification policy plus original page/section context; requirement stage keys include policy; resolution keys include normalization policy, vocabulary, tolerance and database alias data. A resolution-only change supersedes and persists a new revision without extraction calls. Run snapshots record the policy fingerprints. Grouping remains off for the release evaluation.
+
+## Runtime-only provider settings and private diagnostics — 2026-11-10
+
+Require the chat endpoint together with its key/model in both preflight and client construction. Provider/embedding model identifiers and endpoints have no shipped application/example defaults; operators supply them privately at runtime. Health configuration summaries expose configured booleans only. Application-owned model-loading logs and propagated provider/embedding errors retain HTTP status or exception type, never configured identifiers, endpoint addresses, keys or provider response bodies. Retry timing is still parsed from bounded provider responses without publishing those responses. Unit fixtures use a synthetic endpoint and explicit synthetic retry/budget settings so private host configuration cannot change test behavior. No prompt or cache-key change is introduced by this configuration/diagnostics phase.
+
+## Public-image policy packaging and publication gates — 2026-11-10
+
+Package only the five approved nonsecret policy JSON files under /app/data; keep writable corpus, uploads and caches under /var/lib/tender/data so runtime mounts cannot hide bundled policies. Docker build contexts exclude environment files, tests, corpus and bytecode. Provider settings enter through runtime environment only. Public-image release commands require an approved clean RC, revision-labelled immutable image tags, a built-application exact-private-value scan, disposable-database smoke checks, and anonymous pulls plus explicit public repository checks. The leak gate emits counts and redacted paths only; historical source documentation is outside its built-application scope. Image contents do not include corpus or model weights; current Linux packaging has no validated Paddle/CUDA parity. No image build or publication is authorized by documenting these commands, and no publication was performed here.
+
+
+### 2026-11-10 — Historical source accounting is run-bound
+New run inputs snapshot tender source identity, page accounting, extraction status, unknown-clause accounting and source tables alongside requirements/items. Reports read this snapshot rather than current ingestion metadata. Older runs lacking recorded source accounting show historical context unknown and incomplete ingestion, with unknown counts instead of invented current values. Pre-refresh preservation retains any existing bound context; a legacy run cannot prove its original page/extraction state from result links alone, so this is never backfilled with current metadata.
+
+
+## Configuration metadata redaction — 2026-11-10
+
+Remove exact privately configured provider identifiers/endpoints from tracked narrative and historical report configuration blocks; use a synthetic model fixture instead of the installed embedding identifier. Source facts, quotes and verdicts are unchanged. Historical report bytes are therefore redacted derivatives, not original-byte snapshots; config-redactions.json records original and redacted hashes. No old requirements or results are deleted. Deployment-specific database connection examples are blank.
+
+Bind extracted/cached fact attributes to the approved requested canonical attribute before comparison. An unrelated dimension cannot be reinterpreted as a nominal size merely because a model returned that attribute. Alias confidence threshold participates in normalization lineage; signed mixed fractions retain the sign on the complete magnitude.

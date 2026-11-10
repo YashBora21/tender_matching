@@ -52,7 +52,7 @@
       "pressure_class_higher_covers_lower": false
     },
     "app_version": "0.1.0",
-    "llm_base_url": "https://api.groq.com/openai/v1",
+    "llm_base_url": "[runtime-config-redacted]",
     "manufacturers": [
       "delval_flow",
       "Flowserve",
@@ -60,7 +60,7 @@
     ],
     "prompt_version": "1",
     "schema_version": "1",
-    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "embedding_model": "[runtime-config-redacted]",
     "llm_call_budget": 600,
     "llm_token_budget": 0,
     "embedding_backend": "sentence-transformers",

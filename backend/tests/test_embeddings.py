@@ -34,7 +34,7 @@ def test_the_local_backend_encodes_with_normalised_vectors(monkeypatch):
     """The default backend loads the weights in this process: no account, no
     credits. bge models are trained for cosine, so the vector is normalised."""
     monkeypatch.setenv("EMBEDDING_BACKEND", "sentence-transformers")
-    monkeypatch.setenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+    monkeypatch.setenv("EMBEDDING_MODEL", "synthetic-embedding-model")
     get_settings.cache_clear()
     seen: dict = {}
 
@@ -65,8 +65,8 @@ def test_the_http_backend_posts_the_openai_embeddings_shape(monkeypatch):
     """The alternative backend is any OpenAI-compatible endpoint, such as a
     local Ollama. It is config, not a second implementation."""
     monkeypatch.setenv("EMBEDDING_BACKEND", "http")
-    monkeypatch.setenv("EMBEDDING_MODEL", "nomic-embed-text")
-    monkeypatch.setenv("EMBEDDING_BASE_URL", "http://localhost:11434")
+    monkeypatch.setenv("EMBEDDING_MODEL", "synthetic-http-embedding")
+    monkeypatch.setenv("EMBEDDING_BASE_URL", "https://synthetic-embedding.example.test")
     get_settings.cache_clear()
     sent: dict = {}
 
@@ -78,8 +78,8 @@ def test_the_http_backend_posts_the_openai_embeddings_shape(monkeypatch):
     monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
 
     assert llm.embed(["a"]) == [[0.5, 0.6]]
-    assert sent["url"] == "http://localhost:11434/v1/embeddings"
-    assert sent["body"] == {"model": "nomic-embed-text", "input": ["a"]}
+    assert sent["url"] == "https://synthetic-embedding.example.test/v1/embeddings"
+    assert sent["body"] == {"model": "synthetic-http-embedding", "input": ["a"]}
 
 
 def test_an_unknown_backend_is_refused(monkeypatch):

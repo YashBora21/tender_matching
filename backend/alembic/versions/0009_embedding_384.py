@@ -17,7 +17,7 @@ depends_on = None
 
 # The dimension is written here, not read from the environment: a migration
 # that depended on the environment would not be the same migration on every
-# machine (D-6). The model it describes is BAAI/bge-small-en-v1.5, loaded
+# machine (D-6). The model it describes is [runtime-config-redacted], loaded
 # locally through sentence-transformers.
 EMBEDDING_DIMENSION = 384
 PREVIOUS_DIMENSION = 768

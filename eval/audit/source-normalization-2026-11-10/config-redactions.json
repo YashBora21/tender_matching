@@ -1,0 +1,50 @@
+{
+  "scope": "Exact runtime provider identifiers/keys in tracked text only; evidence claims untouched; historical artifact bytes changed only for configuration redaction.",
+  "files": [
+    {
+      "path": ".env.example",
+      "original_sha256": "0b8184473a7da9069d94fcc622686e4f2eef36adbd3728d06c0cbf9afe20b67e",
+      "redacted_sha256": "da7738f227ef182adb302de7d80b32518bca7ff9a587bbefab8e790dc8348fc7"
+    },
+    {
+      "path": "README.md",
+      "original_sha256": "e1b58b1733cfe1956bcc96b9e5058f98e2727d8a7bd01f95ff8b7361478e3695",
+      "redacted_sha256": "95878239325c6cba3facc8e1008ccb592e3a91f4543f02d3e415ba6502e3651f"
+    },
+    {
+      "path": "backend/alembic/versions/0009_embedding_384.py",
+      "original_sha256": "41b3d94d7835b72af557b283abd877cbc2c68b45c2f0bd93037457f33934e534",
+      "redacted_sha256": "cd4eac45b0d9cd9f59bf378d43fa7ed36ea22e70c09ab6fa4beb8e9520307633"
+    },
+    {
+      "path": "backend/tests/test_embeddings.py",
+      "original_sha256": "2f50db729120e3ce0c8ce3bdd005db4ddfbd1ecb7779235caf727ed300eb11a9",
+      "redacted_sha256": "1f8924ec2264c6da2f1e75325f74f5255502c557eb390098b72ccecedc8a9b43"
+    },
+    {
+      "path": "docs/DECISIONS.md",
+      "original_sha256": "34f5e836f31d29818b91de28eaa69ad12c1acc2e8a20fff6380c1c142149d48f",
+      "redacted_sha256": "397fa10b7ac42f279f4aa51f37e0e37ac424c0a1a3b193e607db212cba915d33"
+    },
+    {
+      "path": "docs/WORKLOG.md",
+      "original_sha256": "0f84297b9c83b8a98a5ec3b587f2aa6263e7b8e3cc29313ed43877cbbd27d985",
+      "redacted_sha256": "c824a3213096b602fbdd10a9d33a1561c3e675ed025680f8aace3df264fedd1e"
+    },
+    {
+      "path": "eval/audit/GEM_9671792-items-10-11-audit.provenance.json",
+      "original_sha256": "1221450599b06e4aa98b30870d383d45c439b6262b17375656fa9125d37547ed",
+      "redacted_sha256": "02aa325a8c25caeb5f872c02b3952b46b2e823a891ec9a45d216c7c1066abbf4"
+    },
+    {
+      "path": "eval/baseline/report-4e7ebbc1.frozen.json",
+      "original_sha256": "09990701eca87468d98a1e3608a0132def2c7274b2e799caaae9c7161c5ab6a1",
+      "redacted_sha256": "fa5712e8983d6f07025f815c588a3e19d5c5eb35d6ae134bf7babedd903407ab"
+    },
+    {
+      "path": "eval/baseline/report-4e7ebbc1.json",
+      "original_sha256": "342487bfda34d526e191cc914edf1774b3feebaffe8a39aa44cea9d04d998b15",
+      "redacted_sha256": "99a4b779f03194014cd7fb7a249e8273d52e35ff1b5d3943e401acf835e5b9a6"
+    }
+  ]
+}

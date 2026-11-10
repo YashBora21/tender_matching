@@ -23,7 +23,7 @@
   "model": "openai/gpt-oss-20b",
   "config": {
     "embedding_backend": "sentence-transformers",
-    "embedding_model": "BAAI/bge-small-en-v1.5",
+    "embedding_model": "[runtime-config-redacted]",
     "match_max_candidates": 20
   }
 }

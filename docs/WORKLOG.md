@@ -1,5 +1,9 @@
 # Worklog
 
+## Validation checkpoint — 2026-11-08
+
+Started approved baseline validation without editing source or making paid calls. Fingerprinted 163 Python files; validated six existing gold labels and rescored the frozen historical report (0/6, not fresh current predictions). Live database checks were blocked by Docker's unavailable Linux engine despite a background Desktop startup attempt. No tender selected as complete and no data modified. See docs/VALIDATION_CHECKPOINT_2026-11-08.md for exact fingerprint, historical metrics, limits and resume steps. Existing uncommitted work preserved.
+
 What each phase built, what was tested, what is left open. Newest phase last.
 A different agent should be able to pick this up cold: read `AGENTS.md`, then
 `docs/PRD.md`, then this file.
@@ -541,7 +545,7 @@ page. Without OCR the phase would have found nothing in them.
 - The embedding model is the local Ollama's `nomic-embed-text` (768
   dimensions), which is free and needs no account. The HuggingFace token
   now has the inference permission, but the account has **no credits** (HTTP
-  402), so `BAAI/bge-small-en-v1.5` is a configuration change away, not a
+  402), so `[runtime-config-redacted]` is a configuration change away, not a
   code change.
 
 **Left open**
@@ -2374,7 +2378,7 @@ The key side: `LLM_CALL_BUDGET=300` is set in `.env` (the knob was documented in
 before it starts. `.env` now carries the note that `LLM_API_KEY` and
 `LLM_BASE_URL` are a pair, and `--check` / `/api/preflight` name the model and
 host they would call - `configured: openai/gpt-oss-20b at
-https://api.groq.com/openai/v1` - so a key swapped without the URL is seen
+[runtime-config-redacted]` - so a key swapped without the URL is seen
 before a call is paid for. `_matching` in `make e2e` reported a `rate_limited`
 run as a plain failure; it now names the results the run kept and says the same
 command continues, and `test_e2e.py` pins both wordings. No call was made in
@@ -3576,10 +3580,133 @@ tender D-162 unblocks; `5b68e376` needs its one scanned page OCR'd locally then
 extracted; `41aaa025` needs its two `unknown` documents identified before any
 model call is worth making. Nothing here is a measurement of extraction quality;
 no read was run.
+# Cache safety phase — 2026-11-05
+
+Implemented a conflict guard in `services/match/findings.py`: cached verified readings must agree on value, unit, value type, operator and conditions. Added six synthetic regression cases. Matching and cache regression tests reached 45 passing cases. No database rows or model calls were changed/made in that phase.
+
+## Scoped cache and CUDA retrieval reuse — 2026-11-05
+
+## Bounded grouped extraction phase — 2026-11-05
+
+## Wrong-column verifier correction — 2026-11-05
+
+## Stored fact evidence review export — 2026-11-05
+
+## Completed user review and scoped cleanup — 2026-11-05
+
+## Source-context storage phase — 2026-11-05
+
+## Live context validation and range comparison — 2026-11-05
+
+## Label/value table-anchor correction — 2026-11-06
+
+Final verification: full backend unit suite passed with synthetic credentials and test-only retry/budget defaults. Production/local paid-call limits were not changed by that test process. The initial full-suite failures were retry/budget tests inheriting restrictive local configuration, not anchor assertions. No further inference calls after the captured-coordinate replay.
+
+Inspected the physical Flowserve page-2 table: two label/value pairs per row; EndConnection is row 3 column 0, Flanged row 3 column 1. Added adjacent-label orientation to check_source_anchor. A bounded paid diagnostic showed the model proposing the label coordinate. Added deterministic resolution to the exact adjacent value while retaining original coordinates and a separate resolved_anchor. Captured real-source coordinate replay passes locally. Wrong columns, conflicting headers, gaps, wrong models/conditions, invalid coordinates and wrong values remain rejected. 61 focused tests passed.
+
+Two small paid calls in this phase used 1,905 tokens each; the first returned a valid quote but failed anchoring, and the second captured the label-cell coordinate. No extra paid call was used after the resolution change. No database writes or fact promotions, no prompt/cache-key edits and no provider identifiers/credentials added to tracked files. Real API budgets unchanged. Full-tender accuracy/latency and first-row/merged/OCR layouts remain unverified. Changes remain uncommitted because prerequisite source-context changes are still uncommitted; unrelated work was not staged together.
+
+Executed separate re-extraction proposals covering 11 quarantined fact IDs in five grouped reads. AVK/Bray model scope mismatches are rejected; CIRCOR size text retains 10-16 but lacks a verified anchor; Flowserve context exceeds the bound. Zero promotions, database fact writes or human-label changes. Implemented numeric equality point-in-range comparison with unit conversion and conservative condition review. Full backend unit suite passed.
+
+Completed diagnostic grouping off/on over 21 stored requirements × Flowserve: off 372.946 seconds / 23 calls / 48,962 tokens / 12 retries; on 388.284 seconds / 23 calls / 53,872 tokens / 12 retries. Both abstain on all 21, review all 21 and score 0/2 on existing labels; 19 unlabelled. Source tender remains rate_limited with zero page-ledger rows, so this is not a complete-ingestion/end-to-end SLA benchmark. No production report published. Grouping remains opt-in.
+
+Observed and fixed LLMBudgetExceeded being swallowed as ordinary extraction failure in both extractors. Eleven invalid budget-abstention rows are retained separately and were rerun. Inter-process idle time and invalid attempt excluded from timing table; raw top-level spend fields are last-process counters, not total test spend. See docs/CONTEXT_VALIDATION.md for methodological limits and the concrete next root fix: bounded row/model-specific evidence packets instead of whole-page tables.
+
+Implemented and applied additive migration 0018_fact_source_context. Facts now retain source tables/headers/rows, selected coordinates, source document hash/page/chunk, document model/family and claimed model, actual conditions/operator, complete value text and parsed ranges. Extraction requests include bounded source context; JSON report evidence exposes the stored context. Fixed store_fact writing match.model into conditions. Failed claims retain proposal/context. Added conservative exact table-anchor, model disagreement and copied-condition checks. Legacy facts without context fall through to re-extraction instead of cache reuse.
+
+Full backend unit suite passed after synthetic fixture updates. PostgreSQL JSONB/value/operator/conditions round-trip passed inside a rolled-back transaction. Migration applied to development database, no existing fact values rewritten. Read-only source snapshots generated for all 11 quarantined facts at eval/audit/source-context-reassessment.json, zero promotions and no label edits. No new LLM calls in this phase. Existing reviewed Flowserve geometry dispute remains explicitly documented; snapshots alone do not resolve merged headers.
+
+Remaining next phase: bound re-extraction/adjudication of quarantined evidence; complete scalar-vs-range comparison semantics and condition applicability; frozen full-tender grouping off/on benchmark with correctness and wall time. This phase completes storage plumbing, not the four-step overall objective or 30–60 second SLA. Grouping remains opt-in; no new speed/accuracy claim.
+
+Preserved the 28 user-supplied review labels and before-images in `eval/audit/human-review-quarantine-2026-11-05.json`; applied eight fact status downgrades (AVK two, Bray one, CIRCOR null-attribute four, CIRCOR truncated-range one). Three previously quarantined Flowserve facts remain unchanged. No rows deleted, values overwritten or historical results changed. Read original source pages to confirm AVK/Bray/CIRCOR issues. Added shared scalar-range endpoint rejection to fresh verification and cached facts, plus extraction instructions for range/scope preservation; 76 focused tests passed.
+
+Rendered Flowserve page 13: inch values occupy valve nominal-size columns, actuator Size/diameter lie left. Submitted notes claiming those inch values are actuator sizes are disputed by geometry. Preserve labels as supplied but do not treat them as adjudicated gold; no fact restored. Broad model/condition extraction fixes, full range normalization and full-tender benchmark remain open. No model calls this phase.
+
+Added `eval/evidence_review.py` and two passing synthetic tests. Read-only audit inspected 28 facts across six physical source pages, checking source hashes, page bounds, citations and the table-column contradiction gate. Three wrong-column findings were the previously quarantined Flowserve nominal-size facts; zero additional verified facts were rejected. No database changes or model calls. Exported `eval/audit/evidence-review.csv`, machine summary and human instructions. All human labels are blank, accuracy null. Six pages with repeated facts are insufficient for the requested diverse evidence validation set. Human source/row/column/scope review is the remaining prerequisite for accuracy measurement and full-tender grouping rollout; grouping remains opt-in.
+
+User challenged the integral-flange diagnosis. Rendered original Flowserve page 3 and inspected table cells: Integral flange belongs to Body Design, not End Connections. Corrected the earlier comparison-defect label. Added source-table column contradiction checking in the semantic layer, including cache hits, with per-run page caching. Real-source deterministic replay now fails verification and requires review. Synthetic tests cover wrong/correct column, no table, and the matcher refusing to publish Missing from wrong-column evidence. No new model calls or database writes. General merged-cell/OCR semantics and full-run performance remain open; grouping remains opt-in. See `docs/FLOWServe_PERFORMANCE.md` for evidence and limits.
+
+Positive-evidence follow-up: three further authorized public Flowserve calls extracted flanged / integral flange identically by value, with all four-layer checks passing against original PDF pages. Singles combined 2.968 seconds / 2564 tokens; grouped 1.710 seconds / 2246 tokens. Quotes differed by span length. Deterministic verdicts agreed across paths, but integral flange vs flanged currently returns Missing: recorded as an unresolved comparator terminology issue, not an accuracy success. No database writes or automatic alias edits; grouping remains opt-in.
+
+Authorized live comparison completed: two separate public Flowserve passage reads took 2.357 seconds / 1831 tokens combined; one grouped read took 0.900 seconds / 965 tokens. All three calls succeeded without retries and both paths abstained on both passages. No database writes. This is one two-short-passage sample with no positive claims, so it does not measure citation correctness or full-tender accuracy. Grouping remains opt-in. Source hashes, chunk IDs and individual measurements are in `docs/FLOWServe_PERFORMANCE.md`.
+
+Added opt-in bounded passage grouping for a single requirement. Structured passage IDs isolate claims; invalid IDs or cross-passage quotes become reviewable extraction errors. The existing candidate verifier/comparator still decides results. Environment defaults retain one-passage behavior; count/character limits are recorded in run snapshots. Cache reads precede grouped extraction. Two synthetic uncached passages now use one call rather than two. 101 focused extraction/matching/run tests passed; live grouped latency and accuracy are not measured. User approval so far covered one public-passage call, which completed in the prior phase; a paired live comparison would transmit two public passages via three calls (two singles, one group). No new live calls or database writes in this phase.
+
+Follow-up authorized Groq probe: after explicit user approval to transmit one public Flowserve passage, one call completed in 1.113 seconds (572 prompt / 283 completion tokens). Extraction returned found=false with no error. No database writes. This measures one chunk only; full-tender timing and extraction quality remain open. Details in `docs/FLOWServe_PERFORMANCE.md`.
+
+Implemented conservative category/type checks on explicit-model cache hits, preserved uncertain candidate applicability, and reused expanded query embeddings within a run. Inspected three Flowserve covers and the original Valtek GS page 13; marked three ambiguous nominal-size facts needs_review, preserving evidence and historical results. Exact IDs and recovery context are in `docs/FLOWServe_PERFORMANCE.md`.
+
+Verified 120 focused tests and full backend unit suite (exit 0). Local fixed six-pair benchmark used CUDA automatically, reduced embedding calls 6 to 2, retained identical candidate lists, and measured warm retrieval 0.578 to 0.529 seconds. Cold model load 48–103 seconds. No 30–60 second end-to-end claim. One real-passage Groq probe was blocked by automatic approval review before execution. Remaining: fresh extraction/model timing, grouped extraction and retry work, full-corpus review and model-level metadata cleanup.
+
+
+### 2026-11-08 — Docker follow-up
+
+Engine and PostgreSQL container are up; socket read confirms 11 tenders. Existing-container restart did not restore host-port publication, and application connection still fails. No data recreated or paid calls made. Candidate completeness counts recorded in VALIDATION_CHECKPOINT_2026-11-08.md; live retrieval remains blocked by networking.
+
+### 2026-11-08 — Connectivity restored; live retrieval checked
+
+Recovered application connectivity by running tender-pg-local on the original volume at localhost:15432, with the original container stopped/preserved. Ignored .env database port only; no source/provider changes. Removed only the failed never-started replacement, without deleting any volume. Application read confirms 11 tenders/244 facts. Current six-label retrieval: document 5/6 and page 3/6 at k=3; both 6/6 at k=20. Initial independent process 140.314s; diagnostic cold/warm passes 41.732s/1.701s, cold model loading 34.099s. Registered two-page BOQ candidate has both pages parsed and 48 item-linked/attributed requirements; extraction correctness remains unlabelled. No paid calls or fresh full-tender matching. Details and limitations in VALIDATION_CHECKPOINT_2026-11-08.md.
 
 ### 2026-11-08 — Warm local embedding startup
 
 Added local embedding readiness work to API lifespan using the existing shared model cache. Remote backends are skipped; local failures prevent ready startup. Updated startup/API fixtures to mock embedding work and avoid live startup reconciliation during API contract tests. Focused startup/embedding/API checks and the complete backend non-integration suite passed with synthetic credentials and no paid calls. Full suite used a non-live database target. An initial sandboxed asyncio test stalled and was stopped; elevated runs completed. No extraction prompt or cache-key changes. Unseen-tender accuracy, full end-to-end timing and live deployment startup remain untested; user will supply an unseen tender next.
+
+### 2026-11-08 — Two unseen vehicle-spares tenders
+
+Tested new_unseen PDFs separately (17/21 wrapper pages; 17/25 BOQ items), downloaded each linked BOQ CSV and one-page scanned spec. Initial intake failed due malformed local OCR data path; corrected ignored .env path only. Retry falsely reported done in 14.787s/3.694s with 11/1 unknown review fragments, no item links or attributes, and only attachment-page ledger rows. No LLM calls were made. Visual source review identified sideways/photo tables. Four local read-only item retrieval probes returned unrelated industrial candidates; first-query cold time 37.589s, subsequent 0.126–0.236s. No match report was published. Preserve this negative baseline; source/table recovery, wrapper accounting, completion gating and application/OEM eligibility remain open. Full details: UNSEEN_VALIDATION_2026-11-08.md.
+
+### 2026-11-08 — Validation order updated; OCR comparison in progress
+
+User prioritized corrected Tesseract/PaddleOCR/vision on the same two scanned pages, then completion/page accounting, then a separate multilingual embedding comparison, with migration only if evidence supports it. Partial spend-ledger changes were removed from live application paths and preserved under .audit_tmp/spend-ledger-paused; no budget migration applied. Source-anchor enhancements remain in the working tree (22 synthetic source/table tests passed): open attribute labels, punctuation-preserving value equality and explicit table model-column rejection. No new prompt or cache-key change. OCR inputs rendered at 300 DPI with hashes recorded. Tesseract OSD detected a 90-degree clockwise correction on the first page; exact part-number presence improves but still fails quality, especially the photographed page. Reference transcription is assistant-reviewed, not human-confirmed gold. PaddleOCR is being installed only in an isolated benchmark environment. No paid calls or embedding migration.
+
+### 2026-11-08 — Local OCR comparison completed; vision authentication blocked
+
+Same two scanned pages, fixed 300-DPI inputs. Tesseract orientation correction plus layout variants recovered 11/17 and 2/25 (single-block) or 7/17 and 16/25 (auto-layout). Line removal worsened results. Isolated CPU PaddleOCR recovered 17/17 and 25/25 distinct part-number boxes against assistant-reviewed source transcription; part/nomenclature row bands passed 16/17 and 25/25, with one name character error. Successful CPU inference 115.051s/107.536s; cached import/model setup 13.366s. Optimized defaults failed at runtime; initial full-resolution trial stopped, all outcomes retained. No CUDA performance claim or complete table/citation binding claim. Source/CSV disagreements preserved. User-designated LLM_API_KEY failed Groq metadata authentication (401 with existing request headers); no pages or generation calls sent. 29 offline anchor/table/startup tests passed after spend draft was parked. No live OCR integration or embedding migration. Details: OCR_COMPARISON_2026-11-08.md.
+
+### 2026-11-08 — CUDA OCR verified; source-part preflight measured
+
+Installed an isolated official CUDA Paddle runtime; existing working PyTorch CUDA DLL directory resolved initial runtime inference failure. Identical two pages/configuration: GPU setup14.144s, first inference8.019s/2.229s, warm1.926s/1.705s, peak Paddle allocation745.2MiB. All42 source part boxes retained each pass, 41/42 exact part+nomenclature row-band checks; no complete semantic/quantity verification claim. Source affine transforms mapped polygons back to original PDF points with round-trip assertions. Indexed source-part inventory checked42 rows in6.268s, zero matching source-part evidence, zero embedding/LLM calls; prototype only, no manufacturer inability conclusion. Current documented Groq vision model was configured solely in ignored env; destination proved separate from active Google provider after approval review initially blocked transmission. Direct PNG attempt413; same-resolution JPEG attempt401, then stopped without second-page or paid-provider fallback. No successful vision generation. Production Paddle integration, completion/page accounting and corpus gate remain open. See OCR_COMPARISON_2026-11-08.md and eval/audit/ocr-comparison-2026-11-08/.
+
+### 2026-11-08 — Correct Groq credential located and authenticated
+
+Found a different Groq credential in the separate .kilo worktree environment; earlier 401 tests used the different root credential. Copied only into ignored dedicated Groq configuration; active application provider unchanged. Authentication200 and configured vision model available. First generation response5.705s lost to benchmark JSON-wrapper parser failure; fixed retention-before-validation and list/object handling without changing prompt. Next attempt503 after32.132s; stopped, second page not sent, no paid fallback. Vision quality remains unmeasured. Updated OCR_COMPARISON_2026-11-08.md and local authentication summary.
+
+
+### 2026-11-08 — CUDA OCR integrated and package ledger validated
+
+Integrated persistent isolated Paddle CUDA OCR, source-pixel cache, geometric table reconstruction and original-PDF coordinates. Requirements retain source-table/row links; report JSON exports the source snapshots. Existing table snapshots and facts are preserved. Migrations0019/0020 applied locally; all30 previous ledger rows retained. Document-scoped ledger accounts18/18 and22/22 package pages, including both wrappers. Shared ingestion/recovery/report completion checks prevent false done. Explicit source-part corpus checks and unresolved item/category gates stop before expensive matching; absence remains reviewable No evidence found.
+
+No-remote integration validation recovered17 and25 source part rows, zero LLM calls and zero blocked LLM attempts. Initial measured processing30.718s/14.226s after30.105s worker setup; repeat forced-stage processing18.363s/10.566s after17.221s worker setup, reusing OCR source cache. Full-stage cached reruns0.142s/0.169s. These are ingestion/corpus-preflight timings, not full matching SLA measurements. Both tenders remain incomplete because some source clauses and technical BOQ assignments are unresolved; no confirmed supplier results were published. Second tender has three requirement review flags for source identifier reconciliation, not three distinct confirmed discrepancies. Full non-integration backend suite passed; focused checks cover the final wrapper-hash invalidation and removal of obsolete unfiltered-retrieval code. Integration artifact: eval/audit/ocr-integration-2026-11-08/results.json.
+
+Open: resolve clause/item assignments without guessing, human-confirm source transcription and PDF/CSV differences, then measure verified end-to-end results on in-corpus evidence. BGE-M3 migration, additional vision calls and paid spend-ledger work remain deferred. Changes remain in the working tree alongside earlier unrelated work; no combined commit was made.
+
+
+### 2026-11-08 — Exact part binding and unresolved-source diagnosis
+
+Added unique exact-part BOQ fallback with token boundaries, duplicate rejection and serial/part conflict rejection. Two previously unassigned rows in the second tender now bind to their BOQ items despite nomenclature differences (25/25 source rows assigned). First tender retains16/17 source-row assignments; damaged serial and differing nomenclature remain unresolved. No silent identifier correction. Preserved source-review reasons when deterministic reclassification adds an unreadable-value warning. Reader version5 invalidates affected caches; no prompt change.
+
+No-remote forced-stage validation:17.986s/9.154s after14.946s OCR startup, source OCR cache reused. Full-stage cached0.157s/0.179s;40/40 pages accounted; zero LLM calls or blocked attempts. Both remain incomplete: wrapper search/discovery catalogue lists are being retyped as technical clauses, and other unknown wrapper terms still need interpretation. This phase does not mask them, assign global clauses to arbitrary items, or publish confirmed supplier matches. Historical snapshot totals in the first diagnostic rerun doubled retained source rows; corrected validation to count only snapshots referenced by current requirements. Existing source data was not deleted.
+
+Validation:73 focused source-binding/ingestion/pipeline checks and18 existing reclassification tests passed. Five synthetic binding/review cases cover unique identifiers, substrings, duplicates, serial conflicts and preserved review warnings. No paid calls.
+
+
+### 2026-11-08 — Wrapper search listings retained as informational
+
+Added wrapper-only closed-section segmentation, preserving text and page/source references through continuation pages. Search sections are informational, not supplier requirements; buyer terms and specifications outside the boundary remain eligible. Synthetic checks cover cross-page continuation, missing start/end, attached-spec isolation, retained search text and following buyer technical clauses. Reader version6 invalidates downstream caches; no prompt changes.
+
+Both local tenders rerun without any remote calls or blocked attempts:17.945s/10.241s forced stages using OCR cache,14.995s worker startup separately; full-stage cached0.176s/0.220s. Current source snapshots retain17/25 part rows; all18/22 pages accounted. First tender has no unassigned technical clauses (previously3); second has3 (previously8). Second tender retains25/25 source-row assignments; first16/17. Retained informational search spans total3/67 after atomization, not counts of search-result products. Both remain incomplete: unknown wrapper clauses, one unresolved source-row mapping and absent parsed technical attributes remain; second also has3 unassigned technical fragments outside the excluded section. No source conflicts silently corrected, supplier reports or full-match claims published.
+
+89 focused wrapper/ingestion/pipeline/reclassification tests passed. Complete backend non-integration regression suite passed after this change (one existing HTTP413 deprecation warning). Earlier unrelated changes remain in the working tree; no mixed commit created.
+
+
+### 2026-11-08 — Geometric wrapper metadata review
+
+Inspected rendered second-wrapper pages1/2/10. Remaining3 unassigned technical fragments were metadata: item-category cell, search-strings cell and repeated item heading next to specification/BOQ links. Added wrapper-only geometric separation of explicitly labelled metadata table rows and exact BOQ-title lines. Retain original metadata text/bounds as informational source records; preserve neighbouring buyer clauses and all attachment-spec processing. Missing geometry/unknown headings fall through rather than silently exclude. Reader version7 invalidates affected caches, no prompt change.
+
+Synthetic checks cover actual PDF table geometry, exact title headings, preserved buyer pressure clauses, attached-spec isolation and page ledger state.40 focused wrapper/pipeline tests passed. Full offline backend suite and final no-remote two-tender rerun follow. Unknown commercial/eligibility wrapper terms remain unknown for proper clause interpretation, not blanket-excluded. No paid calls or vendor corpus edits.
+
+
+Final local validation: zero unassigned technical clauses in either tender; all3 metadata fragments resolved structurally. PDF crop originally leaked boundary-touching heading characters into neighbouring prose; full-containment selection for non-metadata bands fixes this, with an explicit no-duplicate-heading test.40/40 pages and17/25 source part rows retained. Forced stages19.404s/10.132s using cached OCR; worker startup14.258s separately; full-stage cached0.178s/0.208s. Zero remote calls or blocked attempts. Both remain incomplete with no extracted technical attributes and unresolved unknown clauses; unclassified review inventory137/146 includes fragmented source text, not confirmed requirement counts. Inventory with source/page/row references: eval/audit/ocr-integration-2026-11-08/remaining-review.json. No human gold confirmation or verified end-to-end supplier matching claim.
 
 
 ### 2026-11-08 — Bounded free-tier clause probe and bilingual reader correction
@@ -3589,6 +3716,53 @@ Five authorized configured free-tier calls completed with0 retries,3533 input/51
 Found and corrected shared English selector truncation: previous logic dropped English preceding the last Hindi fragment. Preserve all English/value runs in source order and strip only Devanagari, CID encoding markers/control residue and separator noise; keep identifiers, zeros, signs and operators. Original source text retained. Reader version8 invalidates affected stage caches; input hashes already include normalized text. No prompt changes.70 focused ingestion/pipeline tests passed; complete offline suite and no-remote tender rerun follow. Production classification-before-item-binding remains deferred because the diagnostic did not establish safe automatic classification.
 
 Final validation: full backend non-integration suite passed. No-remote forced-stage rerun21.642s/12.582s using OCR cache; worker startup24.381s separately; cached0.232s/0.297s.40/40 pages and17/25 source part rows retained, zero blocked requests. Both remain incomplete; no supplier matching accuracy claim.
+
+
+### 2026-11-08 — Opt-in classification before BOQ assignment
+
+Implemented a separate clause-type-only reader with strict enum/quote JSON validation, source-substring checks and versioned structured cache. No values, item guesses or capability verdicts accepted. Enabled pipeline can classify unknown/unassigned clauses after metadata/corpus gates; original text/page/table/row and scope warnings remain. Technical/certification proposals stay unassigned and review-only, so the existing matching scope gate blocks them. All proposed labels retain review_required. Malformed, missing, invented-quote and oversized outputs stay visible rather than producing empty requirements.
+
+REQUIREMENT_CLASSIFICATION_ENABLED defaultsfalse; REQUIREMENT_CLASSIFICATION_MAX_CHARS defaults4000. Disabled deployments retain existing extraction-stage keys, avoiding unintended paid rereads. Enabling folds prompt signature and input limit into downstream keys; upstream reader/item stages unchanged. Rate/budget exceptions stop with unread tail retained. Full offline backend suite passed, then focused classifier/pipeline checks verify final default-cache compatibility. Synthetic cases cover label types, input bounds, provenance, cache hits, malformed output, no default calls and limit stops. No live calls or database tender updates in this phase. Classification quality on real clauses remains unvalidated; keep disabled pending a bounded reviewed probe. Earlier unrelated changes remain separate in the working tree.
+
+
+### 2026-11-08 — Fixed five-case classifier probe
+
+Recorded expected labels before calls for3 source clauses and2 explicitly synthetic technical/mixed controls; assistant-reviewed, not human-confirmed gold. Dedicated configured free-tier service only, no active-provider changes, no database writes, no retries or paid fallback. Four responses passed JSON/quote validation and matched expectations: source eligibility/commercial/informational plus synthetic technical. Fifth mixed payment+technical control timed out after30.059s (sanitized LLMError), then stopped. This is4 correct returned responses and1 unresolved transport failure, not evidence of a wrong mixed-content label or5/5 success.
+
+Five attempts,949 input/164 output reported tokens,0 retries; timeout usage is unknown because no response was received. Successful calls0.447/0.639/1.062/0.194s. Total request elapsed32.401s, including timeout; not full-tender timing. No model identifier, endpoint or credentials recorded. Fixed inputs and detailed outcomes: eval/audit/ocr-integration-2026-11-08/classifier-fixed-sample.json and classifier-reviewed-probe.json. Keep classification disabled: mixed-content safety remains unverified, and the tiny selected sample does not establish broad accuracy. No further calls or code changes in this phase.
+
+
+### 2026-11-08 — Mixed-content retry and capped classifier validation
+
+User accepts2–4 minutes for larger tenders; correctness remains the priority and this is a target, not a measured SLA. Single authorized retry of previously timed-out mixed-content synthetic control returned technical with valid source quote in0.392s,227 input/32 output tokens,0 retries. No database changes or provider fallback. Follow with at most10 free-tier clause-type requests from one tender in a90-second start-window guard, saving each validated proposal atomically. Stop on any provider/validation failure. This is a local resumable validation artifact; production classification staysdisabled and no proposals are automatically applied. Preserve separate source references for identical clauses. No prompt/cache semantics changed.
+
+
+Capped classifier window completed10 free-tier calls in2.475s,2388 input/328 output tokens,0 retries. Saved10 proposals and84 pending unique clauses from137 source fragments (94 unique normalized inputs); duplicate clauses retain separate source references. Review flagged4 unsafe proposals: mixed bid-validity/admin block informational, unidentified ATC certificate certification, OEM authorization certification, and eligibility submission obligation mixed with document-visibility question informational. Flags are assistant review, not human-confirmed gold; do not treat the remaining proposals as confirmed automatically. No labels applied. Production flag remainsfalse. Stop the validation rollout before more calls: context preservation/clause-boundary quality is the next issue, not short-clause throughput. Artifact: eval/audit/ocr-integration-2026-11-08/classifier-capped-progress.json.
+
+This phase used11 requests including the successful mixed-control retry,2615 reported input/360 output tokens, no paid fallback. These sample times do not establish complete tender processing time or retrieval accuracy. Keep the2–4 minute large-tender target provisional until one complete verified in-corpus run.
+
+
+### 2026-11-08 — Wrapper field context preserved before classification
+
+Preserved labelled two-column fields as intact rows with original cell values, requesting label, bounds and stable page-local row identity. Atomization retains them; source-table snapshots expose Field/Value cells and requirement links. Explicit discovery boundary fields remain under the existing cross-page segmenter. Unlabelled/multi-column portions fall through without guessed label inheritance. Contextual clause-type-2 receives complete clause and requesting section; source quote must occur in the clause, and context participates in the cache key. Prompt explicitly separates bidder qualification documents from identified product certificates and retains unknown for unresolved references/mixed administrative roles. Reader9 and enabled prompt signature invalidate affected stages.
+
+60 focused wrapper/classifier/pipeline tests and the complete offline backend suite passed. No new live calls. Both local tenders rerun with every remote request blocked:40/40 pages and17/25 source part rows retained, both incomplete. Persisted72/89 field-linked requirements were verified against their source-table row IDs/cells. New unresolved review queue163/168 source records reflects changed boundaries, not confirmed requirement counts or improved accuracy; old10-proposal/84-pending artifact remains historical and must not be resumed under the new prompt. Fresh queue with labels/cells/bounds: eval/audit/ocr-integration-2026-11-08/contextual-review-reader9.json. Keep classifier disabled until bounded source-context cases are reviewed. No supplier verdicts, corpus migration or model/provider changes.
+
+
+### 2026-11-08 — General layout isolation and frozen classifier validation
+
+User explicitly requires generalized behavior rather than tender-specific tuning. Fixed source-region subtraction to use actual row/heading rectangles instead of full-width horizontal bands, preserving independent neighbouring columns. No tender IDs, part numbers or disputed values added to business logic. New synthetic non-GeM layouts exercise4 arbitrary labels with wrapped values, narrow table beside technical prose, genuine empty-cell fallback, and repeated values under different labels/row IDs.32 focused layout/wrapper/classifier tests and complete backend non-integration suite passed. One initial short synthetic page triggered the unrelated selective-OCR path; added ordinary synthetic document context so the layout test exercises text extraction rather than OCR.
+
+Frozen clause-type-2 probe recorded acceptable labels before requests:4 source regressions and3 synthetic holdouts. Stopped after3 free-tier attempts: mixed bid/admin block still informational (unsafe exclusion), unidentified certificate unknown (appropriate abstention), next source regression timed out30.206s. Successful requests0.387/0.228s;819 input/72 output reported tokens,0 retries. Timeout usage is unknown; no paid fallback or DB labels applied. Holdouts were NOT reached, so no live generalization claim. No case-specific prompt/guard change follows this failure. Keep automated classification disabled. Saved fixed inputs/results in generalized-classifier-cases.json and generalized-classifier-results.json under eval/audit/ocr-integration-2026-11-08/. Reader10 regression-tender accounting rerun uses a client that blocks every remote request.
+
+Reader10 final no-remote regression run preserved18/18 and22/22 pages plus17/25 source part rows, zero LLM calls or blocked attempts. Both tenders remain incomplete. These data points verify source accounting, not classification or matching accuracy. General layout and contextual classification changes remain uncommitted alongside earlier work.
+
+
+### 2026-11-08 — Unverified classifier labels remain proposals
+
+Fixed a general decision-boundary bug: opt-in classification previously changed requirement.type despite describing its label as a proposal. A wrong informational label could remove technical content from unresolved coverage. The classifier now preserves unknown type and source text, records proposed label only in review reason/cache, and leaves review_required set. Manufacturer outcomes for unknown clauses retain that reason. Existing item-scope and deterministic retyping gates remain separate; no phrase-specific exclusion or automatic approval added. Enabled stage keys include proposal-only-1 policy; disabled keys and prompt/response cache stay unchanged.
+
+70 focused classifier/run/completeness tests passed. Synthetic deliberately wrong informational label cannot clear completion gaps, lose the technical source text or reach manufacturer matching. Complete offline backend non-integration suite passed (one existing HTTP413 deprecation warning). No paid/free live calls, database writes, schema migrations, provider changes or source-label applications in this phase. Automated classification remains disabled; correctness on unseen clauses and full-tender extraction/retrieval still require evaluation.
 
 
 ### 2026-11-08 — Independent unknown-clause reporting fix
@@ -3617,25 +3791,73 @@ Added a reusable lexical coverage review trigger and vocabulary-backed function 
 
 Added source-byte and extraction-version validation at run creation/resumption. Isolated synthetic tests verify corrupt sources are rejected before stale requirements, resumed work stops before run claim/matching, and outdated/unversioned extraction requires refresh. Filesystem checks are mocked only in unrelated orchestration tests. No provider requests or DB writes in gate tests.
 
+### 2026-11-09 — Recovered-package and bounded validation checkpoint
+
+Recovered the overwritten 24-page source by exact original SHA-256 and preserved the surviving attachment. Local full-package evaluation accounted for 60/60 pages in 45.171 seconds, with 927 candidate clauses and no remote calls. Frozen retrieval/cached-only replay took 149.417 seconds, zero source hash failures; source-page recall remains 6/6 at top 20 and 3/6 at top 3. Coverage review triggered on 26/48 historical rows, not a confirmed error count. All 48 rows need validated extraction refresh; historical requirements/results were not replaced.
+
+Two bounded free-tier requests failed proposal validation and published no claims: extraction rejection lacks retained raw response; the independent fact proposal used unexpected operation instead of operator. No quota exhaustion, retries or paid fallback. Full offline backend regression suite passed after source coverage preservation changes, with one existing HTTP-status deprecation warning. Retained the documented incomplete-report behavior for rate-limited ingestion rather than changing it incidentally. See docs/SOURCE_INTEGRITY_COVERAGE_2026-11-09.md. Broader integration remains uncommitted; full-tender accuracy and latency remain unproven.
+
+### 2026-11-09 — Proposal contract hardening (offline)
+
+Added validator-derived response schemas to requirement and single/grouped fact prompts; missing requirements envelopes now fail instead of silently becoming empty facts. Preserved strict unknown-field rejection and one-call behavior. Requirement prompt3 invalidates earlier extraction caches; fact-contract digest joins run snapshots and source provenance. Added synthetic contract regressions for schema delivery, explicit empty output, malformed/alias rejection, grouped outer shape and instruction/schema lineage. No remote requests, database writes, historical refresh or automatic claim promotion in this phase. Provider adherence and the next bounded live probe remain untested; code overlaps existing uncommitted source-context integration and is not a frozen release.
+
+Validation result: focused connected tests and the full offline backend suite passed after the final contract changes; only the pre-existing Starlette HTTP-status-name deprecation warning remains. No live provider adherence, database integration or historical refresh was tested. git diff --check passed for the touched implementation and new contract tests.
+
+### 2026-11-09 — Two-call live contract probe and offline source replay
+
+Two designated free-tier calls, zero retries, passed revised proposal schemas: 1.149s extraction and 1.355s facts, 2.508s combined excluding local source preparation, 4213 input/808 output tokens. No database connection or writes. Item10 has six proposed facets including separate connection, but unapproved attribute names retain source-coverage review. Offline replay found three proposed values absent from their supplied spans: the current nonempty span gate is insufficient. Four fact quotes occur on the source page; model-specific binding is unverified and one condition fails the existing source-anchor check. No claims published. Retained redacted raw responses and offline checks under eval/audit/fixed-incorpus-2026-11-09/contract-v3/. See docs/CONTRACT_PROBE_2026-11-09.md. Stop remote calls; next phase strengthens the general span-value support gate and replays retained answers offline.
+
 ### 2026-11-09 — Independent source-span value support utility
 
 Added a pure source-span/value gate with synthetic checks for valid numeric/text/Unicode values, wrong spans, decimal/sign/token clipping, complete ranges, clipped endpoints, discrete lists and invalid offsets. No model calls or database writes. Kept the reusable helper and pure tests independently committable from the existing uncommitted extraction/source-context integration.
+
+### 2026-11-09 — Span gate integration and retained-response replay
+
+Wired value support into requirement extraction and advanced extraction version4 to prevent cache bypass. Added integration regressions verifying rejected spans cause no repair/retry/cache writes and preserve original source/item review. Adjusted orchestration fakes to return no material value when their synthetic input does not contain one. Full offline backend suite passed; final connected checks passed after the range/list refinement. Exact staged utility snapshot passed26 pure tests and was committed separately. Integration remains with earlier uncommitted source-context changes.
+
+Retained item10 response replay: six input proposals, one accepted span, five rejected; original clause preserved with review, no cache write, zero remote calls and zero DB writes. The stricter result includes clipped-word boundaries and literal/paraphrase disagreement, not five missing source requirements. Source anchoring/model binding on table-free manufacturer pages remains open. No new end-to-end accuracy or latency claim.
 
 ### 2026-11-09 — Independent conservative native-line binding utility
 
 Added a pure inline model/attribute/value resolver retaining line ID, bounding box and source text. Synthetic cases cover valid open-vocabulary labels, wrong model/attribute/value, prefix collisions, repeated anchors, cross-line borrowing, extra fields/conditions, exact units and malformed coordinates/layout. No remote calls or DB writes. Kept this utility independently committable from the wider uncommitted matching/source-context wiring.
 
+### 2026-11-09 — Native model-binding integration and saved-proposal replay
+
+Wired native PDF line capture into existing page/table caching and retained coordinates in fact source context. Added a conservative inline binding gate to fresh/cached non-table evidence and verification/source binding to the deterministic offered-list exclusion fallback. Run snapshots include the binding policy. Geometry stays out of model payloads. Added connected tests for valid/wrong/absent model binding through actual matching, exclusion non-publication, native source capture/cache reuse and single/grouped payload filtering. Full offline backend suite passed; final connected tests passed after payload filtering. Independently exported utility snapshot passed20 pure synthetic cases and was committed separately.
+
+Saved real-page replay found191 native horizontal lines and no tables. All4 retained proposals remain unconfirmed:3 lack inline model/attribute/value binding and1 fails condition support. Zero API calls/DB writes or historical report changes. Complex multi-column ownership is not solved by this conservative fallback. Broader integration remains uncommitted. See docs/MODEL_BINDING_CHECKPOINT_2026-11-09.md and eval/audit/fixed-incorpus-2026-11-09/model-binding-replay.json.
+
 ### 2026-11-09 — Independent review-only heading-region utility
 
 Added a pure native-font/geometry region proposal resolver and synthetic tests for column ownership, wrong model/label/value, repeated quotes, later competing headings, wrapped captions, crossed gutters, overlapping headings, uniform fonts, unsupported conditions and malformed geometry. Proposals retain source IDs/boxes and review state. No provider requests or DB writes. Kept the standalone utility and pure tests separately committable from the uncommitted source-context/verifier integration.
+
+### 2026-11-09 — Heading-region integration and visual/offline replay
+
+Source context now preserves font sizes and filters blank native lines. Added review-only region proposals after failed inline binding; the verifier stays failed/review and no claim is promoted. Run snapshot binding lineage updated. Real saved-page replay retains107 nonempty native lines, finds3 distinct candidate column anchors and leaves the conditioned fourth proposal unbound; all4 remain unconfirmed. Four local checks took0.018592s excluding PDF reading/imports, not a latency distribution or tender SLA. Poppler-rendered page inspection agrees with those three candidate columns; this is assistant review on one page, not independent gold.
+
+All connected and full offline backend tests passed, with the existing HTTP-status deprecation warning. Isolated staged snapshot passed15 pure synthetic tests and was committed separately. Zero API calls, DB writes or historical data changes. Wider source-context/verifier integration remains uncommitted; see docs/HEADING_REGIONS_CHECKPOINT_2026-11-09.md. No automatic heading-region promotion; broaden reviewed layout/condition cases next.
 
 ### 2026-11-09 — Repeated-heading and duplicate-provenance regression fixes
 
 Expanded synthetic layout checks to repeated model headings, duplicate source IDs, three columns, source-order/translation/scale invariance, complete ranges/decimals with units, and conditions in another model column. Reproduced two failures before fixing the shared resolver: repeated model headings could select a uniquely occurring value, and duplicate line IDs could identify distinct source lines. Both now abstain. Updated region/binding lineage; automatic region verification remains disabled. No API calls or DB writes. Kept the independently testable utility/policy/test changes separate from existing uncommitted integration.
 
+### 2026-11-09 — Wider frozen layout survey and review boundary
+
+Completed a read-only survey of5 frozen documents/76 pages:0 hash failures,0 pages without native text,22 pages with tables. On54 non-table pages,16 produced44 geometric candidate regions;38 produced none. These are layout counts, not matching accuracy. Assistant visual review on AVK2, Valtek12 and CIRCOR7 confirmed corporate headings, dimensional labels and actuator/accessory scopes that must not be promoted as valve-model facts. Notes are explicitly not independent human gold. No tender/source-specific skip guard or vocabulary approval was added.
+
+Full offline suite passed. Exact isolated staged snapshot passed42 pure region/inline tests, including the two reproduced ambiguity regressions. Page/table/native preparation p50=0.695084s and p95 nearest-rank=2.043260s over76 pages; non-table region preparation p50=0.001056s/p95=0.004824s over54 pages. Survey wall time64.243s after imports; no DB/network/embedding/LLM latency in these measurements. Zero API calls/DB writes/historical refresh/confirmed matches. See docs/REGION_SURVEY_2026-11-09.md and region-survey-v2.json/region-review-notes.json under eval/audit/fixed-incorpus-2026-11-09/. Next prioritize hash-keyed persisted page context, retaining review gates and invalidation checks; whole-tender correctness/runtime and broader uncommitted integration remain open.
+
 ### 2026-11-09 — Independent verified page-context cache utility
 
 Added a content-addressed native PDF context cache with source-byte validation before memory/disk lookup, strict payload validation/checksums, source/page/reader/engine/binding identity and atomic writes. Synthetic cases cover equivalent cold/disk/memory output, caller mutation, changed/missing bytes, invalid identities/pages, reader/engine/binding invalidation, corrupted payload/schema/geometry/IDs/table cells, parse failures, unwritable cache and identical verified bytes under another path. No API calls or DB writes. The utility and pure tests are independently committable; matching/source-context/run wiring is tracked separately from prior uncommitted integration.
+
+### 2026-11-09 — Persistent context integration and separate-process warm replay
+
+Wired the verified page cache into matching, preserving native coordinates and binding/review gates. Source hashes are checked before memory/disk reuse; evidence records the hash actually verified. Run snapshots name reader/PDF-engine versions and per-run context/metadata caches reset on execution. Source context storage uses the existing ignored DATA_DIR/tmp directory. No provider or extraction-prompt changes.
+
+Same76 frozen pages: cold76 misses,65.106957s page-context work (p50 .665952s/p95 1.939349s); a separate warm process had76 disk hits/zero misses,2.256633s work (p50 .030404s/p95 .039625s). All76 context fingerprints identical. About28.9x observed reduction for this step only; cold overlapped offline tests, imports/DB/network/embedding/LLM/full-matching latency are excluded. Cache76 entries/1,200,422 bytes. Full offline suite passed; final connected regressions passed after verified-hash provenance adjustment, and isolated staged utility snapshot passed25 pure tests including the final corrupt-table schema case.
+
+Zero API calls/DB writes/historical refresh or confirmed claims. Cache files were written locally as intended. Matching/run wiring remains with earlier uncommitted integration; no full-tender re-extraction, live DB integration or SLA validation in this phase. See docs/PAGE_CONTEXT_CACHE_2026-11-09.md and page-context-cold.json/page-context-warm.json under eval/audit/fixed-incorpus-2026-11-09/.
 
 ### 2026-11-09 — Fixed-source cached diagnostic and extraction cause audit
 
@@ -3658,3 +3880,31 @@ Used the designated free-tier configuration for2 calls,0 retries/no paid fallbac
 Both pipeline replays remain review-required. Four distinct unapproved attribute names affect6 proposals; one class-rating proposal is typed certification. Numeric sizes are source-literal2-inch strings with quote marks and require deterministic typed canonicalization before numeric comparison. No model/component/condition verification or full matching was performed, and no claims were confirmed. These two known regression cases do not establish unseen accuracy or p95/full-tender latency.
 
 Four gates remain: extraction/normalization acceptance; history-preserving refresh and vendor evidence validation; fixed/unseen gold and timing/grouping evaluation; integration/release cleanup. Rough planning estimate3–6 focused days for assignment readiness if no major new failures, not a delivery guarantee. Next use retained responses offline for typed normalization and vocabulary/type review rather than making more calls. See docs/QUOTE_LIVE_PROBE_2026-11-10.md. No production code/prompt/cache changes in this phase.
+
+
+### 2026-11-10 — Append-only requirement refresh support (prepared)
+Added requirement supersession and normalization persistence, current-item activation, immutable run-input helpers, and historical report binding. Updated destructive-replacement integration expectations. Focused synthetic history/report tests: 24 passed. Migration 0021 is prepared only; no live database writes, refresh, migration, or full-suite invocation in this step. Pipeline creation/execution hooks are integrated separately before the release candidate. Legacy history already deleted by earlier software cannot be recovered; incomplete historical input sets are labelled explicitly.
+
+
+### 2026-11-10 — Run history integration and derived-value consumption
+Integrated run creation/execution/progress with immutable requirement/item inputs, revision guards, deterministic-policy fingerprints, and derived normalization. Synthetic fixtures now explicitly simulate run-creation binding, with direct production-path regression coverage for obsolete revisions and normalization abstention before retrieval. Focused run/quote/history/source-lineage checks: 79 passed with a workspace pytest basetemp (default sandbox temp was unavailable). No paid calls, live migrations, refresh, full-suite run or commits performed.
+
+
+## 2026-11-10 — Structured values and release consolidation (in progress)
+
+Implemented side-by-side normalized source values, data-configured nominal-size table, ambiguity-safe exact aliases, table-based nominal comparison and verification, source-position/subject clause typing, and immutable historical requirement/item snapshots. Focused tests cover notation, range preservation, unknown sizes, alias collisions, technical specification versus bidder history, and stale-run rejection. No provider calls or production database refresh/migrations were made for this phase. Saved-response replay and one consolidated full unit run precede the release candidate; new valve/pump evaluation remains blocked on RC plus user-confirmed labels. User selected GEM_9935572_Pump; local filename/internal identifier discrepancy and conflicting flow labels require confirmation.
+
+## 2026-11-10 — Runtime configuration privacy and public Docker release preparation
+
+Removed shipped provider target defaults, required the runtime chat endpoint during preflight/client initialization, and replaced application-owned model/provider diagnostics with generic status/type messages. Focused LLM/config/embedding validation covered 44 passing tests with one integration test skipped; no full-suite run, paid calls or live database changes. Synthetic fixture isolation prevents local budget/retry settings from altering tests. An in-process scan of eight privately configured values found zero matches across 84 application/example files and zero across 80 changed application/test/evaluation/script files; values were never emitted.
+
+Separated five bundled JSON policies from writable runtime data, added the built-image leak/allowlist checker and its synthetic self-test, and documented exact PowerShell commands for building, smoke-testing, pushing both public images, and verifying credential-free pulls/digests in docs/DOCKER_HUB_PUBLIC_RELEASE.md. Checker self-test, quiet Compose validation using a separate empty env file, and focused diff checks passed. The private root env file previously failed Compose BOM parsing and was not edited. Actual image builds, runtime image smoke tests, publication and Paddle/CUDA validation remain pending; no images were built/pushed and no commits were made in this preparation step.
+
+
+### 2026-11-10 — Historical source-accounting binding
+Bound page/extraction/source metadata at new-run creation and consumed it in report output. Legacy metadata absent from the snapshot remains explicitly unknown; report HTML warns readers and avoids refreshed statistics. Added snapshot persistence/report regression checks against changed current metadata. Focused run/report/history modules passed (72 cases); no full suite, migrations, refresh or paid calls.
+
+
+## 2026-11-10 — Offline replay and evaluation hold
+
+Twelve saved proposals replayed without LLM/network calls: six canonical mappings and six unmapped abstentions; one derived value and one clause type changed; source/proposal hashes and quote preservation checked. These are comparison-input changes, not verified matching results. The user rejected the proposed pump-file identity and will identify the correct file; pump labels remain unconfirmed and no release evaluation has run. Configuration-only historical redactions are separately hash-audited; baseline bytes must no longer be described as unmodified originals.
