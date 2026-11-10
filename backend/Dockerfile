@@ -23,11 +23,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY app ./app
+COPY data/attribute_vocabulary.json data/categories.json data/doc_types.json data/doc_roles.json data/normalization_policy.json ./data/
+
+# Packaged policy is separate from the writable corpus/upload/cache volume.
+ENV DATA_DIR=/var/lib/tender/data \
+    ATTRIBUTE_VOCABULARY_PATH=/app/data/attribute_vocabulary.json \
+    CATEGORY_VOCABULARY_PATH=/app/data/categories.json \
+    DOC_TYPES_PATH=/app/data/doc_types.json \
+    NORMALIZATION_POLICY_PATH=/app/data/normalization_policy.json
 
 # Run as a non-root user.
 RUN useradd --create-home --uid 10001 appuser \
-    && mkdir -p /app/data \
-    && chown -R appuser:appuser /app
+    && mkdir -p /var/lib/tender/data \
+    && chown -R appuser:appuser /app /var/lib/tender/data
 USER appuser
 
 EXPOSE 8000

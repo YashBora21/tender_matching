@@ -1,7 +1,12 @@
 # The image copies code only. The corpus, uploaded tenders and the tests are
 # mounted or run outside it, and shipping them would add hundreds of megabytes
 # and make every code edit a slow upload.
-data
+data/*
+!data/attribute_vocabulary.json
+!data/categories.json
+!data/doc_types.json
+!data/doc_roles.json
+!data/normalization_policy.json
 tests
 venv
 .venv
@@ -12,3 +17,8 @@ __pycache__
 .ruff_cache
 .env
 .env.*
+**/.env
+**/.env.*
+**/__pycache__
+**/*.py[cod]
+.git
