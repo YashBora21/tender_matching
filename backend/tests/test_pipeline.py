@@ -7,6 +7,7 @@ rerun, a malformed attachment and an ambiguous item mapping.
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -36,6 +37,12 @@ class FakeSession:
 
     def commit(self) -> None:
         self.commits += 1
+
+    def execute(self, statement):
+        class EmptyAliases:
+            def all(self):
+                return []
+        return EmptyAliases()
 
 
 class Clock:
@@ -118,6 +125,9 @@ class FakeRepo:
     def replace_pages(self, tender_id, pages):
         self.pages = list(pages)
         return len(self.pages)
+
+    def store_ocr_table(self, *args):
+        pass
 
     def list_pages(self, tender_id):
         return [dict(row) for row in self.pages]
@@ -273,7 +283,7 @@ def _attachments(tmp_path: Path, **overrides) -> tuple[list[dict], Path]:
             "url": "https://example.test/boq.csv",
             "filename": "boq.csv",
             "path": "raw/boq.csv",
-            "sha256": "a" * 64,
+            "sha256": hashlib.sha256((raw / "boq.csv").read_bytes()).hexdigest(),
             "kind": "boq-csv",
             "status": "new",
         },
@@ -281,7 +291,7 @@ def _attachments(tmp_path: Path, **overrides) -> tuple[list[dict], Path]:
             "url": "https://example.test/spec.pdf",
             "filename": "spec.pdf",
             "path": "raw/spec.pdf",
-            "sha256": "b" * 64,
+            "sha256": hashlib.sha256((raw / "spec.pdf").read_bytes()).hexdigest(),
             "kind": "boq-pdf",
             "status": "new",
         },
@@ -372,9 +382,11 @@ def test_a_changed_attachment_re_reads_the_items_and_the_requirements(tmp_path, 
 
     repo.stages = _stage_keys_for(attachments)
 
-    # The bill of quantities changed.
+    # The synthetic bill of quantities changed, with its manifest updated consistently.
     changed = [dict(record) for record in attachments]
-    changed[0]["sha256"] = "c" * 64
+    path = directory / changed[0]['path']
+    path.write_text(path.read_text() + "\n", encoding='utf-8')
+    changed[0]["sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
 
     result = run_pipeline(
         "T1", directory, changed, repo=repo, cache=FakeCache(), client=client
@@ -444,7 +456,7 @@ def test_a_changed_prompt_re_extracts_but_does_not_re_read_the_items(tmp_path, m
     # does not. It is read from the extractor, which owns the prompt.
     import app.services.requirement.extract as extractor
 
-    monkeypatch.setattr(extractor, "PROMPT_VERSION", "2")
+    monkeypatch.setattr(extractor, "PROMPT_VERSION", "synthetic-changed-prompt")
     result = run_pipeline(
         "T1", directory, attachments, repo=repo, cache=FakeCache(), client=client
     )
@@ -477,24 +489,27 @@ def test_a_changed_model_re_extracts(tmp_path, monkeypatch):
     assert client.calls == 2
 
 
-def test_a_changed_vocabulary_re_resolves_only(tmp_path, monkeypatch):
-    """A change to the vocabulary changes the resolution and nothing before
-    it: no re-read, no re-extract."""
+def test_a_changed_vocabulary_rechecks_coverage_and_resolves(tmp_path, monkeypatch):
+    """Coverage depends on approved vocabulary as well as normalization."""
     attachments, directory = _attachments(tmp_path)
     monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
     repo = FakeRepo()
     client = CountingClient()
 
-    repo.stages = _stage_keys_for(attachments)
+    cache = FakeCache()
+    run_pipeline("T1", directory, attachments, repo=repo, cache=cache, client=client)
+    client.calls = 0
     monkeypatch.setattr(pipeline, "_vocabulary_hash", lambda: "new-vocabulary")
 
     result = run_pipeline(
-        "T1", directory, attachments, repo=repo, cache=FakeCache(), client=client
+        "T1", directory, attachments, repo=repo, cache=cache, client=client
     )
 
-    assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_SKIPPED
+    assert result.stages[STAGE_REQUIREMENTS].status == pipeline.STATUS_SKIPPED
+    assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
     assert result.stages[STAGE_RESOLUTION].status == pipeline.STATUS_DONE
     assert client.calls == 0
+    assert result.llm_cache_hits == 2
 
 
 def test_a_cached_answer_is_reused_and_is_not_a_call(tmp_path, monkeypatch):
@@ -550,6 +565,7 @@ def test_a_malformed_attachment_does_not_stop_the_others(tmp_path, monkeypatch):
     """A file that cannot be read is a file that cannot be read."""
     attachments, directory = _attachments(tmp_path)
     (directory / "raw" / "spec.pdf").write_bytes(b"not a pdf")
+    attachments[1]['sha256'] = hashlib.sha256(b'not a pdf').hexdigest()
     monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
 
     result = run_pipeline("T1", directory, attachments, repo=FakeRepo())
@@ -695,7 +711,7 @@ def test_a_stored_row_is_stamped_with_the_versions_the_run_uses():
     assert stored.extraction_version == EXTRACTION_VERSION
 
 
-def test_a_vocabulary_change_does_not_move_the_stages_before_the_resolution():
+def test_a_vocabulary_change_invalidates_coverage_but_not_source_reading():
     attachments = [
         {"kind": "boq-csv", "sha256": "a" * 64, "status": "new"},
         {"kind": "boq-pdf", "sha256": "b" * 64, "status": "new"},
@@ -717,7 +733,7 @@ def test_a_vocabulary_change_does_not_move_the_stages_before_the_resolution():
     assert before[STAGE_ATTACHMENTS] == after[STAGE_ATTACHMENTS]
     assert before[STAGE_ITEMS] == after[STAGE_ITEMS]
     assert before[STAGE_REQUIREMENTS] == after[STAGE_REQUIREMENTS]
-    assert before[STAGE_EXTRACTION] == after[STAGE_EXTRACTION]
+    assert before[STAGE_EXTRACTION] != after[STAGE_EXTRACTION]
     assert before[STAGE_RESOLUTION] != after[STAGE_RESOLUTION]
 
 
@@ -781,7 +797,7 @@ def test_a_line_the_model_could_not_read_is_flagged_not_dropped(tmp_path, monkey
     assert result.rate_limited is False
     # The first line was kept and flagged; the second was read normally.
     assert len(result.requirements) == 2
-    flagged = [row for row in result.requirements if row.review_required]
+    flagged = [row for row in result.requirements if 'could not read this line' in (row.review_reason or '')]
     assert len(flagged) == 1
     assert "could not read this line" in (flagged[0].review_reason or "")
     assert result.llm_calls == 2
@@ -934,6 +950,7 @@ def test_a_clause_the_model_called_unknown_is_re_typed_from_its_own_value(
                     "number": "1",
                     "title": "GATE VALVE SIZE 150 MM CLASS 150",
                     "description": "minimum efficiency 85%",
+                    "page_tag": "technical",
                 }
             ]
         ),
@@ -1008,7 +1025,7 @@ def test_every_page_read_ends_in_the_ledger(tmp_path, monkeypatch):
         "T1", directory, attachments, repo=repo, cache=FakeCache(), client=CountingClient()
     )
 
-    assert result.failure is None
+    assert result.failure == 'source pages remain unreadable'
     assert [row["page"] for row in repo.pages] == [1, 2]
     assert [row["ledger_status"] for row in repo.pages] == ["parsed", "failed"]
     assert repo.pages[0]["extraction_method"] == "table"
@@ -1183,3 +1200,14 @@ def test_a_page_of_prose_is_readable(tmp_path):
     document.close()
 
     assert pipeline._reads_nothing(written) is False
+
+
+def test_wrapper_change_invalidates_reading_but_not_boq_items():
+    """Synthetic wrapper hashes must invalidate source reading and downstream caches."""
+    kwargs = dict(prompt_version="synthetic", schema_version="synthetic",
+                  model="synthetic", vocabulary_hash="synthetic")
+    before = stage_keys([], wrapper_fingerprint="synthetic-before", **kwargs)
+    after = stage_keys([], wrapper_fingerprint="synthetic-after", **kwargs)
+    assert before[STAGE_ITEMS] == after[STAGE_ITEMS]
+    assert before[STAGE_REQUIREMENTS] != after[STAGE_REQUIREMENTS]
+    assert before[STAGE_EXTRACTION] != after[STAGE_EXTRACTION]

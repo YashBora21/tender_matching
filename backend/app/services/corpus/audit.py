@@ -60,6 +60,7 @@ class TenderAudit:
     rate_limited: bool = False
     rate_limited_detail: Optional[str] = None
     stages: dict = field(default_factory=dict)
+    completion_gaps: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -201,6 +202,15 @@ def audit_tender(
             TenderStatus.RATE_LIMITED,
             error=result.rate_limited_detail,
         )
+    from app.services.tender.completeness import completion_gaps
+    ledger = [{'page': p.page, 'ledger_status': p.status, 'skip_reason': p.skip_reason,
+               'source_key': p.source_key, 'attachment_id': p.attachment_id} for p in result.pages]
+    if repo is not None and not ledger:
+        ledger = repo.list_pages(tender_id)
+    source_records = repo.list_attachments(tender_id) if repo is not None else attachments
+    gaps = completion_gaps(manifest, source_records, ledger, [vars(record) for record in result.requirements])
+    if gaps and repo is not None and not result.rate_limited:
+        repo.set_status(tender_id, TenderStatus.INCOMPLETE, error='; '.join(gaps))
     return TenderAudit(
         tender_id=tender_id,
         filename=manifest.get("filename") or tender_dir.name,
@@ -215,7 +225,7 @@ def audit_tender(
         ),
         items=len(result.items),
         requirements=len(result.requirements),
-        pages_read=len(result.pages),
+        pages_read=len(ledger),
         failure=result.failure,
         failure_code=result.failure_code,
         llm_calls=result.llm_calls,
@@ -228,6 +238,7 @@ def audit_tender(
         stages={
             name: state.status for name, state in result.stages.items()
         },
+        completion_gaps=gaps,
     )
 
 

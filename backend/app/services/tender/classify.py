@@ -11,15 +11,80 @@ technical, commercial/legal, safety/HSE, boilerplate, or a mix? The answer
 decides whether the page is read at all, and it is stored on the page ledger
 so a reviewer can see why.
 
-The keyword lists are the configuration. They are deliberately data, not
-logic: adding a word is a one-line change here, and nothing else needs to
-know how the score is computed.
+The source-position, subject and page-scoring cues are versioned JSON data.
 """
 
 from __future__ import annotations
 
 import re
+import json
+from functools import lru_cache
+from hashlib import sha256
+from pathlib import Path
 from dataclasses import dataclass, field
+
+
+@lru_cache(maxsize=1)
+def clause_policy():
+    """Versioned source-position/subject cues shipped as editable data."""
+    # shortcut: release policy is loaded once per process; restart after editing its data.
+    return json.loads(Path(__file__).with_name('clause_policy.json').read_text(encoding='utf-8'))
+
+
+def classification_policy_fingerprint():
+    return sha256(json.dumps(clause_policy(), sort_keys=True).encode()).hexdigest()
+
+
+@dataclass(frozen=True)
+class ClauseClassification:
+    kind: str
+    source_position: str
+    reason: str
+    review_required: bool = False
+
+
+def _position(page_tag, source_section):
+    for context in (source_section, page_tag):
+        if not context:
+            continue
+        positions = [name for name, patterns in clause_policy()['position_patterns'].items()
+                     if any(re.search(pattern, context, re.IGNORECASE) for pattern in patterns)]
+        if len(positions) == 1:
+            return positions[0]
+        if positions:
+            return 'ambiguous'
+    return 'unknown'
+
+
+def classify_clause(text, *, page_tag=None, source_section=None, attribute=None):
+    """Type a clause by source position and grammatical subject, never a score."""
+    policy = clause_policy()
+    position = _position(page_tag, source_section)
+    actor = re.search(policy['actor_subject_pattern'], text or '', re.IGNORECASE)
+    if actor:
+        if position == 'atc' and any(re.search(pattern, text, re.IGNORECASE)
+                                     for pattern in policy['eligibility_action_patterns']):
+            return ClauseClassification('eligibility', position,
+                'source qualification section and bidder/supplier subject with experience or possession obligation')
+        return ClauseClassification('unknown', position,
+            'actor-subject obligation has no unambiguous source qualification context', True)
+    if re.search(policy['ambiguous_subject_pattern'], text or '', re.IGNORECASE):
+        return ClauseClassification('unknown', position, 'clause subject is an unresolved reference', True)
+    if re.search(policy['competing_actor_pattern'], text or '', re.IGNORECASE):
+        return ClauseClassification('unknown', position, 'source clause mixes product and actor-subject context', True)
+    words = policy['retype']['attribute_words']
+    property_words = [word for word in words if re.search(rf'(?<![a-z]){re.escape(word)}(?![a-z])', text or '', re.IGNORECASE)]
+    property_present = bool(property_words or (attribute and attribute not in policy['non_property_attributes']))
+    if property_present and position == 'specification' and not reads_as_legal_clause(text):
+        return ClauseClassification('technical', position, 'specification position with a product-property subject')
+    prefix = policy['attribute_prefix_pattern']
+    labelled_property = any(re.search(prefix + re.escape(word) + r'(?![a-z])', text or '', re.IGNORECASE)
+                            for word in property_words)
+    product_obligation = re.search(policy['product_obligation_pattern'], text or '', re.IGNORECASE)
+    if property_present and position == 'atc' and (labelled_property or product_obligation) and not reads_as_legal_clause(text):
+        return ClauseClassification('technical', position, 'buyer-term position with a product-property obligation')
+    return ClauseClassification('unknown', position,
+        'source position or subject does not establish a technical or eligibility clause', True)
 
 # The page kinds. A page is exactly one of these; `mixed` means it carries
 # technical content *and* one of the non-technical kinds, so it is read.
@@ -30,7 +95,9 @@ BOILERPLATE = "boilerplate"
 MIXED = "mixed"
 
 # The kinds whose clauses are recorded but never sent to the model (D-87).
-NON_TECHNICAL = frozenset({COMMERCIAL_LEGAL, SAFETY_HSE, BOILERPLATE})
+DISCOVERY = "catalogue_discovery"
+WRAPPER_METADATA = "wrapper_metadata"
+NON_TECHNICAL = frozenset({COMMERCIAL_LEGAL, SAFETY_HSE, BOILERPLATE, DISCOVERY, WRAPPER_METADATA})
 
 # The prefix a requirement's `review_reason` carries when its page was not a
 # specification. The pipeline writes it, the report counts by it, so the two
@@ -40,151 +107,17 @@ NON_TECHNICAL_REASON = "page classified as"
 # Weight 2 terms say what the page *is*; weight 1 terms only say what it
 # mentions. A legal page that says "specification" once must not outvote
 # "integrity pact" and "arbitration".
-COMMERCIAL_LEGAL_TERMS: dict[str, int] = {
-    "integrity pact": 2,
-    "arbitration": 2,
-    "arbitrator": 2,
-    "jurisdiction": 2,
-    "court of law": 2,
-    "earnest money": 2,
-    "emd": 2,
-    "bid security": 2,
-    "performance bank guarantee": 2,
-    "bank guarantee": 2,
-    "liquidated damages": 2,
-    "penalty": 2,
-    "penalties": 2,
-    "forfeit": 2,
-    "indemnify": 2,
-    "indemnity": 2,
-    "gst": 2,
-    "payment terms": 2,
-    "invoice": 2,
-    "purchase order": 2,
-    "disqualification": 2,
-    "conflict of interest": 2,
-    "code of conduct": 2,
-    "undertaking": 2,
-    "eligibility criteria": 2,
-    "tenderer": 1,
-    "contract": 1,
-    "agreement": 1,
-    "bidder": 1,
-    "tender fee": 1,
-    "price": 1,
-    "quotation": 1,
-    "delivery period": 1,
-    "warranty": 1,
-    "guarantee": 1,
-    "tax": 1,
-    "refund": 1,
-    "payment": 1,
-}
+COMMERCIAL_LEGAL_TERMS: dict[str, int] = clause_policy()["page_terms"]["COMMERCIAL_LEGAL_TERMS"]
 
-SAFETY_HSE_TERMS: dict[str, int] = {
-    "safety officer": 2,
-    "safety supervisor": 2,
-    "personal protective equipment": 2,
-    "ppe": 2,
-    "scaffolding": 2,
-    "hot work": 2,
-    "permit to work": 2,
-    "work permit": 2,
-    "helmet": 2,
-    "safety harness": 2,
-    "first aid": 2,
-    "fire extinguisher": 2,
-    "accident": 2,
-    "injury": 2,
-    "hazard": 2,
-    "unsafe": 2,
-    "lockout": 2,
-    "tagout": 2,
-    "toolbox talk": 2,
-    "height work": 2,
-    "excavation": 2,
-    "environmental protection": 2,
-    "waste disposal": 2,
-    "safety": 1,
-    "emergency": 1,
-    "training": 1,
-    "housekeeping": 1,
-    "pollution": 1,
-    "noise": 1,
-    "dust": 1,
-    "supervisor": 1,
-}
+SAFETY_HSE_TERMS: dict[str, int] = clause_policy()["page_terms"]["SAFETY_HSE_TERMS"]
 
-BOILERPLATE_TERMS: dict[str, int] = {
-    "table of contents": 2,
-    "for office use": 2,
-    "authorised signatory": 2,
-    "authorized signatory": 2,
-    "signature": 2,
-    "copyright": 2,
-    "disclaimer": 2,
-    "this page intentionally": 2,
-    "letter head": 2,
-    "letterhead": 2,
-    "annexure": 1,
-    "index": 1,
-    "seal": 1,
-    "witness": 1,
-    "notary": 1,
-    "preface": 1,
-    "page no": 1,
-}
+BOILERPLATE_TERMS: dict[str, int] = clause_policy()["page_terms"]["BOILERPLATE_TERMS"]
 
-TECHNICAL_TERMS: dict[str, int] = {
-    "pressure": 2,
-    "rating": 2,
-    "rated": 2,
-    "material": 2,
-    "size": 2,
-    "diameter": 2,
-    "capacity": 2,
-    "flow": 2,
-    "head": 2,
-    "efficiency": 2,
-    "temperature": 2,
-    "thickness": 2,
-    "voltage": 2,
-    "frequency": 2,
-    "speed": 2,
-    "tolerance": 2,
-    "impeller": 2,
-    "bearing": 2,
-    "gasket": 2,
-    "casing": 2,
-    "shaft": 2,
-    "winding": 2,
-    "insulation": 2,
-    "test": 1,
-    "inspection": 1,
-    "specification": 1,
-    "technical": 1,
-    "standard": 1,
-    "grade": 1,
-    "valve": 1,
-    "pump": 1,
-    "motor": 1,
-    "compressor": 1,
-    "transformer": 1,
-    "cable": 1,
-    "panel": 1,
-    "boiler": 1,
-    "pipe": 1,
-    "flange": 1,
-}
+TECHNICAL_TERMS: dict[str, int] = clause_policy()["page_terms"]["TECHNICAL_TERMS"]
 
 # A number with a unit is the fallback signal for a page that names nothing
 # else: a specification table of bare values is still technical.
-NUMBER_WITH_UNIT = re.compile(
-    r"\d+(?:[.,]\d+)?\s*"
-    r"(?:mm|cm|mtr|meter|metre|inch|in\b|kg|gm|ton|bar|psi|kpa|mpa|"
-    r"kw|hp|watt|volt|amp|hz|rpm|lpm|lps|m3/h|gpm|%|degree|°c)",
-    re.IGNORECASE,
-)
+NUMBER_WITH_UNIT = re.compile(clause_policy()["numeric_fallback_pattern"], re.IGNORECASE)
 
 # How many number+unit pairs make an otherwise keyword-free page technical.
 NUMERIC_FALLBACK_MIN = 2

@@ -235,6 +235,8 @@ def _read(
         # did read are stored; the tender is resumable, so it is not failed
         # and not done (D8).
         return TenderStatus.RATE_LIMITED, audit.rate_limited_detail, None
+    if getattr(audit, 'completion_gaps', None):
+        return TenderStatus.INCOMPLETE, '; '.join(audit.completion_gaps), None
     # A tender that was read but gave nothing is not `done`: "done" says the
     # document was read, and an empty requirement list would be read as a
     # tender that states nothing (PRD 4, D-91).

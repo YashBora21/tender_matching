@@ -246,7 +246,7 @@ def atomize_records(records):
     atomized: list[RequirementRecord] = []
     for record in records:
         method = _method_of(record.extraction_method)
-        if method is ExtractionMethod.TABLE:
+        if method is ExtractionMethod.TABLE or record.source_row_id is not None:
             atomized.append(record)
             continue
         parts = atomize(
@@ -276,6 +276,8 @@ def atomize_records(records):
                     unreadable=record.unreadable,
                     review_required=record.review_required,
                     review_reason=record.review_reason,
+                    source_table_id=record.source_table_id,
+                    source_row_id=record.source_row_id,
                 )
             )
     return atomized

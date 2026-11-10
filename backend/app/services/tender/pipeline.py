@@ -21,6 +21,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -36,8 +37,10 @@ from app.services.requirement.extract import (
     extract_requirements,
 )
 from app.services.llm import LLMClient, LLMRateLimited, LLMBudgetExceeded
-from app.services.tender.classify import NON_TECHNICAL_REASON, is_non_technical
-from app.services.requirement.retype import retype_technical
+from app.services.tender.classify import DISCOVERY, WRAPPER_METADATA, NON_TECHNICAL_REASON, is_non_technical
+from app.services.requirement.retype import retype_technical, apply_clause_type, retype
+from app.services.requirement.structured_values import normalize_records, fingerprint as normalization_fingerprint
+from app.services.tender.classify import classify_clause, classification_policy_fingerprint
 from app.services.tender.ingest import (
     PageRead,
     RequirementRecord,
@@ -50,6 +53,7 @@ from app.services.tender.ingest import (
     read_boq_items,
     read_specification,
     requirements_from_items,
+    find_columns,
 )
 
 logger = get_logger(__name__)
@@ -85,6 +89,11 @@ def _reader_version() -> str:
     from app.services.tender.ingest import READER_VERSION
 
     return READER_VERSION
+
+
+def _ocr_signature():
+    from app.services.tender.ocr import ocr_signature
+    return ocr_signature()
 
 
 def _classifier_version() -> str:
@@ -280,6 +289,9 @@ def stage_keys(
     model: str,
     vocabulary_hash: str,
     fetch_config: str = "",
+    corpus_fingerprint: str = "",
+    wrapper_fingerprint: str = "",
+    alias_fingerprint: str = "",
 ) -> dict[str, str]:
     """The key of every stage, from the inputs each one reads.
 
@@ -322,16 +334,23 @@ def stage_keys(
         spec.get("sha256") if spec else "",
         _reader_version(),
         _atomizer_version(),
+        _ocr_signature(),
+        wrapper_fingerprint,
+        classification_policy_fingerprint(),
     )
 
     # The extraction: the requirements, and what read them.
-    extraction_key = content_hash(
-        "extraction", requirements_key, model, prompt_version, schema_version
-    )
+    extraction_parts = ["extraction", requirements_key, model, prompt_version, schema_version, corpus_fingerprint]
+    from app.services.requirement.coverage import POLICY_VERSION
+    extraction_parts.extend((POLICY_VERSION, vocabulary_hash))
+    classification = _classification_signature()
+    if classification[0]:
+        extraction_parts.append(classification)
+    extraction_key = content_hash(*extraction_parts)
 
     # The resolution: what was extracted, and the vocabulary that reads it.
     resolution_key = content_hash(
-        "resolution", extraction_key, vocabulary_hash, RESOLVER_VERSION
+        "resolution", extraction_key, vocabulary_hash, RESOLVER_VERSION, normalization_fingerprint(), alias_fingerprint
     )
 
     return {
@@ -394,6 +413,49 @@ def run_pipeline(
     result = PipelineResult(tender_id=tender_id)
     result.attachments = attachments
 
+    from app.services.tender.collect import read_manifest
+    from app.services.tender.upload import _wrapper
+    from app.services.tender.integrity import verify_sources
+    manifest_path = tender_dir / 'manifest.json'
+    manifest = read_manifest(manifest_path)
+    wrapper_path = _wrapper(tender_dir, manifest) if manifest_path.exists() else None
+    wrapper = ({'path': str((wrapper_path or tender_dir / (manifest.get('filename') or 'missing-wrapper')).resolve()),
+                'sha256': manifest.get('wrapper_sha256'), 'pages': manifest.get('page_count'),
+                'source_key': 'wrapper'} if manifest_path.exists() else None)
+    issues = verify_sources(tender_dir, attachments, wrapper=wrapper)
+    if issues:
+        result.failure = 'source integrity check failed'
+        result.stages[STAGE_ATTACHMENTS] = StageState(
+            name=STAGE_ATTACHMENTS, status=STATUS_FAILED,
+            key=content_hash('source-integrity', [(r.get('sha256'), r['integrity_error']) for r in issues]),
+            detail='; '.join(sorted({r['integrity_error'] for r in issues})))
+        existing = repo.list_pages(tender_id) if repo is not None else []
+        for record in issues:
+            attachment_id = _attachment_id(repo, tender_id, record) if repo is not None and not record.get('source_key') else None
+            key = record.get('source_key') or attachment_id or record.get('sha256') or 'legacy'
+            aliases = {str(value) for value in (key, attachment_id, record.get('sha256')) if value}
+            existing = [page for page in existing if str(page.get('source_key') or page.get('attachment_id') or 'legacy') not in aliases]
+            failed = [PageRead(number, '', 'failed', error=record['integrity_error'],
+                               source_key=key, attachment_id=attachment_id)
+                      for number in range(1, (record.get('pages') or 0) + 1)]
+            result.pages.extend(failed)
+            existing.extend(_page_rows(failed, attachment_id))
+        if repo is not None:
+            repo.replace_pages(tender_id, existing)
+            _save_failed(repo, result, settings)
+        return result
+
+    corpus_fingerprint = ''
+    if repo is not None and settings.ocr_backend == 'paddle':
+        from app.repositories.corpus import corpus_hash
+        corpus_fingerprint = corpus_hash(repo.session)
+
+    from app.services.tender.collect import read_manifest
+    wrapper_fingerprint = read_manifest(tender_dir / 'manifest.json').get('wrapper_sha256') or ''
+    aliases = []
+    if repo is not None and getattr(repo, 'session', None) is not None:
+        from app.repositories.aliases import AliasRepo
+        aliases = AliasRepo(repo.session).list_all()
     keys = stage_keys(
         attachments,
         prompt_version=_prompt_version(),
@@ -401,6 +463,9 @@ def run_pipeline(
         model=settings.llm_model or "",
         vocabulary_hash=_vocabulary_hash(),
         fetch_config=settings.fetch_allowed_domains,
+        corpus_fingerprint=corpus_fingerprint,
+        wrapper_fingerprint=wrapper_fingerprint,
+        alias_fingerprint=content_hash(sorted(aliases, key=lambda row: row['alias'])),
     )
     previous = repo.stage_keys(tender_id) if repo is not None else {}
     previous_status = (
@@ -486,25 +551,10 @@ def run_pipeline(
         return result
     backfill = False
     if changed(STAGE_REQUIREMENTS):
-        # Before a single model call: a specification nobody can read is not a
-        # specification that states nothing. One page is read here, OCR
-        # included, so a hopeless scan costs a second of local work instead of
-        # a call per clause (D-156).
-        specification_path = tender_dir / (spec.get("path") or "")
-        if specification_path.exists() and _reads_nothing(specification_path):
-            requirements_state.status = STATUS_FAILED
-            requirements_state.detail = (
-                f"the specification {specification_path.name} is a scan and the "
-                "OCR read no text from it"
-            )
-            result.stages[STAGE_REQUIREMENTS] = requirements_state
-            result.failure = requirements_state.detail
-            result.failure_code = TenderReasonCode.SPECIFICATION_UNREADABLE
-            if repo is not None:
-                _save_failed(repo, result, settings)
-            return result
-        read = _read_specification(spec, tender_dir)
+        read = _read_package(tender_id, tender_dir, attachments, spec, repo)
         if read.error:
+            if repo is not None:
+                repo.replace_pages(tender_id, _page_rows(read.pages, _attachment_id(repo, tender_id, spec)))
             # The document could not be opened, so no page of it was looked
             # at. That is a document that could not be read, not a document
             # with no requirements (PRD 4).
@@ -528,7 +578,7 @@ def run_pipeline(
                 RequirementRecord(
                     text=row.get("description", ""),
                     item_id="",
-                    requirement_type=RequirementType.UNKNOWN,
+                    requirement_type=RequirementType.INFORMATIONAL if tag in {DISCOVERY, WRAPPER_METADATA} else RequirementType.UNKNOWN,
                     page=row.get("page"),
                     source_section=row.get("title"),
                     extraction_method=row.get("extraction_method") or "table",
@@ -539,6 +589,8 @@ def run_pipeline(
                         if classified
                         else "the specification row names no item in the bill of quantities"
                     ),
+                      source_table_id=row.get('source_table_id'),
+                      source_row_id=row.get('source_row_id'),
                 )
             )
         # A clause that is a fragment of a line is not a requirement: it is
@@ -600,7 +652,7 @@ def run_pipeline(
         # call, and every page ends in a state (FR-T2).
         backfill = repo is not None and _ledger_is_empty(repo, tender_id)
         if backfill:
-            result.pages = _read_specification(spec, tender_dir).pages
+            result.pages = _read_package(tender_id, tender_dir, attachments, spec, repo).pages
     requirements_state.rows = len(result.requirements)
     result.stages[STAGE_REQUIREMENTS] = requirements_state
     if result.pages and repo is not None and (
@@ -617,7 +669,29 @@ def run_pipeline(
                 _attachment_id(repo, tender_id, spec),
             ),
         )
+    if any(page.status == 'failed' for page in result.pages):
+        requirements_state.status = STATUS_FAILED
+        requirements_state.detail = 'source pages remain unreadable'
+        result.failure = requirements_state.detail
+        result.failure_code = TenderReasonCode.SPECIFICATION_UNREADABLE
+        if repo is not None:
+            _persist(repo, result, settings)
+        return result
     # --- the extraction (the only stage that calls the LLM) ---
+    if repo is not None and settings.ocr_backend == 'paddle':
+        from app.repositories.part_coverage import source_part, indexed_part_manufacturers
+        repo.session.info['part_catalogue_evidence'] = {}
+        item_coverage = {}
+        for record in result.requirements:
+            part = source_part(repo.session, {'source_table_id': record.source_table_id,
+                                              'source_row_id': record.source_row_id})
+            if part:
+                record.corpus_evidence_found = bool(indexed_part_manufacturers(repo.session, part))
+                if record.item_id:
+                    item_coverage.setdefault(record.item_id, []).append(record.corpus_evidence_found)
+        for record in result.requirements:
+            if record.item_id in item_coverage and not any(item_coverage[record.item_id]):
+                record.corpus_evidence_found = False
     extraction_state = StageState(
         name=STAGE_EXTRACTION,
         key=keys[STAGE_EXTRACTION],
@@ -673,14 +747,12 @@ def run_pipeline(
             result.requirements, cache=cache, client=client, on_read=report
         )
         result.requirements = extracted
-        # The model's `unknown` is a proposal, not a verdict: a clause that
-        # states a value and a direction is technical whatever it was called
-        # (FR-14, FR-15). The re-typing is deterministic and never overrides
-        # a type the model did give.
+        # Source position and subject can correct proposed types; numeric recovery
+        # only fills absent fields and never decides a match.
         retyped = retype_technical(result.requirements)
         if retyped:
             logger.info(
-                "tender %s: %d clause(s) re-typed as technical", tender_id, retyped
+                "tender %s: %d clause(s) corrected by source typing or technical field recovery", tender_id, retyped
             )
         after = (
             int(getattr(client, "calls", 0) or 0),
@@ -719,6 +791,8 @@ def run_pipeline(
         key=keys[STAGE_RESOLUTION],
         depends_on=keys[STAGE_EXTRACTION],
     )
+    if changed(STAGE_RESOLUTION):
+        normalize_records(result.requirements, aliases)
     resolution_state.status = STATUS_DONE if changed(STAGE_RESOLUTION) else STATUS_SKIPPED
     resolution_state.rows = len(result.requirements)
     result.stages[STAGE_RESOLUTION] = resolution_state
@@ -796,7 +870,7 @@ def _requirements_rewritten(result: PipelineResult) -> bool:
     return any(
         result.stages.get(name) is None
         or result.stages[name].status != STATUS_SKIPPED
-        for name in (STAGE_REQUIREMENTS, STAGE_EXTRACTION)
+        for name in (STAGE_REQUIREMENTS, STAGE_EXTRACTION, STAGE_RESOLUTION)
     )
 
 
@@ -892,7 +966,66 @@ def _read_specification(attachment: dict, tender_dir: Path) -> SpecificationRead
         return SpecificationRead(
             error=f"the specification file {path.name} does not exist"
         )
-    return read_specification(path)
+    return read_specification(path, wrapper=True, item_titles=tuple(attachment.get("item_titles") or ())) if attachment.get("source_key") == "wrapper" else read_specification(path)
+
+
+def _read_package(tender_id, directory, attachments, specification, repo):
+    """Inspect each distinct source PDF locally; wrapper terms are not silently omitted."""
+    from app.services.tender.collect import read_manifest
+    from app.services.tender.upload import _wrapper
+    from app.schemas.enums import LedgerStatus
+    sources = [specification] + [a for a in attachments if a is not specification and
+                                  (str(a.get('path') or '').casefold().endswith('.pdf') or a.get('pages') is not None)]
+    manifest_path = directory / 'manifest.json'
+    manifest = read_manifest(manifest_path) if manifest_path.exists() else {}
+    wrapper = _wrapper(directory, manifest) if manifest else None
+    known_hashes = {source.get('sha256') for source in sources if source.get('sha256')}
+    if wrapper is not None:
+        digest = hashlib.sha256(wrapper.read_bytes()).hexdigest()
+        if digest not in known_hashes:
+            sources.append({'path': str(wrapper), 'sha256': digest, 'source_key': 'wrapper',
+                            'pages': manifest.get('page_count'),
+                            'item_titles': [item['name'] for item in repo.list_items(tender_id)] if repo is not None else []})
+    combined = SpecificationRead()
+    seen = set()
+    for source in sources:
+        identity = source.get('sha256') or source.get('path')
+        if identity in seen:
+            continue
+        seen.add(identity)
+        attachment_id = _attachment_id(repo, tender_id, source) if repo is not None else None
+        source_key = source.get('source_key') or attachment_id or source.get('sha256') or 'legacy'
+        read = _read_specification(source, directory)
+        if read.error:
+            combined.error = read.error
+            for number in range(1, (source.get('pages') or 0) + 1):
+                read.pages.append(PageRead(number, '', LedgerStatus.FAILED.value, error=read.error))
+        for page in read.pages:
+            page.source_key, page.attachment_id = source_key, attachment_id
+            page_rows = [row for row in read.rows if row['page'] == page.page]
+            context = page.source_context
+            if context is None:
+                context = {'headers': next((row['source_headers'] for row in page_rows if row.get('source_headers')), ['Field', 'Value'] if any(row.get('source_cells') for row in page_rows) else []),
+                           'rows': [{'row_id': row['source_row_id'], 'cells': row['source_cells'],
+                                     'bbox': row.get('source_bbox'), 'headers': row.get('source_headers'), 'header_page': row.get('source_header_page')} for row in page_rows if row.get('source_cells')], 'reading': {
+                    'cache_key': str(source.get('sha256')) + ':' + str(page.page),
+                    'source_sha256': source.get('sha256'), 'source_key': source_key,
+                    'text_rows': page_rows}}
+            if context is not None and repo is not None:
+                context['reading']['source_sha256'] = source.get('sha256')
+                context['reading']['source_key'] = source_key
+                columns = find_columns([label.casefold() for label in context['headers']])
+                for row in context['rows']:
+                    index = columns.get('part_number')
+                    row['part_number'] = row['cells'][index] if index is not None else None
+                identifier = str(uuid.uuid5(uuid.NAMESPACE_URL, tender_id + '/' + source_key + '/' +
+                                           context['reading']['cache_key'] + '/' + content_hash(context['headers'], context['rows'], _reader_version(), context['reading'].get('text_rows'))))
+                repo.store_ocr_table(tender_id, identifier, page.page, attachment_id, context)
+                for row in page_rows:
+                    row['source_table_id'] = identifier
+            combined.pages.append(page)
+        combined.rows.extend(read.rows)
+    return combined
 
 
 def _attachment_id(repo, tender_id: str, attachment: dict) -> Optional[str]:
@@ -935,10 +1068,31 @@ def _page_rows(pages: list[PageRead], attachment_id: Optional[str]) -> list[dict
             "quality_warnings": [],
             "ledger_status": page.status,
             "skip_reason": page.skip_reason or page.error,
-            "attachment_id": attachment_id,
+            'attachment_id': page.attachment_id if page.source_key else attachment_id,
+            'source_key': page.source_key or attachment_id or 'legacy',
         }
         for page in pages
     ]
+
+
+def _classification_signature():
+    from app.services.requirement.classify import signature
+    enabled = get_settings().requirement_classification_enabled
+    return (enabled, signature() if enabled else None,
+            get_settings().requirement_classification_max_chars if enabled else None,
+            "proposal-only-1" if enabled else None)
+
+
+def _classify_unscoped(readable, requirement, *, cache=None, client=None):
+    from app.services.requirement.classify import classify_clause
+    label, called, hit, error = classify_clause(readable, context={'section': english_half(requirement.source_section or '')}, cache=cache, client=client)
+    if label is None:
+        return None, called, hit, error
+    requirement.review_required = True
+    requirement.review_reason = '; '.join(part for part in (
+        requirement.review_reason, f'Proposed clause type: {label.value}; classification and BOQ scope require review.'
+    ) if part)
+    return [requirement], called, hit, None
 
 
 def _extract_all(
@@ -965,31 +1119,58 @@ def _extract_all(
     limited = False
     limit_detail: Optional[str] = None
 
+    seen_sources = set()
     for index, requirement in enumerate(requirements):
+        if requirement.source_text and requirement.source_table_id and requirement.source_row_id is not None:
+            source_key = (requirement.item_id, requirement.page, requirement.source_table_id,
+                          requirement.source_row_id, requirement.source_text)
+            if source_key in seen_sources:
+                continue
+            seen_sources.add(source_key)
         added: list[RequirementRecord] = []
-        readable = english_half(requirement.source_text or requirement.text)
-
-        if requirement.review_required and not requirement.item_id:
+        original_source = requirement.source_text or requirement.text
+        readable = english_half(original_source)
+        source_type = classify_clause(original_source, page_tag=requirement.page_tag,
+                                      source_section=requirement.source_section)
+        if source_type.kind == 'eligibility' and not source_type.review_required:
+            apply_clause_type(requirement)
+            requirement.source_text = original_source
+            added = [requirement]
+        elif requirement.corpus_evidence_found is False:
+            requirement.review_required = True
+            requirement.review_reason = '; '.join(part for part in (requirement.review_reason, 'No indexed catalogue evidence for the required source part; comparison awaits applicable catalogues.') if part)
+            added = [requirement]
+        elif requirement.review_required and not requirement.item_id and not (
+            get_settings().requirement_classification_enabled
+            and requirement.requirement_type is RequirementType.UNKNOWN
+        ):
             # An ambiguous mapping is flagged, not read.
             added = [requirement]
-        elif requirement.page_tag and is_non_technical(requirement.page_tag):
-            # The page is not a specification: legal prose, a safety annex or
-            # boilerplate. The clause is recorded, and the model is not asked
-            # about it (D-87).
+        elif requirement.page_tag and is_non_technical(requirement.page_tag) and source_type.kind != "technical":
+            # Keep unresolved nontechnical context for review. A decisive
+            # product obligation in buyer-added terms bypasses this coarse tag.
             added = [requirement]
         elif is_mangled(requirement.text):
             requirement.unreadable = True
             requirement.review_required = True
-            requirement.review_reason = "the line could not be read"
+            requirement.source_text = requirement.source_text or requirement.text
+            requirement.review_reason = '; '.join(part for part in (
+                requirement.review_reason, 'source_coverage_gap: the line could not be read'
+            ) if part)
             added = [requirement]
         elif not readable:
             requirement.unreadable = True
             requirement.review_required = True
-            requirement.review_reason = "the line has no readable text"
+            requirement.source_text = requirement.source_text or requirement.text
+            requirement.review_reason = '; '.join(part for part in (
+                requirement.review_reason, 'source_coverage_gap: the line has no readable text'
+            ) if part)
             added = [requirement]
         else:
             try:
-                outcome, was_call, was_hit, error = _extract_one(
+                reader = (_classify_unscoped if not requirement.item_id and
+                          requirement.requirement_type is RequirementType.UNKNOWN else _extract_one)
+                outcome, was_call, was_hit, error = reader(
                     readable, requirement, cache=cache, client=client
                 )
             except (LLMRateLimited, LLMBudgetExceeded) as exc:
@@ -1010,18 +1191,41 @@ def _extract_all(
                 # there.
                 requirement.review_required = True
                 requirement.source_text = readable
-                requirement.review_reason = (
-                    f"the model could not read this line: {error}"
-                    if error
-                    else "the line could not be read"
-                )
+                requirement.review_reason = '; '.join(part for part in (
+                    requirement.review_reason,
+                    f"the model could not read this line: {error}" if error else "the line could not be read",
+                    'source_coverage_gap: extraction did not resolve the source clause' if reader is _extract_one else None
+                ) if part)
                 added = [requirement]
             else:
+                from app.services.requirement.coverage import uncovered_tokens, MARKER
+                gap = uncovered_tokens(readable, outcome) if reader is _extract_one else []
+                if not outcome:
+                    requirement.requirement_type = RequirementType.UNKNOWN
+                    requirement.review_required = True
+                    requirement.source_text = readable
+                    requirement.review_reason = '; '.join(part for part in (
+                        requirement.review_reason, f'{MARKER}: extractor returned no source facts'
+                    ) if part)
+                    added.append(requirement)
                 for extracted in outcome:
+                    extracted.source_text = original_source
+                    extracted.page_tag = requirement.page_tag
+                    extracted.source_section = requirement.source_section
+                    extracted.review_required = extracted.review_required or requirement.review_required or bool(gap)
+                    extracted.review_reason = '; '.join(part for part in (
+                        requirement.review_reason, extracted.review_reason,
+                        f'{MARKER}: unrepresented source tokens: ' + ', '.join(gap) if gap else None
+                    ) if part) or None
                     extracted.item_id = requirement.item_id
                     extracted.page = requirement.page
+                    extracted.source_table_id = requirement.source_table_id
+                    extracted.source_row_id = requirement.source_row_id
+                    retype(extracted)
                     added.append(extracted)
 
+        for record in added:
+            retype(record)
         enriched.extend(added)
         if on_read is not None:
             on_read(enriched)
@@ -1043,7 +1247,9 @@ def _extract_one(
     model = settings.llm_model or ""
     prompt_version = _prompt_version()
     schema_version = settings.schema_version
-    input_hash = content_hash(readable, model, prompt_version, schema_version)
+    input_hash = content_hash(readable, model, prompt_version, schema_version,
+                              requirement.page_tag, requirement.source_section,
+                              classification_policy_fingerprint())
 
     if cache is not None:
         cached = cache.get(input_hash, model, prompt_version, schema_version)
@@ -1062,11 +1268,16 @@ def _extract_one(
         extraction_method=requirement.extraction_method,
     )
     if outcome.rejected:
-        return None, True, False, 'source_quote_or_value_validation_failed'
+        return None, True, False, 'source_coverage_gap: source_quote_or_value_validation_failed'
     if outcome.error:
         # The model was asked and did not answer. Nothing is cached: the next
         # run has to ask again.
         return None, True, False, outcome.error
+    for extracted in outcome.requirements:
+        extracted.source_text = requirement.source_text or requirement.text
+        extracted.page_tag = requirement.page_tag
+        extracted.source_section = requirement.source_section
+        retype(extracted)
     if cache is not None and outcome.requirements:
         cache.put(
             input_hash,
@@ -1083,6 +1294,9 @@ def _as_dict(item: RequirementRecord) -> dict:
     return {
         "text": item.text,
         "source_text": item.source_text,
+        "page_tag": item.page_tag,
+        "source_section": item.source_section,
+        "normalization": item.normalization,
         "span": list(item.source_span) if item.source_span else None,
         "type": item.requirement_type.value,
         "attribute": item.attribute,
@@ -1110,6 +1324,9 @@ def _as_record(item) -> RequirementRecord:
     return RequirementRecord(
         text=item.get("text", ""),
         source_text=item.get("source_text"),
+        page_tag=item.get("page_tag"),
+        source_section=item.get("source_section"),
+        normalization=item.get("normalization"),
         item_id="",
         requirement_type=_type_of(item.get("type", "unknown")),
         attribute=item.get("attribute"),
@@ -1117,8 +1334,8 @@ def _as_record(item) -> RequirementRecord:
         value=item.get("value"),
         unit=item.get("unit"),
         mandatory=bool(item.get("mandatory", True)),
-        review_required=bool(item.get("review_required", False)),
-        review_reason=item.get("review_reason"),
+        review_required=bool(item.get('review_required', False)),
+        review_reason=item.get('review_reason'),
         source_span=tuple(span) if span else None,
         # An answer cached before this field existed names no method; a table
         # row is the safe reading, because it is the one that is never split.
@@ -1148,14 +1365,15 @@ def _stored_records(repo, tender_id: str) -> list[RequirementRecord]:
     records: list[RequirementRecord] = []
     for row in repo.list_requirements(tender_id):
         reason = row.get("review_reason") or None
-        tag = None
-        if reason and reason.startswith(NON_TECHNICAL_REASON):
+        normalization = row.get("normalization") or {}
+        tag = normalization.get("source_context", {}).get("page_tag")
+        if not tag and reason and reason.startswith(NON_TECHNICAL_REASON):
             tag = reason[len(NON_TECHNICAL_REASON) :].strip() or None
         records.append(
             RequirementRecord(
                 text=row.get("text") or row.get("source_text") or "",
                 source_text=row.get("source_text"),
-                source_span=tuple(row["source_span"]) if row.get("source_span") is not None else None,
+                source_span=tuple(row['source_span']) if row.get('source_span') is not None else None,
                 item_id=row.get("item_id") or "",
                 requirement_type=_type_of(row.get("type")),
                 attribute=row.get("attribute"),
@@ -1167,9 +1385,12 @@ def _stored_records(repo, tender_id: str) -> list[RequirementRecord]:
                 source_section=row.get("source_section"),
                 extraction_method=row.get("extraction_method") or "table",
                 page_tag=tag,
+                normalization=row.get("normalization"),
                 confidence=row.get("confidence"),
                 review_required=bool(row.get("review_required")),
                 review_reason=reason,
+                  source_table_id=row.get('source_table_id'),
+                  source_row_id=row.get('source_row_id'),
             )
         )
     return records
@@ -1201,7 +1422,6 @@ def to_stored(
         item_id=requirement.item_id or None,
         text=requirement.text,
         source_text=requirement.source_text or requirement.text,
-        source_span=requirement.source_span,
         page=requirement.page or 1,
         requirement_type=requirement.requirement_type.value,
         attribute=requirement.attribute,
@@ -1219,4 +1439,9 @@ def to_stored(
         input_hash=input_hash,
         extraction_version=extraction_version,
         schema_version=schema_version,
+        source_table_id=requirement.source_table_id,
+        source_row_id=requirement.source_row_id,
+        source_span=requirement.source_span,
+        normalization=dict(requirement.normalization or {},
+                           source_context={"page_tag": requirement.page_tag}),
     )

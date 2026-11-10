@@ -1,0 +1,223 @@
+{
+  "version": "position-subject-1",
+  "page_terms": {
+    "COMMERCIAL_LEGAL_TERMS": {
+      "integrity pact": 2,
+      "arbitration": 2,
+      "arbitrator": 2,
+      "jurisdiction": 2,
+      "court of law": 2,
+      "earnest money": 2,
+      "emd": 2,
+      "bid security": 2,
+      "performance bank guarantee": 2,
+      "bank guarantee": 2,
+      "liquidated damages": 2,
+      "penalty": 2,
+      "penalties": 2,
+      "forfeit": 2,
+      "indemnify": 2,
+      "indemnity": 2,
+      "gst": 2,
+      "payment terms": 2,
+      "invoice": 2,
+      "purchase order": 2,
+      "disqualification": 2,
+      "conflict of interest": 2,
+      "code of conduct": 2,
+      "undertaking": 2,
+      "eligibility criteria": 2,
+      "tenderer": 1,
+      "contract": 1,
+      "agreement": 1,
+      "bidder": 1,
+      "tender fee": 1,
+      "price": 1,
+      "quotation": 1,
+      "delivery period": 1,
+      "warranty": 1,
+      "guarantee": 1,
+      "tax": 1,
+      "refund": 1,
+      "payment": 1
+    },
+    "SAFETY_HSE_TERMS": {
+      "safety officer": 2,
+      "safety supervisor": 2,
+      "personal protective equipment": 2,
+      "ppe": 2,
+      "scaffolding": 2,
+      "hot work": 2,
+      "permit to work": 2,
+      "work permit": 2,
+      "helmet": 2,
+      "safety harness": 2,
+      "first aid": 2,
+      "fire extinguisher": 2,
+      "accident": 2,
+      "injury": 2,
+      "hazard": 2,
+      "unsafe": 2,
+      "lockout": 2,
+      "tagout": 2,
+      "toolbox talk": 2,
+      "height work": 2,
+      "excavation": 2,
+      "environmental protection": 2,
+      "waste disposal": 2,
+      "safety": 1,
+      "emergency": 1,
+      "training": 1,
+      "housekeeping": 1,
+      "pollution": 1,
+      "noise": 1,
+      "dust": 1,
+      "supervisor": 1
+    },
+    "BOILERPLATE_TERMS": {
+      "table of contents": 2,
+      "for office use": 2,
+      "authorised signatory": 2,
+      "authorized signatory": 2,
+      "signature": 2,
+      "copyright": 2,
+      "disclaimer": 2,
+      "this page intentionally": 2,
+      "letter head": 2,
+      "letterhead": 2,
+      "annexure": 1,
+      "index": 1,
+      "seal": 1,
+      "witness": 1,
+      "notary": 1,
+      "preface": 1,
+      "page no": 1
+    },
+    "TECHNICAL_TERMS": {
+      "pressure": 2,
+      "rating": 2,
+      "rated": 2,
+      "material": 2,
+      "size": 2,
+      "diameter": 2,
+      "capacity": 2,
+      "flow": 2,
+      "head": 2,
+      "efficiency": 2,
+      "temperature": 2,
+      "thickness": 2,
+      "voltage": 2,
+      "frequency": 2,
+      "speed": 2,
+      "tolerance": 2,
+      "impeller": 2,
+      "bearing": 2,
+      "gasket": 2,
+      "casing": 2,
+      "shaft": 2,
+      "winding": 2,
+      "insulation": 2,
+      "test": 1,
+      "inspection": 1,
+      "specification": 1,
+      "technical": 1,
+      "standard": 1,
+      "grade": 1,
+      "valve": 1,
+      "pump": 1,
+      "motor": 1,
+      "compressor": 1,
+      "transformer": 1,
+      "cable": 1,
+      "panel": 1,
+      "boiler": 1,
+      "pipe": 1,
+      "flange": 1
+    }
+  },
+  "retype": {
+    "attribute_words": {
+      "size": "size",
+      "diameter": "diameter",
+      "dia": "diameter",
+      "bore": "diameter",
+      "head": "head",
+      "flow": "flow",
+      "discharge": "flow",
+      "capacity": "capacity",
+      "pressure": "pressure",
+      "rating": "rating",
+      "class": "class",
+      "material": "material",
+      "moc": "material",
+      "thickness": "thickness",
+      "efficiency": "efficiency",
+      "power": "power",
+      "speed": "speed",
+      "rpm": "speed",
+      "voltage": "voltage",
+      "frequency": "frequency",
+      "temperature": "temperature",
+      "weight": "weight",
+      "length": "length",
+      "width": "width",
+      "height": "height"
+    },
+    "value_pattern": "(?P<number>\\d+(?:[.,]\\d+)?)\\s*(?P<unit>kg/cm2|kg/cm²|m3/hr|m3/min|m3/h|m³/h|lpm|lps|gpm|sqmm|mm2|percent|meter|metre|mtr|inch|kpa|mpa|ppm|psi|rpm|kwh|watt|volt|amp|mm|cm|kg|gm|ton|bar|deg|°c|hz|kw|hp|pa|mt|ml|in|m|v|a|w|g|l|%)(?![a-z0-9])",
+    "operators": [
+      [
+        "\\b(?:or\\s+more|not\\s+less\\s+than|at\\s+least|minimum|min\\.?)\\b",
+        "gte"
+      ],
+      [
+        "\\b(?:or\\s+less|not\\s+more\\s+than|at\\s+most|maximum|max\\.?)\\b",
+        "lte"
+      ],
+      [
+        "\\b(?:greater\\s+than|more\\s+than|above|exceeds?)\\b",
+        "gt"
+      ],
+      [
+        "\\b(?:less\\s+than|below)\\b",
+        "lt"
+      ],
+      [
+        "\\bbetween\\b",
+        "between"
+      ]
+    ],
+    "bare_number_pattern": "[\\s:=/(.\\-]*(\\d+(?:[.,]\\d+)?)",
+    "value_window": 24
+  },
+  "position_patterns": {
+    "specification": [
+      "\\b(?:technical(?:\\s+specifications?)?|specifications?|specs?|boq|datasheets?)\\b"
+    ],
+    "atc": [
+      "\\b(?:atc|additional\\s+terms(?:\\s+and\\s+conditions)?|buyer[ -]added\\s+terms|eligibility\\s+criteria)\\b"
+    ]
+  },
+  "actor_subject_pattern": "^\\s*(?:(?:the|a|an|eligible|successful)\\s+)?(?:bidder|supplier|tenderer|vendor|manufacturer|contractor|company|firm|organisation|organization)\\b",
+  "eligibility_action_patterns": [
+    "\\b(?:supplied|delivered|completed|executed|installed|manufactured)\\b",
+    "\\b(?:prior|previous|past)\\s+(?:experience|performance|supply|supplies)\\b",
+    "\\bexperience\\s+(?:of|in|with)\\b",
+    "\\b(?:must|shall)\\s+(?:hold|possess|have)\\b"
+  ],
+  "ambiguous_subject_pattern": "^\\s*(?:it|they|this|that|these|those|the\\s+same)\\b",
+  "product_obligation_pattern": "^\\s*[^:;.!?]+?\\s+(?:shall|must|should)\\s+(?:have|be|withstand|operate|meet|provide|deliver|support)\\b",
+  "attribute_prefix_pattern": "^\\s*(?:(?:working|operating|rated|rating|design|nominal|ambient|minimum|maximum|required|preferable|preferred|overall|total)\\s+)*",
+  "non_property_attributes": [
+    "certification"
+  ],
+  "numeric_fallback_pattern": "\\d+(?:[.,]\\d+)?\\s*(?:mm|cm|mtr|meter|metre|inch|in\\b|kg|gm|ton|bar|psi|kpa|mpa|kw|hp|watt|volt|amp|hz|rpm|lpm|lps|m3/h|gpm|%|degree|°c)",
+  "thresholds": {
+    "numeric_fallback_min": 2,
+    "clause_legal_min": 2
+  },
+  "non_requirement_tags": [
+    "catalogue_discovery",
+    "wrapper_metadata"
+  ],
+  "competing_actor_pattern": "\\b(?:bidder|supplier|tenderer|vendor|manufacturer|contractor|company|firm|organisation|organization)\\b"
+}

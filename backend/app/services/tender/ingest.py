@@ -27,6 +27,9 @@ from app.core.logging import get_logger
 from app.schemas.enums import ExtractionMethod, LedgerStatus, RequirementType
 from app.services.tender.classify import (
     BOILERPLATE,
+    DISCOVERY,
+    WRAPPER_METADATA,
+    MIXED,
     NUMBER_WITH_UNIT,
     classify_page,
     is_non_technical,
@@ -69,7 +72,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "8"
+READER_VERSION = "11"
 
 
 @dataclass
@@ -121,7 +124,11 @@ class RequirementRecord:
     unreadable: bool = False
     review_required: bool = False
     review_reason: Optional[str] = None
+    source_table_id: Optional[str] = None
+    source_row_id: Optional[str] = None
+    corpus_evidence_found: Optional[bool] = None
     source_text: Optional[str] = None
+    normalization: Optional[dict] = None
 
 
 @dataclass
@@ -420,7 +427,7 @@ def read_boq_table(
 # buyers write the same column several ways, so the header is matched on the
 # words it uses, not on its position.
 _COLUMN_WORDS: dict[str, tuple[str, ...]] = {
-    "number": ("itemnumber", "itemno", "srno", "sno", "serial", "snonumber"),
+    "number": ("itemnumber", "itemno", "srno", "sno", "serial", "snonumber", "serno"),
     "title": ("itemtitle", "itemname", "item", "briefdescription", "descriptionofitem"),
     "description": (
         "itemdescription",
@@ -428,9 +435,11 @@ _COLUMN_WORDS: dict[str, tuple[str, ...]] = {
         "descriptions",
         "particulars",
         "description",
+        "nomenclature",
     ),
     "quantity": ("quantity", "qty", "quantiry", "quantite"),
-    "unit": ("unit", "uom", "unitofmeasure"),
+    "unit": ("unit", "uom", "unitofmeasure", "au"),
+    "part_number": ("partnumber", "partno", "oempartnumber"),
 }
 
 
@@ -539,6 +548,9 @@ class PageRead:
     method: Optional[str] = None
     error: Optional[str] = None
     skip_reason: Optional[str] = None
+    source_context: Optional[dict] = None
+    source_key: Optional[str] = None
+    attachment_id: Optional[str] = None
 
 
 @dataclass
@@ -552,7 +564,7 @@ class SpecificationRead:
     error: Optional[str] = None
 
 
-def read_specification(path: Path) -> SpecificationRead:
+def read_specification(path: Path, *, wrapper: bool = False, item_titles: tuple[str, ...] = ()) -> SpecificationRead:
     """Read a specification page by page, and say what became of each page.
 
     A page is read one of three ways, and which one is decided by what the
@@ -585,16 +597,36 @@ def read_specification(path: Path) -> SpecificationRead:
     scan = None
     try:
         with pdf:
+            metadata = {}
+            texts = []
+            for number, page in enumerate(pdf.pages, 1):
+                if wrapper:
+                    text, metadata[number] = _wrapper_regions(page, number, item_titles)
+                else:
+                    text = page.extract_text() or ""
+                texts.append(text)
+            discovery = _discovery_bounds(texts) if wrapper else {}
             for number, page in enumerate(pdf.pages, start=1):
-                text = page.extract_text() or ""
+                text = texts[number - 1]
+                read.rows.extend(metadata.get(number, []))
                 method = ExtractionMethod.TEXT
 
-                if _needs_ocr(page, text):
+                if _needs_ocr(page, text + " ".join(row['description'] for row in metadata.get(number, []))):
                     # No text layer worth reading, or the page is a picture
                     # with a letterhead typed over it.
                     if scan is None:
                         scan = _open_scan(path)
-                    ocr_text, ocr_error = _ocr(scan, number)
+                    from app.core.config import get_settings
+                    if get_settings().ocr_backend == 'paddle' and scan is not None:
+                        try:
+                            layout = _paddle_layout(scan[number - 1])
+                            ocr_text, ocr_error = layout['text'], None
+                        except Exception as exc:
+                            layout = None
+                            ocr_text, ocr_error = '', f'Paddle OCR failed ({type(exc).__name__})'
+                    else:
+                        layout = None
+                        ocr_text, ocr_error = _ocr(scan, number)
                     if ocr_text.strip():
                         # The page needed OCR, so what the OCR read is the
                         # page: the text layer, when there was one, was the
@@ -618,9 +650,8 @@ def read_specification(path: Path) -> SpecificationRead:
                 if method is ExtractionMethod.OCR:
                     # An OCRed page has no grid to trust: what the scanner
                     # saw as columns is the scanner's guess.
-                    rows = _prose_rows(
-                        text, number, tag, method=ExtractionMethod.OCR.value
-                    )
+                    rows = (_paddle_rows(layout, number) if layout is not None and layout['rows'] else
+                            _prose_rows(text, number, tag, method=ExtractionMethod.OCR.value))
                     read.rows.extend(rows)
                     read.pages.append(
                         PageRead(
@@ -629,10 +660,22 @@ def read_specification(path: Path) -> SpecificationRead:
                             status=LedgerStatus.OCR.value,
                             chars=len(text),
                             method=ExtractionMethod.OCR.value,
+                            source_context=layout,
                         )
                     )
                     continue
 
+                if number in discovery:
+                    start, end = discovery[number]
+                    read.rows.extend(_prose_rows(text[:start], number, tag))
+                    read.rows.append({"row": len(read.rows), "page": number, "number": "",
+                                      "title": "GeMARPTS catalogue discovery",
+                                      "description": text[start:end], "row_text": text[start:end],
+                                      "page_tag": DISCOVERY, "extraction_method": ExtractionMethod.TEXT.value})
+                    read.rows.extend(_prose_rows(text[end:], number, tag))
+                    read.pages.append(PageRead(number, tag, LedgerStatus.PARSED.value,
+                                               chars=len(text), method=ExtractionMethod.TEXT.value))
+                    continue
                 table_rows, columns = _read_tables(
                     page, text, number, tag, columns
                 )
@@ -657,13 +700,13 @@ def read_specification(path: Path) -> SpecificationRead:
                         tag=tag,
                         status=(
                             LedgerStatus.PARSED.value
-                            if rows
+                            if rows or metadata.get(number)
                             else LedgerStatus.SKIPPED.value
                         ),
                         chars=len(text),
                         method=ExtractionMethod.TEXT.value,
                         skip_reason=(
-                            None if rows else "the page states no readable clause"
+                            None if rows or metadata.get(number) else "the page states no readable clause"
                         ),
                     )
                 )
@@ -671,6 +714,35 @@ def read_specification(path: Path) -> SpecificationRead:
         if scan is not None:
             scan.close()
     return read
+
+
+def _paddle_layout(page):
+    from app.core.config import get_settings
+    from app.services.tender.ocr import read_paddle_page
+    from app.services.tender.ocr_layout import page_layout
+    def header(labels):
+        columns = find_columns([label.casefold() for label in labels])
+        return columns['description'] is not None and columns['part_number'] is not None
+    return page_layout(read_paddle_page(page), get_settings(), header)
+
+
+def _paddle_rows(layout, page):
+    from app.services.tender.classify import TECHNICAL
+    columns = find_columns([label.casefold() for label in layout['headers']])
+    result = []
+    for row in layout['rows']:
+        cells = row['cells']
+        result.append({'row': row['row_id'], 'page': page,
+                       'number': _clean_cell(_cell(cells, columns['number'])),
+                       'title': _clean_cell(_cell(cells, columns['description'])),
+                       'description': ' | '.join(cell for cell in cells if cell),
+                       'part_number': _clean_cell(_cell(cells, columns['part_number'])),
+                       'quantity': _clean_cell(_cell(cells, columns['quantity'])),
+                       'unit': _clean_cell(_cell(cells, columns['unit'])),
+                       'row_text': ' | '.join(cells), 'page_tag': TECHNICAL,
+                       'extraction_method': ExtractionMethod.OCR.value,
+                       'source_row_id': row['row_id'], 'ocr_ambiguous': row['ambiguous']})
+    return result
 
 
 def _open_scan(path: Path):
@@ -784,6 +856,8 @@ def _read_tables(
         header_row, found = _find_header_row(table)
         if found:
             found_columns = found
+            found_columns['_source_headers'] = [_clean_cell(cell) for cell in table[header_row]]
+            found_columns['_source_header_page'] = page_number
         accepted.append((table, header_row, found))
 
     if not accepted or found_columns is None:
@@ -807,7 +881,7 @@ def _read_tables(
         return None, columns
 
     rows: list[dict] = []
-    for table, header_row, found in accepted:
+    for table_index, (table, header_row, found) in enumerate(accepted, 1):
         start = header_row + 1 if found else 0
         for index, row in enumerate(table[start:], start=start):
             description = _clean_lines(_cell(row, found_columns.get("description")))
@@ -843,11 +917,84 @@ def _read_tables(
                         "quantity": quantity,
                         "unit": unit,
                         "row_text": row_text,
+                        "source_cells": [_clean_cell(cell) for cell in row],
+                        "source_headers": [_clean_cell(cell) for cell in table[header_row]] if found else found_columns.get('_source_headers', []),
+                        "source_header_page": page_number if found else found_columns.get('_source_header_page'),
+                        "source_row_id": f"table-{table_index}-row-{index}",
                         "extraction_method": ExtractionMethod.TABLE.value,
                         "page_tag": tag,
                     }
                 )
     return rows, found_columns
+
+
+def _wrapper_regions(page, number: int, item_titles: tuple[str, ...]):
+    """Preserve labelled field rows before clause assembly; separate exact BOQ headings."""
+    regions, rows = [], []
+    for table in page.find_tables():
+        for row, cells in zip(table.rows, table.extract()):
+            if len(cells) != 2 or not all(cell and cell.strip() for cell in cells):
+                continue
+            label = " ".join(cells[0].split())
+            # Keep discovery section boundary fields in prose for the cross-page segmenter.
+            if re.search(r"Result\s+generated\s+in\s+GeMARPTS|Categories\s+selected\s+for\s+notification", label, re.I):
+                continue
+            tag = (WRAPPER_METADATA if re.search(
+                r"\bItem Category\b|Strings\s+used\s+in\s+GeMARPTS", label, re.I) else MIXED)
+            bounds = row.bbox
+            text = page.crop(bounds).extract_text() or ""
+            if not text.strip():
+                continue
+            if tuple(bounds) in regions:
+                continue
+            regions.append(tuple(bounds))
+            rows.append({"row": len(rows), "page": number, "number": "", "title": label,
+                         "description": text, "row_text": text, "page_tag": tag,
+                         "source_bbox": list(bounds), "source_cells": cells,
+                         "source_row_id": "field-" + str(len(rows) + 1),
+                         "extraction_method": ExtractionMethod.TABLE.value})
+    titles = {" ".join(title.casefold().split()) for title in item_titles if title}
+    for line in page.extract_text_lines():
+        if " ".join(line['text'].casefold().split()) not in titles:
+            continue
+        top, bottom = line['top'], line['bottom']
+        bounds = (line['x0'], top, line['x1'], bottom)
+        if any(left <= bounds[0] and upper <= top and bounds[2] <= right and bottom <= lower
+               for left, upper, right, lower in regions):
+            continue
+        regions.append(bounds)
+        text = page.crop(bounds).extract_text() or ""
+        rows.append({"row": len(rows), "page": number, "number": "", "title": "Wrapper metadata",
+                     "description": text, "row_text": text, "page_tag": WRAPPER_METADATA,
+                     "source_bbox": list(bounds), "extraction_method": ExtractionMethod.TEXT.value})
+    if not regions:
+        return page.extract_text() or "", []
+    def outside_regions(obj):
+        if obj.get('object_type') != 'char':
+            return True
+        return not any(left <= obj['x0'] and obj['x1'] <= right and
+                       top <= obj['top'] and obj['bottom'] <= bottom
+                       for left, top, right, bottom in regions)
+    return page.filter(outside_regions).extract_text() or "", rows
+
+
+def _discovery_bounds(texts: list[str]) -> dict[int, tuple[int, int]]:
+    """Only a closed, explicitly labelled wrapper search section is informational."""
+    document = "\n".join(texts)
+    start = re.search(r"GeMARPTS[^\n]*Searched|Searched\s+Strings\s+used\s+in\s+GeMARPTS|Searched\s+String:", document, re.I)
+    if start is None:
+        return {}
+    end = re.search(r"Categories\s+selected\s+for\s+notification", document[start.end():], re.I)
+    if end is None:
+        return {}
+    stop = start.end() + end.start()
+    bounds, offset = {}, 0
+    for number, text in enumerate(texts, 1):
+        left, right = max(start.start(), offset), min(stop, offset + len(text))
+        if left < right:
+            bounds[number] = (left - offset, right - offset)
+        offset += len(text) + 1
+    return bounds
 
 
 def _prose_rows(
@@ -1007,15 +1154,28 @@ def assign_to_items(
     clause of that item.
     """
     by_number = {item.item_id.rsplit(":", 1)[-1]: item for item in items}
-    by_title = {_title_key(item.title): item for item in items if item.title}
+    title_counts = Counter(_title_key(item.title) for item in items if item.title)
+    by_title = {_title_key(item.title): item for item in items if item.title and title_counts[_title_key(item.title)] == 1}
     only_item = items[0] if len(items) == 1 else None
 
     assigned: list[RequirementRecord] = []
     unassigned: list[dict] = []
 
     for row in rows:
+        identifier_review = False
         number = (row.get("number") or "").strip()
         item = by_number.get(number)
+        if row.get('part_number'):
+            # Exact identifier tokens can bridge a misspelled nomenclature, never a conflicting serial.
+            token = re.escape(' '.join(row['part_number'].casefold().split()))
+            pattern = re.compile(r'(?<![a-z0-9])' + token + r'(?![a-z0-9])')
+            candidates = [candidate for candidate in items
+                          if pattern.search(' '.join(candidate.title.casefold().split()))]
+            if len(candidates) > 1 or (candidates and item is not None and candidates[0] != item):
+                unassigned.append(row)
+                continue
+            if len(candidates) == 1:
+                item = candidates[0]
         if item is None:
             # The specification names the item in its own words, and the bill
             # of quantities names it in the buyer's words. The two are the
@@ -1023,6 +1183,14 @@ def assign_to_items(
             item = by_title.get(_title_key(row.get("title") or ""))
         if item is None:
             item = by_title.get(_title_key(row.get("description") or ""))
+        if item is None and row.get('part_number'):
+            title = _title_key(row.get('title') or '')
+            candidates = [candidate for candidate in items if title and _title_key(candidate.title).endswith(title)]
+            if len(candidates) == 1:
+                item = candidates[0]
+                compact = lambda value: ''.join(value.casefold().split())
+                identifier_review = (any(c.isdigit() for c in item.title) and
+                                     compact(row['part_number']) not in compact(item.title))
         if item is None and only_item is not None:
             item = only_item
         if item is None:
@@ -1038,6 +1206,7 @@ def assign_to_items(
                 # A clause on a page that is not a specification is recorded,
                 # but it is not a capability a document could state (D-87).
                 requirement_type=(
+                    RequirementType.INFORMATIONAL if tag in {DISCOVERY, WRAPPER_METADATA} else
                     RequirementType.UNKNOWN if classified else RequirementType.TECHNICAL
                 ),
                 extraction_method=row.get("extraction_method") or "table",
@@ -1046,8 +1215,14 @@ def assign_to_items(
                     (row.get("title") or "").strip() or item.title or None
                 ),
                 page_tag=tag,
-                review_required=classified,
-                review_reason=f"page classified as {tag}" if classified else None,
+                source_table_id=row.get('source_table_id'),
+                source_row_id=row.get('source_row_id'),
+                review_required=classified or bool(row.get('ocr_ambiguous')) or identifier_review,
+                review_reason='; '.join(reason for reason in (
+                    f"page classified as {tag}" if classified else None,
+                    'OCR table geometry requires review' if row.get('ocr_ambiguous') else None,
+                    'Source part identifier is absent from the BOQ title; reconcile the source identifiers' if identifier_review else None
+                ) if reason) or None,
             )
         )
     return assigned, unassigned
@@ -1194,6 +1369,9 @@ def drop_fragments(
     report = FragmentReport()
 
     for requirement in requirements:
+        if requirement.source_table_id:
+            kept.append(requirement)
+            continue
         if requirement.unreadable or is_mangled(requirement.text):
             # A line that cannot be read is a gap, not a fragment: dropping
             # it would turn "I could not read this" into "the tender did not

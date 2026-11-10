@@ -109,6 +109,13 @@ def settle(
     )
     if status is None:
         return None
+    if status is TenderStatus.DONE:
+        from app.services.tender.completeness import completion_gaps
+        gaps = completion_gaps(repo.get_tender(tender_id) or {}, repo.list_attachments(tender_id),
+                               repo.list_pages(tender_id), repo.list_requirements(tender_id))
+        if gaps:
+            repo.set_status(tender_id, TenderStatus.INCOMPLETE, error='; '.join(gaps))
+            return TenderStatus.INCOMPLETE
     repo.set_status(tender_id, status, error=_reason(repo, tender_id, status))
     logger.warning(
         "tender %s was left reading by a read that never finished; recorded %s",

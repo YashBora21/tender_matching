@@ -10,6 +10,12 @@ from app.services.corpus import audit
 
 
 class FakeRepo:
+    def list_pages(self, tender_id):
+        return []
+
+    def list_attachments(self, tender_id):
+        return []
+
     def __init__(self):
         self.status = None
 

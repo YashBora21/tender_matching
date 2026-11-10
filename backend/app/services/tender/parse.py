@@ -189,6 +189,13 @@ def ocr_page_with_reason(pymupdf_page) -> tuple[str, Optional[str]]:
     has to say which one it recorded: a machine that is missing the program, or
     a page that holds nothing to read.
     """
+    if get_settings().ocr_backend == 'paddle':
+        try:
+            from app.services.tender.ocr import read_paddle_page
+            from app.services.tender.ocr_layout import page_layout
+            return page_layout(read_paddle_page(pymupdf_page), get_settings())['text'], None
+        except Exception as exc:
+            return '', f'Paddle OCR failed ({type(exc).__name__})'
     missing = tesseract_missing()
     if missing:
         return "", missing

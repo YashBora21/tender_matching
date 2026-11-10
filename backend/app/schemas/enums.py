@@ -108,6 +108,8 @@ class ReasonCode(StrEnum):
     # the reason is ours: a requirement we did not parse is not a capability the
     # corpus does not document (D-147).
     REQUIREMENT_NOT_PARSED = "requirement_not_parsed"
+    CORPUS_GAP = "corpus_gap"
+    SCOPE_UNRESOLVED = "scope_unresolved"
 
 
 class LedgerStatus(StrEnum):
