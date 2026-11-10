@@ -1,0 +1,73 @@
+{
+  "date": "2026-11-10",
+  "tag": "rc-2026-11-10.1",
+  "source_commit": "db15dab91ff9904478d0526ae26e2d6bdbeb4b4c",
+  "status": "release_candidate_not_production_acceptance",
+  "unit_suite": {
+    "command": "python -m pytest backend/tests collect eval -m \"not integration\"",
+    "tests": 1128,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 59.333,
+    "successful_full_runs": 1,
+    "aborted_attempts": 1,
+    "aborted_cause": "Windows sandbox prevented local socketpair initialization in FastAPI TestClient; rerun outside sandbox passed.",
+    "junit_sha256": "e066e8ac1109d709d9e8c72391b90bf559c0f56badafacb70ec4a0e59e169d94"
+  },
+  "policies": {
+    "normalization": "961c503389c971cb9423db07b6187e5a2b71003c4048e3e3817d414d969c9723",
+    "clause_classification": "82440d843e6a7a2935c4238f2d9429d553f1b2d515cb1d4056abfd666d8b5ee0"
+  },
+  "offline_replay": {
+    "total_rows": 12,
+    "changed_derived_fields": {
+      "attribute": 12,
+      "value": 1,
+      "type": 1
+    },
+    "comparison_input_eligible": 6,
+    "abstentions_by_cause": {
+      "unmapped attribute": 6
+    },
+    "llm_calls": 0,
+    "cost_inr": 0,
+    "raw_quotes_preserved": true
+  },
+  "privacy": {
+    "exact_private_values_checked": 10,
+    "matching_tracked_files": 0,
+    "history_rewritten": false,
+    "configuration_redactions": "../source-normalization-2026-11-10/config-redactions.json"
+  },
+  "grouping": {
+    "evaluation_enabled": false,
+    "configured_batch_size": 1,
+    "acceptance_comparison_completed": false
+  },
+  "database": {
+    "migration_head_in_source": "0021_requirement_history",
+    "migrations_executed_this_phase": false,
+    "refresh_executed": false,
+    "refresh_policy": "supersede, never delete"
+  },
+  "live_acceptance": {
+    "run": false,
+    "valve_labels": "six previously confirmed compound pairs are not whole-tender atomic gold",
+    "pump_input": "user will identify correct file; GEM_9935572_Pump candidate is held",
+    "labels_confirmed_for_full_evaluation": false,
+    "false_confident_claims": null,
+    "abstentions_by_cause": null,
+    "stage_wall_seconds": null,
+    "tokens": null,
+    "cost_inr": null
+  },
+  "docker": {
+    "compose_config_check": "passed",
+    "privacy_checker_synthetic_self_test": "passed",
+    "images_built": false,
+    "images_published": false,
+    "commands": "docs/DOCKER_HUB_PUBLIC_RELEASE.md"
+  },
+  "audit_note": "This manifest records the tagged tested source commit; a later audit-only commit does not move the RC tag."
+}

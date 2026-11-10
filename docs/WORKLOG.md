@@ -3908,3 +3908,8 @@ Bound page/extraction/source metadata at new-run creation and consumed it in rep
 ## 2026-11-10 — Offline replay and evaluation hold
 
 Twelve saved proposals replayed without LLM/network calls: six canonical mappings and six unmapped abstentions; one derived value and one clause type changed; source/proposal hashes and quote preservation checked. These are comparison-input changes, not verified matching results. The user rejected the proposed pump-file identity and will identify the correct file; pump labels remain unconfirmed and no release evaluation has run. Configuration-only historical redactions are separately hash-audited; baseline bytes must no longer be described as unmodified originals.
+
+
+## 2026-11-10 — Release candidate gate passed
+
+Consolidated integration into seven logical commits. Tagged rc-2026-11-10.1 at db15dab91ff9904478d0526ae26e2d6bdbeb4b4c. Full offline unit suite backend/tests + collect + eval: 1,128 passed, zero failures/errors/skips, 59.333 seconds. One sandbox socketpair stall was stopped; the only completed full run passed outside the socket-restricted sandbox with synthetic provider settings and offline model loading. Audit is eval/audit/release-candidate-2026-11-10/rc.json. Exact private-value tracked-file scan: ten values checked, zero matching files. Compose quiet validation and image-checker synthetic self-test passed. No API spend, live migration, refresh, image build or publication. Pump input and full-tender labels remain pending user confirmation; grouping stays off. Subsequent audit commit records the tested hash without moving the tag.
