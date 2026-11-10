@@ -121,6 +121,7 @@ class RequirementRecord:
     unreadable: bool = False
     review_required: bool = False
     review_reason: Optional[str] = None
+    source_text: Optional[str] = None
 
 
 @dataclass

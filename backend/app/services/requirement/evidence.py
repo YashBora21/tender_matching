@@ -19,6 +19,16 @@ def _ranges(text):
     yield from _BETWEEN.finditer(text)
 
 
+def quote_span(text, quote):
+    """Locate one verbatim quote, including overlapping duplicate detection."""
+    if not isinstance(quote, str) or not quote.strip():
+        return None
+    start = text.find(quote)
+    if start < 0 or text.find(quote, start + 1) >= 0:
+        return None
+    return start, start + len(quote)
+
+
 def span_supports(text, span, value=None):
     """Require complete value support inside valid offsets, preserving ranges."""
     start, end = span

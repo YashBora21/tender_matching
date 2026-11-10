@@ -95,6 +95,7 @@ class FakeRepo:
                     "item_id": item.item_id,
                     "text": item.text,
                     "source_text": item.source_text,
+                    "source_span": item.source_span,
                     "page": item.page,
                     "source_section": item.section,
                     "extraction_method": item.extraction_method,
@@ -167,11 +168,11 @@ class CountingClient:
             "requirements": [
                 {
                     "text": f"read: {user}",
-                    "span": [0, len(user)],
+                    "source_quote": user,
                     "type": "technical",
                     "attribute": "body material",
                     "operator": "eq",
-                    "value": "cast carbon steel",
+                    "value": "cast carbon steel" if "cast carbon steel" in user.casefold() else None,
                     "unit": None,
                     "mandatory": True,
                 }
@@ -751,11 +752,11 @@ class FlakyClient:
             "requirements": [
                 {
                     "text": f"read: {user}",
-                    "span": [0, len(user)],
+                    "source_quote": user,
                     "type": "technical",
                     "attribute": "body material",
                     "operator": "eq",
-                    "value": "cast carbon steel",
+                    "value": "cast carbon steel" if "cast carbon steel" in user.casefold() else None,
                     "unit": None,
                     "mandatory": True,
                 }
@@ -942,7 +943,7 @@ def test_a_clause_the_model_called_unknown_is_re_typed_from_its_own_value(
             "requirements": [
                 {
                     "text": "minimum efficiency 85%",
-                    "span": [0, 22],
+                    "source_quote": "minimum efficiency 85%",
                     "type": "unknown",
                     "attribute": None,
                     "operator": None,

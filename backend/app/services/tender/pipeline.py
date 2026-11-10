@@ -35,7 +35,7 @@ from app.services.requirement.extract import (
     ExtractedRequirement,
     extract_requirements,
 )
-from app.services.llm import LLMClient, LLMRateLimited
+from app.services.llm import LLMClient, LLMRateLimited, LLMBudgetExceeded
 from app.services.tender.classify import NON_TECHNICAL_REASON, is_non_technical
 from app.services.requirement.retype import retype_technical
 from app.services.tender.ingest import (
@@ -967,7 +967,7 @@ def _extract_all(
 
     for index, requirement in enumerate(requirements):
         added: list[RequirementRecord] = []
-        readable = english_half(requirement.text)
+        readable = english_half(requirement.source_text or requirement.text)
 
         if requirement.review_required and not requirement.item_id:
             # An ambiguous mapping is flagged, not read.
@@ -992,7 +992,7 @@ def _extract_all(
                 outcome, was_call, was_hit, error = _extract_one(
                     readable, requirement, cache=cache, client=client
                 )
-            except LLMRateLimited as exc:
+            except (LLMRateLimited, LLMBudgetExceeded) as exc:
                 # Stop at the first limit. Everything from here on was never
                 # asked about, so it stays as it was: the stage is resumable,
                 # and dropping the tail would lose requirements the tender
@@ -1009,6 +1009,7 @@ def _extract_all(
                 # line that was not read is not a requirement that was not
                 # there.
                 requirement.review_required = True
+                requirement.source_text = readable
                 requirement.review_reason = (
                     f"the model could not read this line: {error}"
                     if error
@@ -1060,6 +1061,8 @@ def _extract_one(
         # table row and never be atomized on a rerun.
         extraction_method=requirement.extraction_method,
     )
+    if outcome.rejected:
+        return None, True, False, 'source_quote_or_value_validation_failed'
     if outcome.error:
         # The model was asked and did not answer. Nothing is cached: the next
         # run has to ask again.
@@ -1079,6 +1082,7 @@ def _as_dict(item: RequirementRecord) -> dict:
     """An extracted requirement, as it is cached."""
     return {
         "text": item.text,
+        "source_text": item.source_text,
         "span": list(item.source_span) if item.source_span else None,
         "type": item.requirement_type.value,
         "attribute": item.attribute,
@@ -1086,6 +1090,8 @@ def _as_dict(item: RequirementRecord) -> dict:
         "value": item.value,
         "unit": item.unit,
         "mandatory": item.mandatory,
+        "review_required": item.review_required,
+        "review_reason": item.review_reason,
         # How the clause was read. A cached prose requirement that came back
         # as a table row would never be atomized again.
         "extraction_method": item.extraction_method,
@@ -1103,6 +1109,7 @@ def _as_record(item) -> RequirementRecord:
     span = item.get("span")
     return RequirementRecord(
         text=item.get("text", ""),
+        source_text=item.get("source_text"),
         item_id="",
         requirement_type=_type_of(item.get("type", "unknown")),
         attribute=item.get("attribute"),
@@ -1110,6 +1117,8 @@ def _as_record(item) -> RequirementRecord:
         value=item.get("value"),
         unit=item.get("unit"),
         mandatory=bool(item.get("mandatory", True)),
+        review_required=bool(item.get("review_required", False)),
+        review_reason=item.get("review_reason"),
         source_span=tuple(span) if span else None,
         # An answer cached before this field existed names no method; a table
         # row is the safe reading, because it is the one that is never split.
@@ -1145,6 +1154,8 @@ def _stored_records(repo, tender_id: str) -> list[RequirementRecord]:
         records.append(
             RequirementRecord(
                 text=row.get("text") or row.get("source_text") or "",
+                source_text=row.get("source_text"),
+                source_span=tuple(row["source_span"]) if row.get("source_span") is not None else None,
                 item_id=row.get("item_id") or "",
                 requirement_type=_type_of(row.get("type")),
                 attribute=row.get("attribute"),
@@ -1189,7 +1200,8 @@ def to_stored(
         tender_id=tender_id,
         item_id=requirement.item_id or None,
         text=requirement.text,
-        source_text=requirement.text,
+        source_text=requirement.source_text or requirement.text,
+        source_span=requirement.source_span,
         page=requirement.page or 1,
         requirement_type=requirement.requirement_type.value,
         attribute=requirement.attribute,

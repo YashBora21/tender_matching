@@ -71,6 +71,7 @@ class StoredRequirement:
     model: Optional[str] = None
     prompt_version: Optional[str] = None
     input_hash: Optional[str] = None
+    source_span: Optional[tuple[int, int]] = None
 
 
 class TenderRepo:
@@ -405,6 +406,7 @@ class TenderRepo:
                     "source_page": item.page,
                     "source_section": item.section,
                     "source_text": item.source_text,
+                    "source_span": list(item.source_span) if item.source_span is not None else None,
                     "text": item.text,
                     "type": item.requirement_type,
                     "attribute": item.attribute,
@@ -460,6 +462,7 @@ class TenderRepo:
                 requirement.c.extraction_confidence,
                 requirement.c.mandatory,
                 requirement.c.prompt_version,
+                requirement.c.source_span,
             )
             .where(requirement.c.tender_id == tender_id)
         ).all()
@@ -484,6 +487,7 @@ class TenderRepo:
                 "confidence": row[14],
                 "mandatory": bool(row[15]) if row[15] is not None else True,
                 "prompt_version": row[16],
+                "source_span": tuple(row[17]) if row[17] is not None else None,
             }
             for row in rows
         ]
