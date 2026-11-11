@@ -33,6 +33,7 @@ def fresh_settings(monkeypatch) -> None:
     monkeypatch.setenv('OCR_BACKEND', 'tesseract')
     # Synthetic endpoint: unit tests must never depend on private host config.
     monkeypatch.setenv('LLM_BASE_URL', 'https://synthetic-llm.example.test/v1')
+    monkeypatch.setenv('LLM_TEXT_API_KEY', '')
     monkeypatch.setenv('LLM_CALL_BUDGET', '0')
     monkeypatch.setenv('LLM_TOKEN_BUDGET', '0')
     monkeypatch.setenv('LLM_MAX_RETRIES', '3')

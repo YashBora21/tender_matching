@@ -9,6 +9,22 @@ import pytest
 from app.services.llm import LLMClient, LLMError, LLMResult
 
 
+def test_text_and_explicit_vision_credentials_are_independent(monkeypatch):
+    """Synthetic credentials: switching endpoint cannot silently reuse the text key."""
+    monkeypatch.setenv('LLM_API_KEY', 'synthetic-legacy-groq-key')
+    monkeypatch.setenv('LLM_TEXT_API_KEY', 'synthetic-text-key')
+    monkeypatch.setenv('LLM_MODEL', 'synthetic-text-model')
+    assert LLMClient().api_key == 'synthetic-text-key'
+    vision = LLMClient(model='synthetic-vision-model',
+        base_url='https://synthetic-vision.example.test/v1', api_key='synthetic-vision-key')
+    assert vision.api_key == 'synthetic-vision-key'
+    assert LLMClient().api_key == 'synthetic-text-key'
+    with pytest.raises(LLMError, match='explicit API key'):
+        LLMClient(base_url='https://synthetic-vision.example.test/v1')
+    with pytest.raises(LLMError, match='API key'):
+        LLMClient(base_url='https://synthetic-vision.example.test/v1', api_key='')
+
+
 def test_a_json_answer_is_parsed():
     result = LLMResult(content='{"attribute": "rotational_speed", "value": "1500"}')
     assert result.parsed == {"attribute": "rotational_speed", "value": "1500"}

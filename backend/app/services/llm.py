@@ -78,7 +78,7 @@ class _RateLimited(Exception):
 
 
 NO_MODEL = "no LLM model is configured (set LLM_MODEL)"
-NO_API_KEY = "no LLM api key is configured (set LLM_API_KEY)"
+NO_API_KEY = "no text API key is configured (set LLM_TEXT_API_KEY or LLM_API_KEY)"
 NO_BASE_URL = "no LLM endpoint is configured (set LLM_BASE_URL)"
 
 
@@ -106,7 +106,7 @@ def config_error() -> Optional[str]:
     model are refused for the same reason - there is nothing to call.
     """
     settings = get_settings()
-    return _missing(settings.llm_model, settings.llm_api_key, settings.llm_base_url)
+    return _missing(settings.llm_model, settings.text_api_key, settings.llm_base_url)
 
 
 # A wait is told in one of three places, and none of them is a vendor's
@@ -317,11 +317,14 @@ class LLMResult:
 class LLMClient:
     """A client for an OpenAI-compatible chat API."""
 
-    def __init__(self, model: Optional[str] = None, base_url: Optional[str] = None):
+    def __init__(self, model: Optional[str] = None, base_url: Optional[str] = None,
+                 *, api_key: Optional[str] = None):
         settings = get_settings()
         self.model = model or settings.llm_model
         self.base_url = (base_url or settings.llm_base_url).rstrip("/")
-        self.api_key = settings.llm_api_key
+        if api_key is None and base_url is not None and self.base_url != settings.llm_base_url.rstrip('/'):
+            raise LLMError('an explicit API key is required for an alternate endpoint')
+        self.api_key = settings.text_api_key if api_key is None else api_key
         # The same question `config_error` answers, so a caller that checked
         # first and a client built without checking refuse for one reason.
         # The resolved values are checked, not the settings: a caller that

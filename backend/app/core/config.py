@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     # local by default: sentence-transformers loads public weights, with no
     # account and no inference credits.
     llm_api_key: Optional[str] = None
+    llm_text_api_key: Optional[str] = None
+
     # gpt-oss-20b over gpt-oss-120b: the provider's daily token limit is
     # per model, and 20b is the cheaper and faster of the two.
     llm_model: Optional[str] = None
@@ -97,8 +99,7 @@ class Settings(BaseSettings):
     # from the pairs it never asked about (D-110).
     llm_call_budget: int = 0
     llm_token_budget: int = 0
-    # gpt-oss is a reasoning model: the answer comes after the reasoning, and
-    # a small budget is spent entirely on reasoning.
+    # The output budget includes any provider-side reasoning tokens.
     llm_max_tokens: int = 2048
     llm_timeout_seconds: int = 120
     llm_temperature: float = 0.0
@@ -304,6 +305,11 @@ class Settings(BaseSettings):
     def evidence_priority_list(self) -> list[str]:
         return [c.strip() for c in self.evidence_priority.split(",") if c.strip()]
 
+    @property
+    def text_api_key(self) -> Optional[str]:
+        """Explicit text credential wins; retain the legacy single-provider setting."""
+        return self.llm_text_api_key or self.llm_api_key
+
     def public_summary(self) -> dict:
         """Config shape for /api/health. Never includes secret values."""
         return {
@@ -312,7 +318,7 @@ class Settings(BaseSettings):
             "log_level": self.log_level,
             "database_configured": bool(self.database_url),
             "data_dir": str(self.data_dir),
-            "llm_configured": bool(self.llm_api_key and self.llm_model),
+            "llm_configured": bool(self.text_api_key and self.llm_model and self.llm_base_url),
             "embedding_model_configured": bool(self.embedding_model),
             "cors_origins": self.cors_origin_list,
         }
