@@ -13,7 +13,6 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 from app.core.logging import get_logger
 from app.repositories.postgres import PostgresDocumentRepo

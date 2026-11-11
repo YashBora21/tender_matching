@@ -58,7 +58,6 @@ class AliasRepo:
         the alias table resolves to what it points at, if the row is approved
         and confident enough. Anything else does not resolve.
         """
-        from app.comparison.attributes import attribute_by_term
 
         if not name:
             return AliasResolution(needs_review=True, reason="no attribute name")
@@ -90,15 +89,6 @@ class AliasRepo:
         token = normalise_token(name)
         return [row for row in self.list_all() if normalise_token(row['alias']) == token]
 
-    def _lookup(self, name: str) -> Optional[tuple]:
-        """The alias row for a name, if there is one."""
-        return self.session.execute(
-            select(
-                alias_table.c.canonical_term,
-                alias_table.c.confidence,
-                alias_table.c.approved,
-            ).where(alias_table.c.alias == name)
-        ).first()
 
     def add(
         self,

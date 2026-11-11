@@ -32,10 +32,7 @@ from app.repositories.tender import LLMCache, StoredRequirement, TenderRepo
 from app.schemas.enums import RequirementType, TenderReasonCode
 from app.schemas.models import EXTRACTION_VERSION
 from app.services.requirement.atomize import atomize_records
-from app.services.requirement.extract import (
-    ExtractedRequirement,
-    extract_requirements,
-)
+from app.services.requirement.extract import extract_requirements
 from app.services.llm import LLMClient, LLMRateLimited, LLMBudgetExceeded
 from app.services.tender.classify import DISCOVERY, WRAPPER_METADATA, NON_TECHNICAL_REASON, is_non_technical
 from app.services.requirement.retype import retype_technical, apply_clause_type, retype
@@ -64,13 +61,6 @@ STAGE_REQUIREMENTS = "requirements"
 STAGE_EXTRACTION = "extraction"
 STAGE_RESOLUTION = "resolution"
 
-STAGES = (
-    STAGE_ATTACHMENTS,
-    STAGE_ITEMS,
-    STAGE_REQUIREMENTS,
-    STAGE_EXTRACTION,
-    STAGE_RESOLUTION,
-)
 
 # A stage that could not finish. `rate_limited` is resumable: the next run
 # tries it again, and the work already done is kept.

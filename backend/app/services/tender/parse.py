@@ -119,23 +119,6 @@ def _is_heading(line: str) -> bool:
     return True
 
 
-def _table_to_markdown(rows: list[list[Optional[str]]]) -> str:
-    """A table as markdown, so the rows stay readable and keep their columns."""
-    cleaned = [
-        [(cell or "").strip().replace("\n", " ") for cell in row]
-        for row in rows
-        if any((cell or "").strip() for cell in row)
-    ]
-    if not cleaned:
-        return ""
-    width = max(len(row) for row in cleaned)
-    padded = [row + [""] * (width - len(row)) for row in cleaned]
-    header, body = padded[0], padded[1:]
-    lines = ["| " + " | ".join(header) + " |", "| " + " | ".join("---" for _ in header) + " |"]
-    lines += ["| " + " | ".join(row) + " |" for row in body]
-    return "\n".join(lines)
-
-
 def _rows_to_markdown(rows: list[list[Optional[str]]]) -> list[tuple[str, str, str]]:
     """Each table row as markdown, with a stable row id.
 

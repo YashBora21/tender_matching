@@ -23,8 +23,6 @@ class FakeAliasRepo(AliasRepo):
         super().__init__(session)
         self.rows = rows or {}
 
-    def _lookup(self, name):
-        return self.rows.get(name)
 
     def _normalized_rows(self, name):
         from app.comparison.vocabulary import normalise_token

@@ -12,8 +12,7 @@ from app.repositories.db import get_engine
 from app.repositories.tender import TenderRepo
 from app.services.llm import LLMClient,LLMRateLimited,LLMBudgetExceeded
 from app.services.match.facts import extract_fact
-from app.services.match.match import _evidence_context,match_requirement
-from app.services.match.retrieve import Candidate
+from app.services.match.match import match_requirement
 from app.services.match.verify import check_source_anchor,check_range_endpoint,check_citation
 from app.services.output.runs import _assess,assessable
 

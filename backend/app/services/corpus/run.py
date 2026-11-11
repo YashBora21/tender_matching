@@ -12,13 +12,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Optional
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
-from app.repositories.db import session_scope
 from app.repositories.tender import LLMCache, TenderRepo
 from app.services.corpus.audit import AuditReport, audit_corpus
 from app.services.tender.collect import collect_tender, read_manifest, write_manifest
@@ -28,18 +26,6 @@ logger = get_logger(__name__)
 
 def _corpus_dir() -> Path:
     return get_settings().data_dir / "tenders"
-
-
-def _tender_dirs(corpus_dir: Path) -> list[Path]:
-    """The tenders in a corpus: a directory with a manifest, or a wrapper PDF."""
-    if not corpus_dir.exists():
-        return []
-    directories = [
-        path
-        for path in sorted(corpus_dir.iterdir())
-        if path.is_dir() and (path / "manifest.json").exists()
-    ]
-    return directories
 
 
 def _wrappers(corpus_dir: Path) -> list[Path]:

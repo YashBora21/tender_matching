@@ -38,7 +38,6 @@ from app.services.tender.classify import (
 logger = get_logger(__name__)
 
 # The Devanagari block, and the punctuation the PDF's encoding leaves behind.
-_DEVANAGARI = re.compile(r"[ऀ-ॿ]")
 # A character that is neither ASCII nor Devanagari: the mangled residue.
 _MANGLED = re.compile(r"[^\x00-\x7Fऀ-ॿ‌‍°·•–—‘’“”₹€ ]")
 

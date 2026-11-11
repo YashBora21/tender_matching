@@ -37,7 +37,7 @@ from sqlalchemy.orm import Session
 from app.core.errors import NotFoundError
 from app.repositories.runs import RunRepo
 from app.repositories.tender import TenderRepo
-from app.schemas.enums import LedgerStatus, RequirementStatus, RequirementType
+from app.schemas.enums import RequirementStatus, RequirementType
 from app.services.tender.classify import NON_TECHNICAL_REASON
 from app.services.output.runs import assessable, summarise
 
@@ -99,28 +99,6 @@ def _pages(tender_repo: TenderRepo, tender_id: str, page_count: Optional[int]) -
     tender = tender_repo.get_tender(tender_id) or {}
     tender = {**tender, 'page_count': page_count}
     return page_coverage(tender, tender_repo.list_attachments(tender_id), tender_repo.list_pages(tender_id))
-
-
-def _declared_pages(
-    tender_repo: TenderRepo, tender_id: str, pages: list[dict]
-) -> Optional[int]:
-    """How many pages the document the ledger describes declares.
-
-    The ledger names the attachment its pages came from, so the count is that
-    document's: a two-page specification inside a seventeen-page wrapper is
-    two pages, and comparing it with seventeen would report fifteen pages
-    nobody read.
-    """
-    source = next(
-        (page.get("attachment_id") for page in pages if page.get("attachment_id")),
-        None,
-    )
-    if source is None:
-        return None
-    for record in tender_repo.list_attachments(tender_id):
-        if record.get("id") == source:
-            return record.get("pages")
-    return None
 
 
 def _extraction(tender_repo: TenderRepo, tender_id: str) -> dict:

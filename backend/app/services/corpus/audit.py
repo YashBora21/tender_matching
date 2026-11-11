@@ -12,7 +12,6 @@ tender in it is treated the same way.
 
 from __future__ import annotations
 
-import json
 from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass, field

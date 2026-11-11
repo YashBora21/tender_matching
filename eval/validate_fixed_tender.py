@@ -2,7 +2,7 @@
 No generative requests, database writes or production reports; cached local embedding weights required.
 This measures a known two-page specification subset, not full-tender extraction/matching accuracy.
 """
-import sys,json,time,hashlib,logging,re,contextlib,io,shutil,os
+import sys, json, time, hashlib, logging, contextlib, io, shutil, os
 os.environ["HF_HUB_OFFLINE"]="1"
 os.environ["TRANSFORMERS_OFFLINE"]="1"
 from pathlib import Path
