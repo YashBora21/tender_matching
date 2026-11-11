@@ -42,8 +42,14 @@ ignored; already tracked audit/gold files remain tracked.
 
 ## Checks and publication
 
-Validation results and the tested commit will be recorded after this cleanup.
-The existing RC tag is immutable; source changes need a new tested candidate.
+Tested source: `da09200846b0573626a2c5ff8e2d43766d24d55f`, tag
+`rc-2026-11-11.1`. Python: 1,129 unit tests passed (76.932 seconds). Frontend:
+35 tests, lint and production build passed. Compose configuration and built
+frontend configured-value scans passed. No provider calls or paid spend.
+The previous RC tag is unchanged. Summary: `eval/audit/cleanup-2026-11-11/summary.json`.
+The history scan checked 1,216 reachable blobs before cleanup commits; the final
+tracked-tree scan found zero exact private configuration values. No private env
+file is tracked. Database integration and container runtime tests were not run.
 
 From PowerShell at the repository root, review only committed source for push:
 
@@ -55,9 +61,17 @@ git log -5 --oneline
 git remote -v                 # inspect locally; never share embedded credentials
 ```
 
-Use an existing reviewed GitHub remote, or add your own repository as `origin`.
-Then push the reviewed branch and its new RC tag explicitly. This phase does not
-publish to GitHub or Docker Hub. Untracked local notes are not pushed by Git.
+The user selected `https://github.com/YashBora21/tender_matching.git`.
+The remote was checked and had no existing branches or tags. Publish the
+reviewed `main` branch and the new tested tag explicitly:
+
+```powershell
+git push -u origin main
+git push origin rc-2026-11-11.1
+```
+
+The user authorized source publication to this repository. Docker images are
+not published by these commands. Untracked local notes are not pushed by Git.
 Do not use `git add .` to include unreviewed local artifacts. New generated audits
 are ignored by default; use `git add -f <reviewed-audit-path>` after checking them.
 

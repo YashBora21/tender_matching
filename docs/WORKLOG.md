@@ -3925,3 +3925,13 @@ User startup/request log showed UndefinedColumn tender_item.active. Confirmed lo
 Inspected current credential references without displaying secrets. The text key referenced the Gemini source; the vision key referenced Groq. Generic endpoint overrides could reuse the text key. Added independent text override and explicit alternate-endpoint key boundary; preserved Groq in the local legacy key and configured separate text/vision references. Added synthetic regression checks. No API requests or spend.
 
 Reference scan removed four unused runtime private helpers plus an unused fake override, eleven imports and two constants. Deleted seven generated pytest folders containing 179 temporary files after verifying workspace-contained paths. No runtime module was proven safe to delete; dynamic worker, exports, tests, migrations, corpus and audit history were retained. Added publication exclusions and current readiness/status documentation. Reachable Git history scan checked 1,216 blobs against configured API secrets and high-confidence credential formats: zero matches; no private env files tracked. Frontend lint passed. A focused health test attempt hit the known sandbox local-socket stall and was stopped; final full validation will run outside that socket restriction. No GitHub/Docker publication, history rewrite or model prompt/cache-key change.
+
+
+## 2026-11-11 — Cleanup validation passed
+
+Tagged rc-2026-11-11.1 at da09200846b0573626a2c5ff8e2d43766d24d55f. Full offline suite backend/tests+collect+eval: 1,129 passed, zero failures/errors/skips, 76.932 seconds. Frontend: 35 tests passed, lint and production build passed. Quiet Compose config and built-frontend exact configured-value scan passed. Final tracked-tree scan found no private configured values; no private env files are tracked. Credentials independently asserted against their local source values without requests or logging values. No paid calls/spend, database integration tests, live extraction/refresh, image builds or publication in this phase. No Git remote is configured; requested the target repository URL. Audit: eval/audit/cleanup-2026-11-11/summary.json. Candidate tag remains on the tested commit; subsequent audit-only commit updates evidence/documentation.
+
+
+## 2026-11-11 — User authorized GitHub source publication
+
+User provided https://github.com/YashBora21/tender_matching.git and explicitly requested push to main using existing terminal credentials. Read-only remote check returned no branches or tags. Preserve logical commits, publish the tested source branch as main and the new RC tag; do not push unreviewed local notes, private configuration, generated output or Docker images. Publication verification follows the actual push.

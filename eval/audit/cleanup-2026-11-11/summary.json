@@ -1,0 +1,79 @@
+{
+  "date": "2026-11-11",
+  "source_commit": "da09200846b0573626a2c5ff8e2d43766d24d55f",
+  "tag": "rc-2026-11-11.1",
+  "credentials": {
+    "legacy_key_role": "Groq",
+    "text_override_role": "Gemini",
+    "vision_key_role": "Groq",
+    "routing_assertions_passed": true,
+    "provider_requests": 0,
+    "actual_values_recorded": false
+  },
+  "cleanup": {
+    "runtime_helpers_removed": 4,
+    "obsolete_fake_overrides_removed": 1,
+    "unused_imports_removed": 11,
+    "unused_constants_removed": 2,
+    "generated_directories_removed": 7,
+    "generated_files_removed": 179,
+    "runtime_modules_deleted": 0,
+    "history_or_corpus_deleted": false
+  },
+  "tests": {
+    "tests": 1129,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 76.932,
+    "frontend_tests_passed": 35,
+    "frontend_lint": "passed",
+    "frontend_build": "passed",
+    "compose_config": "passed",
+    "frontend_private_value_check": "passed",
+    "database_integration_tests_run": false
+  },
+  "secrets": {
+    "reachable_history_blob_scan": {
+      "reachable_git_blobs_checked": 1216,
+      "matching_secret_blobs": [],
+      "private_env_files_tracked": [],
+      "scope": "exact configured API keys and high-confidence credential formats; no Git history rewritten"
+    },
+    "tracked_files_checked_after_commits": 345,
+    "current_configured_values_in_tracked_files": [],
+    "private_env_files_tracked": false,
+    "git_history_rewritten": false
+  },
+  "remaining_acceptance_gates": [
+    "confirmed valve/pump full-tender input and labels, followed by RC evaluation",
+    "vendor evidence and alias review driven by frozen evaluation",
+    "persistent daily/monthly spend ledger and caps",
+    "container smoke and deployment OCR/GPU validation"
+  ],
+  "extraction_evidence": {
+    "saved_rows": 12,
+    "canonical_comparison_inputs": 6,
+    "unmapped_abstentions": 6,
+    "changed_values": 1,
+    "changed_types": 1,
+    "full_tender_accuracy_known": false
+  },
+  "retrieval_evidence": {
+    "hybrid_search": "implemented",
+    "per_item_scope": "implemented",
+    "verified_fact_cache_first": true,
+    "grouping": "off",
+    "current_rc_full_tender_quality_and_latency_measured": false
+  },
+  "publication": {
+    "remote_configured": false,
+    "github_push_performed": false,
+    "images_pushed": false,
+    "repository": "https://github.com/YashBora21/tender_matching.git",
+    "target_branch": "main",
+    "user_authorized_push": true,
+    "remote_initially_empty": true
+  },
+  "audit_note": "A later audit-only commit records this tested source hash; the RC tag is not moved."
+}
