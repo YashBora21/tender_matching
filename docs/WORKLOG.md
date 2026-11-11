@@ -3935,3 +3935,8 @@ Tagged rc-2026-11-11.1 at da09200846b0573626a2c5ff8e2d43766d24d55f. Full offline
 ## 2026-11-11 — User authorized GitHub source publication
 
 User provided https://github.com/YashBora21/tender_matching.git and explicitly requested push to main using existing terminal credentials. Read-only remote check returned no branches or tags. Preserve logical commits, publish the tested source branch as main and the new RC tag; do not push unreviewed local notes, private configuration, generated output or Docker images. Publication verification follows the actual push.
+
+
+## 2026-11-11 — GitHub publication verified
+
+Renamed the reviewed local branch to main, added the user-selected origin and atomically pushed main plus rc-2026-11-11.1 using existing Git credentials. Initial remote main matched f1c74f0009867e22bae8e5a77f08660e232044a1; peeled remote tag matched tested source da09200846b0573626a2c5ff8e2d43766d24d55f. No force push, history rewrite, private env, untracked local notes or Docker image publication. Follow-up audit-only commit records this result; no application code changed after validation.

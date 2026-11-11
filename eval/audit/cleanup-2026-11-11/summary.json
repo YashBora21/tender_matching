@@ -67,13 +67,17 @@
     "current_rc_full_tender_quality_and_latency_measured": false
   },
   "publication": {
-    "remote_configured": false,
-    "github_push_performed": false,
+    "remote_configured": true,
+    "github_push_performed": true,
     "images_pushed": false,
     "repository": "https://github.com/YashBora21/tender_matching.git",
     "target_branch": "main",
     "user_authorized_push": true,
-    "remote_initially_empty": true
+    "remote_initially_empty": true,
+    "initial_published_commit": "f1c74f0009867e22bae8e5a77f08660e232044a1",
+    "tag_published": "rc-2026-11-11.1",
+    "verified_tag_source": "da09200846b0573626a2c5ff8e2d43766d24d55f",
+    "remote_hashes_verified": true
   },
   "audit_note": "A later audit-only commit records this tested source hash; the RC tag is not moved."
 }

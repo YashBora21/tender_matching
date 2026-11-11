@@ -86,3 +86,12 @@ are ignored by default; use `git add -f <reviewed-audit-path>` after checking th
    Per-run call/token limits alone do not enforce INR 1,000 per month.
 4. Image builds, runtime smoke and deployment OCR/GPU validation. Published images
    and production acceptance are not implied by unit-test success.
+
+## Publication verified
+
+`main` and `rc-2026-11-11.1` were pushed successfully to the user-selected
+repository. The first published main commit was
+`f1c74f0009867e22bae8e5a77f08660e232044a1`; remote main and peeled tag hashes
+matched local values. A subsequent documentation-only commit records this
+verification without changing the tested source/tag. No repository visibility
+setting or Docker image was changed.
