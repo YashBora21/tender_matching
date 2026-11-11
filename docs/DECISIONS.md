@@ -4727,3 +4727,23 @@ Bind extracted/cached fact attributes to the approved requested canonical attrib
 Preserve the legacy LLM_API_KEY credential and allow LLM_TEXT_API_KEY to select an independent text credential. Client preflight and health use the same effective text key. Alternate client endpoints require an explicit credential; an empty explicit key fails instead of falling back across providers. Models/endpoints stay runtime-only and no credential value enters logs, source or audits. Local ignored environment references text and vision source credentials separately; no provider call is required to test this. Prompt contents and cache identities are unchanged.
 
 Remove only source with no callers after checking imports, tests, CLI/dynamic entry points and documentation: four obsolete private helpers, their fake override, eleven imports and two constants. Preserve package re-exports, migrations, active tests, dynamic OCR worker and audit/gold history. Delete only regenerated pytest temporary directories; ignore local experiments, generated audit outputs and unseen user inputs by default. New reviewed audit artifacts require explicit forced staging; already tracked artifacts remain versioned. Remove unused vision environment forwarding from Compose because production OCR uses Tesseract/Paddle; independent vision experiments remain configured locally.
+
+
+## D-166 - Compose derives its database URL from the database's own credentials
+
+The compose backend took `DATABASE_URL_DOCKER`, while the database service took
+`POSTGRES_*`. Two variables described one password, so they could disagree - and
+on this machine they did: `.env` set the backend to `change-me` and left
+`POSTGRES_PASSWORD` unset, which gives the container `tender`. The stack could
+not start, and the failure would read as a database problem rather than a
+configuration one. `.env.example` had the same drift: it documents
+`POSTGRES_PASSWORD=change-me` and an empty `DATABASE_URL_DOCKER`, whose compose
+default was `tender:tender`.
+
+The backend URL is now built from `${POSTGRES_USER}`, `${POSTGRES_PASSWORD}` and
+`${POSTGRES_DB}`, the same values the database container receives, so the two
+cannot drift. `DATABASE_URL_DOCKER` is removed from the example file and from the
+documented non-setting list.
+
+*Verified:* the image builds and the compose stack starts, runs the migrations to
+`0022_llm_spend` and answers `/api/health`; recorded in the gate 4 audit.
