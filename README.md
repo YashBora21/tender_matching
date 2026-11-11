@@ -131,6 +131,18 @@ anything: the corpus counts, whether a model is configured, and what a run
 would need first. It downloads nothing and makes no model call, so it is safe
 to point a monitor at.
 
+### Independent text and vision credentials
+
+`LLM_API_KEY` remains the legacy key. Set `LLM_TEXT_API_KEY` to use a different
+credential for text extraction/matching; a blank override falls back to the
+legacy key. Keep both provider credentials in the ignored local environment.
+Model identifiers and endpoints are supplied only through runtime configuration.
+
+Vision experiments use their own `OCR_VISION_API_KEY`, model and endpoint.
+The production OCR path supports Tesseract/Paddle, not an automatic vision
+fallback. A client targeting an alternate endpoint requires an explicit key.
+See [GitHub readiness](docs/GITHUB_READINESS.md) for local wiring and checks.
+
 ### Spending a limited key
 
 Two settings bound what one process may ask: `LLM_CALL_BUDGET` and
@@ -145,6 +157,9 @@ the provider said it in, which is what lets a hosted model, a self-hosted one
 and a local one all be the same code. `LLM_BASE_URL` is recorded in every run's
 config snapshot, because the same model name served elsewhere is a different
 answer.
+
+These per-run token/call limits do not enforce a persistent INR monthly cap.
+A persisted spend ledger is still required before unattended paid batch runs.
 
 A tender whose assessable clauses are all commercial, legal or financial is
 answered from their clause types and needs no key at all, so it is not refused
@@ -460,47 +475,39 @@ both new attributes being recognised and old ones stopping being recognised).
 
 ## Current state
 
-Phases 0–10 are built and tested, Phase 11 packaging is in place, and the
-phases after that worked the match and the flow until a person holding only
-this repository could take a tender PDF to a report: the corpus collector,
-tender ingestion with a four-state page ledger, retrieval and LLM extraction
-behind the verifier, deterministic comparison and scoring, runs and their
-reports (JSON, HTML, CSV), the React frontend, the offline evaluation harness,
-`make corpus-restore`, `make e2e` and `GET /api/preflight`.
+As of 2026-11-11, the backend, frontend, corpus tools and evaluation harness
+are implemented. The previous RC passed 1,128 offline unit tests. Its history
+migration has been applied locally and the formerly failing requirements
+endpoint returned HTTP 200. Current cleanup validation is recorded in
+[GitHub readiness](docs/GITHUB_READINESS.md).
 
-The corpus on this machine is ~660 MB across 121 documents on record - 51 in
-the manufacturer manifests and 70 in the catalogue. 117 of those files are on
-disk and hashed; the four KSB catalogues are not, because `www.ksb.com`
-disallows `*.pdf`, the restore reads that rule (D-117), and the files were
-withdrawn with their manifest rows marked `restricted`. Of the 117, 97 carry an
-address on record and come back on a fresh clone; the other 20 have none and
-are reported as gaps rather than guessed. The 117 files dedup to 101 distinct
-documents by content hash, and that is what the database holds. It covers
-valves, pumps, motors and actuators from ABB, AVK, Bharat Bijlee, Bray,
-Crompton, Circor/Flowserve,
-Duncan Engineering, Ebara, Emerson Fisher, Godwin/Goulds, Intervalve Poonawalla,
-KSB, Delval, Sulzer, Val-Matic and Wilo.
+Extraction preserves page/item identity, raw quotations, table/model context
+and complete ranges. Numeric nominal labels use a configured DN/NPS table;
+unknown sizes and ambiguous aliases require review. In the saved twelve-row
+replay, six rows had canonical comparison inputs and six abstained as unmapped;
+one numeric value and one clause type changed. These are not twelve verified
+manufacturer matches.
 
-Still open, and named rather than hidden:
+Retrieval combines keyword and vector search, applies per-item product scope,
+checks the structured fact cache first, and gates claims through verification.
+Model/table ambiguity and corpus silence remain review outcomes. Grouping stays
+off. Full-tender matching accuracy and a 2–4 minute processing target have not
+been demonstrated on the current RC.
 
-- **No real gold set.** 6 confirmed pairs and 22 proposed atomic rows exist;
-  the 50–100 hand-labelled pairs need requirements from a live model run, and
-  the harness and format are ready for them.
-- **No published images.** Nothing is pushed to Docker Hub from here, and there
-  is no CI pipeline.
-- **The corpus is not in git**; only manifests and source configs are tracked,
-  so a fresh clone starts with no PDFs and runs `make corpus-restore` to get
-  them. 20 catalogue rows carry no address at all - the live host serves other
-  bytes than the file on disk - so those documents do not come back on a fresh
-  clone, and they are reported as gaps rather than guessed.
-- **No authentication** in front of the API; it assumes a trusted network.
-- **The matching pipeline has not run end to end here**, because there is no
-  live LLM on this machine. What was verified instead is that the flow says so
-  rather than hanging: a run is refused at the request with the reason,
-  `make e2e ARGS=--check` names the first step that cannot be met, and
-  `GET /api/preflight` answers the same question over HTTP. The 13 database
-  integration tests run against a live PostgreSQL and skip without
-  `TEST_DATABASE_URL`.
+Before acceptance:
 
-See [`docs/WORKLOG.md`](docs/WORKLOG.md) for what each phase built and what was
-tested, and [`docs/DECISIONS.md`](docs/DECISIONS.md) for the decision log.
+- Confirm the intended pump file and full-tender gold labels, then evaluate the
+  fixed valve tender and that pump tender on a tested RC.
+- Review vendor evidence and unmapped aliases from those results; rerun the
+  frozen evaluation after any corrections.
+- Add persistent spend accounting/caps before unattended paid batches.
+- Build and smoke-test both images; validate the deployment OCR/CUDA setup and
+  public pull before announcing a release. Authentication is outside the v1
+  scope; the API assumes a trusted network.
+
+A fresh clone has manifests and policies, not the local PDF corpus, uploads,
+weights, private credentials or generated experiments. Corpus restoration can
+report unavailable/manual sources and must not invent missing documents.
+
+[Work log](docs/WORKLOG.md) · [Decision log](docs/DECISIONS.md) ·
+[Public Docker release commands](docs/DOCKER_HUB_PUBLIC_RELEASE.md)

@@ -15,6 +15,14 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
+# Local experiments, generated evaluations and user-supplied unseen tenders.
+# Existing tracked gold/audit files remain tracked; add new reviewed audits explicitly.
+/.audit_tmp/
+/.pytest-*/
+/eval/.tmp*/
+/eval/audit/
+/new_unseen/
+
 # Corpus / uploads (large binaries live outside git; manifests are tracked)
 backend/data/manufacturers/*/raw/
 backend/data/uploads/
