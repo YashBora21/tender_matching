@@ -1243,6 +1243,7 @@ def test_catalogue_absence_does_not_prevent_tender_extraction(tmp_path, monkeypa
     monkeypatch.setenv('OCR_BACKEND', 'paddle')
     get_settings.cache_clear()
     monkeypatch.setattr(pipeline, '_reader_version', lambda: 'synthetic-paddle-reader')
+    monkeypatch.setattr(pipeline, '_ocr_signature', lambda: 'synthetic-paddle-signature')
     monkeypatch.setattr(pipeline, '_read_specification', lambda a, d: _spec_rows())
     def forbidden(*args, **kwargs):
         raise AssertionError('vendor catalogue queries belong to matching')

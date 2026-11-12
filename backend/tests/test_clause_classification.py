@@ -88,7 +88,8 @@ def test_enabling_classifier_invalidates_only_extraction_and_downstream(monkeypa
     before = stage_keys([],**kwargs)
     from app.services.tender.pipeline import content_hash
     assert before[STAGE_EXTRACTION] == content_hash("extraction", before[STAGE_REQUIREMENTS],
-                                                  'synthetic', 'synthetic', 'synthetic', '', 'structured-source-coverage-1', 'synthetic')
+                                                  'synthetic', 'synthetic', 'synthetic', 'source-first-2',
+                                                get_settings().llm_max_tokens, 'structured-source-coverage-1', 'synthetic')
     monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_ENABLED','true')
     get_settings.cache_clear()
     after = stage_keys([],**kwargs)

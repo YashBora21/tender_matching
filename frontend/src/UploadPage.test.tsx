@@ -437,7 +437,7 @@ describe('UploadPage', () => {
     })
 
     await screen.findByText('Requirements read so far')
-    expect(screen.getByText(/1 requirement read so far/)).toBeTruthy()
+    expect(screen.getByText(/1 requirement in the last saved reading attempt/)).toBeTruthy()
     expect(screen.getByText('The body shall be stainless steel')).toBeTruthy()
     // A partial read is not a finished one: no manufacturers are offered yet.
     expect(screen.queryByText('Choose manufacturers')).toBeNull()
