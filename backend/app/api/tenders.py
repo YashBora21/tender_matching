@@ -147,6 +147,43 @@ async def upload_tender(
     }
 
 
+@router.post("/{tender_id}/read-again", status_code=status.HTTP_202_ACCEPTED)
+def read_again(
+    tender_id: str,
+    background: BackgroundTasks,
+    session: Session = Depends(get_session),
+) -> dict:
+    """Read a tender again, with the limits in force now (user step 5).
+
+    The explicit action a resume needs: a reading that stopped at a budget or
+    rate limit is resumed by asking for it, not by re-uploading bytes. The new
+    attempt supersedes the old reading - its requirements are superseded by
+    the fresh ones, never destroyed - and the attempt ledger keeps every
+    previous reading, each with the limits it ran under.
+
+    A tender already being read is refused rather than double-read: two
+    background reads writing the same rows is a race, not a resume.
+    """
+    identifier = _identifier(tender_id)
+    repo = TenderRepo(session)
+    tender = repo.get_tender(identifier, for_update=True)
+    if tender is None:
+        raise NotFoundError(f"no tender with id {tender_id}")
+    if tender["status"] in (TenderStatus.QUEUED.value, TenderStatus.PROCESSING.value):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="the tender is already being read",
+        )
+
+    repo.set_status(identifier, TenderStatus.QUEUED)
+    # Committed before the task is scheduled: the task opens its own session
+    # and must be able to see the state it was told to read.
+    session.commit()
+    background.add_task(ingest, identifier, force=True)
+    logger.info("tender %s read again", identifier)
+    return {"tender_id": identifier, "status": TenderStatus.QUEUED.value}
+
+
 @router.get("/{tender_id}/requirements")
 def get_requirements(
     tender_id: str, session: Session = Depends(get_session)
@@ -204,12 +241,15 @@ _READING = (TenderStatus.QUEUED.value, TenderStatus.PROCESSING.value)
 def _requirements_payload(repo: TenderRepo, tender: dict) -> dict:
     """What the requirements routes answer, from the rows stored right now."""
     items = {item["item_id"]: item for item in repo.list_items(tender["id"])}
+    from app.services.tender.source_policy import context_only, source_context
     requirements = []
+    contexts = []
     for row in repo.list_requirements(tender["id"]):
         item = items.get(row.get("item_id")) or {}
-        requirements.append(
+        (contexts if context_only(row) else requirements).append(
             {
                 **row,
+                **source_context(row),
                 "item_title": item.get("name"),
                 "category": item.get("category"),
             }
@@ -231,6 +271,7 @@ def _requirements_payload(repo: TenderRepo, tender: dict) -> dict:
             "flagged": sum(1 for row in requirements if row.get("review_required")),
         },
         "requirements": requirements,
+        "context_clauses": contexts,
     }
 
 

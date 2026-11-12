@@ -27,6 +27,7 @@ from sqlalchemy import (
     Index,
     Integer,
     MetaData,
+    Numeric,
     String,
     Table,
     Text,
@@ -390,6 +391,11 @@ llm_cache = Table(
     Column("output", JSONB, nullable=False),
     Column("created_at", DateTime(timezone=True), server_default=func.now()),
     Index("ix_llm_cache_input_hash", "input_hash"),
+    # Which tender and reading wrote the entry, when that is known. Written by
+    # `LLMCache(tender_id=..., reading_id=...)`; legacy rows carry no provenance
+    # and are retained and reported, never guessed to be tender-only (PLAN 4).
+    # The key is unchanged: provenance is recorded, it does not select.
+    Column("provenance", JSONB),
     UniqueConstraint(
         "input_hash",
         "model",
@@ -444,6 +450,39 @@ result = Table(
     Column("reason_code", _enum(ReasonCode, "reason_code")),
     Index("ix_result_run_id", "run_id"),
     Index("ix_result_requirement_id", "requirement_id"),
+)
+
+# --- reading attempts --------------------------------------------------------
+
+# One row per attempt to read a tender, opened before the attempt starts and
+# closed when it ends. It is the record behind "resume with the current
+# limits": each row freezes the numeric limits its read ran under, so the next
+# attempt is governed by the *current* configuration, never by a previous
+# attempt's stop reason or old limits (user step 5). Append-only: a superseded
+# reading is history, not something to overwrite.
+reading_attempt = Table(
+    "reading_attempt",
+    metadata,
+    _uuid_pk(),
+    Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False),
+    # 1, 2, 3... within the tender, in the order the attempts were made.
+    Column("attempt_no", Integer, nullable=False),
+    Column("started_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("finished_at", DateTime(timezone=True)),
+    # running | done | failed | rate_limited | incomplete — the tender's own
+    # state vocabulary, plus `running` for an attempt still in flight.
+    Column("status", String(32), nullable=False, server_default="running"),
+    Column("stop_reason", Text),
+    Column("reason_code", String(64)),
+    # The source identity the attempt was given, frozen at its start.
+    Column("sha256", String(64)),
+    Column("filename", String(512)),
+    # The effective numeric limits and versions this attempt ran under.
+    Column("limits", JSONB, nullable=False, server_default="{}"),
+    # What the attempt produced: calls, tokens, requirements, pages.
+    Column("metrics", JSONB, nullable=False, server_default="{}"),
+    Index("ix_reading_attempt_tender_id", "tender_id"),
+    UniqueConstraint("tender_id", "attempt_no", name="uq_reading_attempt_tender_no"),
 )
 
 # --- spend ledger -----------------------------------------------------------

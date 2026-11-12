@@ -26,6 +26,8 @@ export interface RequirementRow {
   item_id: string | null
   text: string
   source_text: string | null
+  source_role?: string
+  context_only?: boolean
   page: number
   type: string
   attribute: string | null
@@ -55,6 +57,7 @@ export interface TenderRequirements {
   partial?: boolean
   counts: { items: number; requirements: number; flagged: number }
   requirements: RequirementRow[]
+  context_clauses?: RequirementRow[]
 }
 
 /** One document a tender links to, as the manifest records it.

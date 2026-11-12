@@ -56,6 +56,60 @@ logger = get_logger(__name__)
 _SELF_READING = frozenset({"boq-pdf", "boq-csv", "spec", "scanned"})
 
 
+def effective_limits() -> dict:
+    """The process's numeric limits, read now (user step 5).
+
+    This is what a reading attempt is frozen with when it starts, and what
+    `/api/preflight` shows as the current effective limits. A resumed attempt
+    is governed by these, never by the limits an earlier attempt recorded: the
+    previous attempt's row is history, not configuration. No model identity
+    and no endpoint are in here - those are deployment configuration, not
+    metrics.
+    """
+    from app.services.tender.ingest import READER_VERSION
+    from app.services.tender.source_policy import fingerprint
+    settings = get_settings()
+    limits = {
+        # 0 means "no ceiling", as everywhere else the budgets are read.
+        "call_budget": settings.llm_call_budget,
+        "token_budget": settings.llm_token_budget,
+        "max_output_tokens": settings.llm_max_tokens,
+        "max_retries": settings.llm_max_retries,
+        "spend_caps_enabled": getattr(settings, 'llm_spend_caps_enabled', False),
+        "schema_version": settings.schema_version,
+        "app_version": settings.app_version,
+        "reader_version": READER_VERSION,
+        "source_policy": fingerprint(),
+    }
+    if limits['spend_caps_enabled']:
+        limits["daily_cap_inr"] = settings.llm_daily_cap_inr
+        limits["monthly_cap_inr"] = settings.llm_monthly_cap_inr
+    return limits
+
+
+def _attempt_start(repo: TenderRepo, tender_id: str) -> Optional[str]:
+    try:
+        with repo.session.begin_nested():
+            tender = repo.get_tender(tender_id) or {}
+            return repo.start_reading_attempt(tender_id, limits=effective_limits(),
+                sha256=tender.get("sha256"), filename=tender.get("filename"))
+    except Exception:  # The savepoint preserves the caller's successful writes.
+        logger.warning("tender %s: reading history unavailable; apply migrations", tender_id)
+        return None
+
+
+def _attempt_finish(repo: TenderRepo, attempt_id: Optional[str], *, status: str,
+                    stop_reason=None, reason_code=None, metrics=None) -> None:
+    if attempt_id is None:
+        return
+    try:
+        with repo.session.begin_nested():
+            repo.finish_reading_attempt(attempt_id, status=status, stop_reason=stop_reason,
+                                        reason_code=reason_code, metrics=metrics)
+    except Exception:
+        logger.warning("reading attempt %s could not be closed", attempt_id)
+
+
 @dataclass
 class Uploaded:
     """What `POST /api/tenders` answers with."""
@@ -163,29 +217,55 @@ def store_upload(
     )
 
 
-def ingest(tender_id: str) -> str:
+def ingest(tender_id: str, *, force: bool = False) -> str:
     """Read a stored tender and write its requirements. Returns its final state.
 
     This is the background task. It opens its own session because the request
     that scheduled it has already been answered and its session closed.
+
+    Each run of this function is one *reading attempt*: it is opened with the
+    limits it will run under and closed with its outcome (user step 5). The
+    attempt record is bookkeeping - a failure to write it is logged and never
+    changes the reading's result.
     """
     from app.repositories.db import session_scope
 
     with session_scope() as session:
         repo = TenderRepo(session)
+        # History writes use savepoints so a bookkeeping error cannot undo a read.
+        attempt_id = _attempt_start(repo, tender_id)
         repo.set_status(tender_id, TenderStatus.PROCESSING)
         session.commit()
 
         try:
-            status, error, code = _read(session, tender_id)
+            status, error, code, metrics = _read(
+                session, tender_id, reading_id=attempt_id, force=force
+            )
         except Exception as exc:  # noqa: BLE001 - the state is the answer
             session.rollback()
             message = f"{type(exc).__name__}: {exc}"
             logger.exception("tender %s could not be read: %s", tender_id, exc)
+            # The attempt is closed first: if closing it fails, its rollback
+            # must not discard the status that is written after it.
+            _attempt_finish(
+                repo,
+                attempt_id,
+                status=TenderStatus.FAILED.value,
+                stop_reason=message,
+            )
             repo.set_status(tender_id, TenderStatus.FAILED, error=message)
             session.commit()
             return TenderStatus.FAILED.value
 
+        # Closing history must preserve the pipeline's successful writes.
+        _attempt_finish(
+            repo,
+            attempt_id,
+            status=status.value,
+            stop_reason=error,
+            reason_code=code.value if code else None,
+            metrics=metrics,
+        )
         repo.set_status(tender_id, status, error=error, reason_code=code)
         session.commit()
         logger.info("tender %s %s", tender_id, status.value)
@@ -193,9 +273,19 @@ def ingest(tender_id: str) -> str:
 
 
 def _read(
-    session: Session, tender_id: str
-) -> tuple[TenderStatus, Optional[str], Optional[TenderReasonCode]]:
-    """Collect the tender's documents and run its pipeline."""
+    session: Session,
+    tender_id: str,
+    *,
+    reading_id: Optional[str] = None,
+    force: bool = False,
+) -> tuple[TenderStatus, Optional[str], Optional[TenderReasonCode], dict]:
+    """Collect the tender's documents and run its pipeline.
+
+    The fourth element is what the attempt ledger records as the attempt's
+    metrics: the counts the audit measured, or an empty dict when the read
+    stopped before there was anything to count.
+    """
+    metrics: dict = {}
     directory = tender_dir(tender_id)
     manifest = read_manifest(directory / "manifest.json")
     wrapper = _wrapper(directory, manifest)
@@ -204,6 +294,7 @@ def _read(
             TenderStatus.FAILED,
             "the uploaded file is no longer on disk; upload it again",
             None,
+            metrics,
         )
 
     collected = collect_tender(
@@ -226,17 +317,41 @@ def _read(
     audit = audit_tender(
         directory,
         repo=TenderRepo(session),
-        cache=LLMCache(session),
+        # The cache writes carry this tender and this attempt as provenance,
+        # so a reset can later tell tender-derived entries from legacy ones.
+        cache=LLMCache(session, tender_id=tender_id, reading_id=reading_id),
+        force=force,
     )
+    metrics = {
+        # Tolerant on purpose: the audit is a duck type (a caller may hand
+        # audit_tender a stub), and the attempt's counts are bookkeeping -
+        # a missing number is recorded as 0, never allowed to fail the read.
+        "llm_calls": getattr(audit, "llm_calls", 0),
+        "llm_cache_hits": getattr(audit, "llm_cache_hits", 0),
+        "prompt_tokens": getattr(audit, "prompt_tokens", 0),
+        "completion_tokens": getattr(audit, "completion_tokens", 0),
+        "llm_retries": getattr(audit, "llm_retries", 0),
+        "validation_attempts": getattr(audit, "validation_attempts", []),
+        "attachments": getattr(audit, "attachments", 0),
+        "attachments_failed": getattr(audit, "attachments_failed", 0),
+        "items": getattr(audit, "items", 0),
+        "requirements": getattr(audit, "requirements", 0),
+        "pages_read": getattr(audit, "pages_read", 0),
+    }
     if audit.failure:
-        return TenderStatus.FAILED, audit.failure, audit.failure_code
+        return TenderStatus.FAILED, audit.failure, audit.failure_code, metrics
     if audit.rate_limited:
         # The extraction stopped at the provider's limit. The requirements it
         # did read are stored; the tender is resumable, so it is not failed
         # and not done (D8).
-        return TenderStatus.RATE_LIMITED, audit.rate_limited_detail, None
+        return (
+            TenderStatus.RATE_LIMITED,
+            audit.rate_limited_detail,
+            None,
+            metrics,
+        )
     if getattr(audit, 'completion_gaps', None):
-        return TenderStatus.INCOMPLETE, '; '.join(audit.completion_gaps), None
+        return TenderStatus.INCOMPLETE, '; '.join(audit.completion_gaps), None, metrics
     # A tender that was read but gave nothing is not `done`: "done" says the
     # document was read, and an empty requirement list would be read as a
     # tender that states nothing (PRD 4, D-91).
@@ -245,16 +360,23 @@ def _read(
             TenderStatus.INCOMPLETE,
             "no page of the specification was read",
             TenderReasonCode.SPECIFICATION_UNREADABLE,
+            metrics,
         )
     if not audit.items:
-        return TenderStatus.INCOMPLETE, "the bill of quantities gave no items", None
+        return (
+            TenderStatus.INCOMPLETE,
+            "the bill of quantities gave no items",
+            None,
+            metrics,
+        )
     if not audit.requirements:
         return (
             TenderStatus.INCOMPLETE,
             "the specification gave no requirements",
             TenderReasonCode.NO_REQUIREMENTS_STATED,
+            metrics,
         )
-    return TenderStatus.DONE, None, None
+    return TenderStatus.DONE, None, None, metrics
 
 
 def _wrapper(directory: Path, manifest: dict) -> Optional[Path]:

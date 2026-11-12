@@ -112,6 +112,14 @@ export function uploadAttachment(
   })
 }
 
+/** Ask the backend to read the same tender again, with the limits in force
+ * now. A reading stopped at a budget or rate limit is resumed by this action,
+ * not by re-uploading bytes; the new attempt supersedes the old one and the
+ * history of earlier attempts is kept. */
+export function readAgain(tenderId: string): Promise<{ tender_id: string; status: string }> {
+  return request(`/api/tenders/${tenderId}/read-again`, { method: 'POST' })
+}
+
 export function startRun(
   tenderId: string,
   manufacturers: string[],

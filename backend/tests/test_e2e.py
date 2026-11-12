@@ -312,14 +312,14 @@ def test_the_command_reports_through_the_standard_output(monkeypatch, calls, tmp
     assert "report" in printed
 
 
-def test_the_model_line_names_the_endpoint_a_run_would_call():
-    """A key issued by one provider and a base URL set for another is a
-    refusal mid-run, so the preflight says which model and host it means."""
+def test_the_model_line_keeps_model_identity_and_endpoint_private():
+    """Availability is public; configured provider identifiers are private."""
     facts = Facts(documents=10, chunks=200, model_label="some-model at https://api.example/v1")
 
     text = E2EResult(facts=facts, check_only=True).as_text()
 
-    assert "configured: some-model at https://api.example/v1" in text
+    assert 'model  configured' in text
+    assert 'some-model' not in text and 'api.example' not in text
 
 
 def test_a_run_stopped_by_the_budget_names_what_it_kept(monkeypatch):

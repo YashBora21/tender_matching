@@ -62,8 +62,7 @@ class Facts:
     manufacturers: int = 0
     files_on_disk: int = 0
     model_reason: Optional[str] = None
-    # Which model, at which host, a run would call. Named because a key for
-    # one provider and a base URL for another is a refusal, not a match.
+    # Configuration availability only; provider identity stays private.
     model_label: str = ""
     ocr_reason: Optional[str] = None
     tender_status: Optional[str] = None
@@ -110,8 +109,6 @@ class E2EResult:
                 f"from {facts.manufacturers} maker(s); {facts.files_on_disk} file(s) on disk"
             )
             model_line = facts.model_reason or "configured"
-            if not facts.model_reason and facts.model_label:
-                model_line = f"configured: {facts.model_label}"
             lines.append(f"   model  {model_line}")
             if facts.ocr_reason:
                 lines.append("     ocr  not available here; see the reason below")
@@ -191,7 +188,7 @@ def measure(session: Session, *, tender_id: Optional[str] = None) -> Facts:
         chunks=sum(m["chunks"] for m in makers),
         manufacturers=len(makers),
         model_reason=config_error(),
-        model_label=f"{settings.llm_model} at {settings.llm_base_url}",
+        model_label="configured" if not config_error() else "",
         ocr_reason=tesseract_missing(),
     )
 
@@ -469,11 +466,32 @@ def preflight(session: Session, *, tender_ref: Optional[str] = None) -> dict:
     """What a caller needs to know before it asks for a run (PRD 11's status).
 
     The same measurement the command makes, as data: the corpus, the model,
-    and what a run would need first.
+    and what a run would need first. Alongside them, the numeric limits a read
+    would run under *now* - which is what a resumed attempt is governed by -
+    and, for a stored tender, the reading attempts already made, each with the
+    limits it ran under. The two are kept separate on purpose: the current
+    limits are configuration, the historical ones are a record (user step 5).
+
+    The model's identity and endpoint are deployment configuration, not API
+    output, so the payload does not name them: `configured` and `reason` are
+    the facts a caller acts on.
     """
+    from app.services.tender.upload import effective_limits
+
     stored = _stored_id(session, tender_ref) if tender_ref else None
     facts = measure(session, tender_id=stored)
     blockers, next_steps = assess(facts)
+
+    attempts: list[dict] = []
+    if stored is not None:
+        try:
+            from app.repositories.tender import TenderRepo
+
+            with session.begin_nested():
+                attempts = TenderRepo(session).list_reading_attempts(stored)
+        except Exception:  # noqa: BLE001 - history is informative, not required
+            logger.warning("the reading history of %s could not be read", stored)
+
     return {
         "corpus": {
             "documents": facts.documents,
@@ -484,7 +502,9 @@ def preflight(session: Session, *, tender_ref: Optional[str] = None) -> dict:
         "model": {
             "configured": facts.model_reason is None,
             "reason": facts.model_reason,
-            "target": facts.model_label,
+            # Redacted on purpose: this answer crosses an API boundary, and
+            # the model id and endpoint are server configuration.
+            "target": None if facts.model_reason else "configured (identity withheld)",
         },
         "ocr": {"available": facts.ocr_reason is None, "reason": facts.ocr_reason},
         "tender": {
@@ -495,6 +515,10 @@ def preflight(session: Session, *, tender_ref: Optional[str] = None) -> dict:
             "requirements": facts.requirements,
             "needs_model": facts.needs_model,
         },
+        # What a read or run would be governed by if it started now.
+        "limits": effective_limits(),
+        # What earlier reads were governed by, and what each produced.
+        "reading_attempts": attempts,
         "can_run": not blockers,
         "why_not": blockers,
         "next_steps": next_steps,

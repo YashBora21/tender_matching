@@ -32,6 +32,7 @@ from app.core.logging import get_logger
 from app.repositories.schema import (
     extraction_batch,
     llm_cache,
+    reading_attempt,
     requirement,
     result,
     run,
@@ -87,9 +88,8 @@ class TenderRepo:
 
     # --- the tender ---
 
-    def get_tender(self, tender_id: str) -> Optional[dict]:
-        row = self.session.execute(
-            select(
+    def get_tender(self, tender_id: str, *, for_update: bool = False) -> Optional[dict]:
+        statement = (select(
                 tender.c.id,
                 tender.c.filename,
                 tender.c.sha256,
@@ -98,8 +98,10 @@ class TenderRepo:
                 tender.c.error,
                 tender.c.reason_code,
             )
-            .where(tender.c.id == tender_id)
-        ).first()
+            .where(tender.c.id == tender_id))
+        if for_update:
+            statement = statement.with_for_update()
+        row = self.session.execute(statement).first()
         if row is None:
             return None
         return {
@@ -567,6 +569,105 @@ class TenderRepo:
             for row in rows
         ]
 
+    # --- the reading attempts ---
+
+    def start_reading_attempt(
+        self,
+        tender_id: str,
+        *,
+        limits: dict,
+        sha256: Optional[str] = None,
+        filename: Optional[str] = None,
+    ) -> str:
+        """Open the record of one reading attempt, before the reading starts.
+
+        The row is the attempt's own history: what the source was, and the
+        numeric limits it will run under. A later attempt reads the current
+        configuration, never the row a previous attempt wrote.
+        """
+        self.get_tender(tender_id, for_update=True)
+        number = self.session.execute(
+            select(func.coalesce(func.max(reading_attempt.c.attempt_no), 0)).where(
+                reading_attempt.c.tender_id == tender_id
+            )
+        ).scalar_one() + 1
+        attempt_id = uuid.uuid4()
+        self.session.execute(
+            insert(reading_attempt).values(
+                id=attempt_id,
+                tender_id=tender_id,
+                attempt_no=number,
+                status="running",
+                sha256=sha256,
+                filename=filename,
+                limits=limits,
+            )
+        )
+        return str(attempt_id)
+
+    def finish_reading_attempt(
+        self,
+        attempt_id: str,
+        *,
+        status: str,
+        stop_reason: Optional[str] = None,
+        reason_code: Optional[str] = None,
+        metrics: Optional[dict] = None,
+    ) -> None:
+        """Close a reading attempt with its outcome and its counts."""
+        self.session.execute(
+            update(reading_attempt)
+            .where(reading_attempt.c.id == attempt_id, reading_attempt.c.finished_at.is_(None))
+            .values(
+                status=status,
+                stop_reason=stop_reason,
+                reason_code=reason_code,
+                metrics=metrics or {},
+                finished_at=datetime.now(timezone.utc),
+            )
+        )
+
+    def list_reading_attempts(self, tender_id: str) -> list[dict]:
+        """Every attempt to read the tender, oldest first.
+
+        The limits each one ran under are part of the answer: a screen showing
+        why a read stopped shows the numbers that governed it, separately from
+        the limits the next attempt would use.
+        """
+        rows = self.session.execute(
+            select(
+                reading_attempt.c.id,
+                reading_attempt.c.attempt_no,
+                reading_attempt.c.started_at,
+                reading_attempt.c.finished_at,
+                reading_attempt.c.status,
+                reading_attempt.c.stop_reason,
+                reading_attempt.c.reason_code,
+                reading_attempt.c.sha256,
+                reading_attempt.c.filename,
+                reading_attempt.c.limits,
+                reading_attempt.c.metrics,
+            )
+            .where(reading_attempt.c.tender_id == tender_id)
+            .order_by(reading_attempt.c.attempt_no)
+        ).all()
+        return [
+            {
+                "id": str(row[0]),
+                "attempt_no": row[1],
+                "started_at": row[2].isoformat() if row[2] else None,
+                "finished_at": row[3].isoformat() if row[3] else None,
+                "status": row[4],
+                "stop_reason": row[5],
+                "reason_code": row[6],
+                "sha256": row[7],
+                "filename": row[8],
+                "limits": dict(row[9] or {}),
+                "metrics": dict(row[10] or {}),
+            }
+            for row in rows
+        ]
+
     # --- the stage checkpoints ---
 
     def get_stage(self, tender_id: str, section: str) -> Optional[dict]:
@@ -673,55 +774,62 @@ class LLMCache:
     The key is the hash of the input plus the model, the prompt and the
     schema that read it, so an answer is reused only when every one of those
     is the same.
+
+    The one-argument constructor is unchanged: provenance is optional. When a
+    tender and a reading are given, every entry the cache writes carries them,
+    so a reset can later tell a tender-derived entry from a legacy one - which
+    is retained and reported, never guessed (PLAN 4).
     """
 
-    def __init__(self, session: Session):
-        self.session = session
-
-    def get(
-        self, input_hash: str, model: str, prompt_version: str, schema_version: str
-    ) -> Optional[Any]:
-        row = self.session.execute(
-            select(llm_cache.c.output).where(
-                llm_cache.c.input_hash == input_hash,
-                llm_cache.c.model == model,
-                llm_cache.c.prompt_version == prompt_version,
-                llm_cache.c.schema_version == schema_version,
-            )
-        ).first()
-        return row[0] if row else None
-
-    def put(
+    def __init__(
         self,
-        input_hash: str,
-        model: str,
-        prompt_version: str,
-        schema_version: str,
-        output: Any,
-    ) -> None:
-        """Store an answer, replacing the one with the same key."""
-        existing = self.session.execute(
-            select(llm_cache.c.id).where(
-                llm_cache.c.input_hash == input_hash,
-                llm_cache.c.model == model,
-                llm_cache.c.prompt_version == prompt_version,
-                llm_cache.c.schema_version == schema_version,
-            )
-        ).first()
+        session: Session,
+        *,
+        tender_id: Optional[str] = None,
+        reading_id: Optional[str] = None,
+    ):
+        self.session = session
+        if tender_id is None and reading_id is None:
+            self.provenance: Optional[dict] = None
+        else:
+            self.provenance = {"tender_id": tender_id, "reading_id": reading_id}
+
+    def _entry(self, input_hash, model, prompt_version, schema_version):
+        return self.session.execute(select(llm_cache.c.id, llm_cache.c.output,
+            llm_cache.c.provenance).where(llm_cache.c.input_hash == input_hash,
+            llm_cache.c.model == model, llm_cache.c.prompt_version == prompt_version,
+            llm_cache.c.schema_version == schema_version).with_for_update()).first()
+
+    def get(self, input_hash: str, model: str, prompt_version: str, schema_version: str) -> Optional[Any]:
+        row = self._entry(input_hash, model, prompt_version, schema_version)
+        if row is None:
+            return None
+        provenance = cache_provenance(row[2], self.provenance)
+        if provenance != row[2]:
+            self.session.execute(update(llm_cache).where(llm_cache.c.id == row[0])
+                                 .values(provenance=provenance))
+        return row[1]
+
+    def put(self, input_hash: str, model: str, prompt_version: str,
+            schema_version: str, output: Any) -> None:
+        existing = self._entry(input_hash, model, prompt_version, schema_version)
+        provenance = cache_provenance(existing[2] if existing else None,
+                                      self.provenance, new=existing is None)
         if existing:
-            self.session.execute(
-                update(llm_cache)
-                .where(llm_cache.c.id == existing[0])
-                .values(output=output, created_at=datetime.now(timezone.utc))
-            )
+            self.session.execute(update(llm_cache).where(llm_cache.c.id == existing[0])
+                .values(output=output, created_at=datetime.now(timezone.utc), provenance=provenance))
             return
-        self.session.execute(
-            insert(llm_cache).values(
-                id=uuid.uuid4(),
-                input_hash=input_hash,
-                model=model,
-                prompt_version=prompt_version,
-                schema_version=schema_version,
-                output=output,
-            )
-        )
+        self.session.execute(insert(llm_cache).values(id=uuid.uuid4(), input_hash=input_hash,
+            model=model, prompt_version=prompt_version, schema_version=schema_version,
+            output=output, provenance=provenance))
+
+
+def cache_provenance(previous, usage, *, new=False):
+    """Only newly attributed entries can prove exclusive tender ownership."""
+    known = isinstance(previous, dict) and previous.get('version') == 2
+    usages = list(previous.get('usages', [])) if known else []
+    if usage and usage not in usages:
+        usages.append(dict(usage))
+    return {'version': 2, 'usages': usages,
+            'exclusively_tender': bool(usage and usage.get('tender_id') and
+                ((new and previous is None) or (known and previous.get('exclusively_tender'))))}

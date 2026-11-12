@@ -4842,3 +4842,8 @@ Batch prompt clause-batch-1 classifies same-source/page unresolved candidates wi
 ## Publish the ledger schema prerequisite without enabling cap runtime - 2026-11-12
 
 Reading-attempt migration0023 depends on the existing local migration0022. Publish the spend table schema and migration as a self-contained prerequisite; reset retains every spend row and only detaches deleted run references. This change neither enables spend caps nor includes unfinished spend runtime/configuration work. No migration is applied to the application database.
+
+
+## Reading attempts, current-limit resume and explicit rereading - 2026-11-12
+
+Track B integration: every ingest attempt freezes current numeric limits, reader/schema/app/policy versions, and records outcome/tokens/calls plus validation attempts. History start/finish use savepoints; errors cannot roll back successful extraction. Finished attempts cannot be rewritten. Explicit read-again locks the tender, rejects concurrent reads, forces local pipeline rebuilding, reuses valid response caches and supersedes requirements while retaining prior reports. Normal complete uploads still reuse their reading. Preflight separates current limits from historical attempts and redacts model/endpoint in HTTP and CLI output. The UI offers rereading completed/stopped tenders and shows source-context clauses separately. Cache provenance version2 accumulates all reads/writes by tender/attempt; untracked or corpus use permanently prevents exclusive ownership, and legacy attribution is never treated as proof. Cache selection/key is unchanged. Migration0023 is published after0022; not applied to the application database.

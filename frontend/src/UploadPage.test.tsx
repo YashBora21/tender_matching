@@ -6,6 +6,7 @@ import {
   getAttachments,
   getManufacturers,
   getRequirements,
+  readAgain,
   requirementsStreamUrl,
   startRun,
   uploadAttachment,
@@ -38,6 +39,7 @@ vi.mock('./api', () => {
     getAttachments: vi.fn(),
     getManufacturers: vi.fn(),
     getRequirements: vi.fn(),
+    readAgain: vi.fn(),
     requirementsStreamUrl: vi.fn(),
     startRun: vi.fn(),
     uploadAttachment: vi.fn(),
@@ -186,6 +188,7 @@ beforeEach(() => {
   vi.mocked(uploadAttachment).mockReset()
   vi.mocked(getManufacturers).mockReset()
   vi.mocked(getRequirements).mockReset()
+  vi.mocked(readAgain).mockReset()
   vi.mocked(requirementsStreamUrl).mockReset()
   vi.mocked(startRun).mockReset()
   vi.mocked(uploadTender).mockReset()
@@ -214,6 +217,18 @@ function chooseFile(container: HTMLElement, name = 'tender.pdf') {
 }
 
 describe('UploadPage', () => {
+  it('shows stored source context separately and permits rereading a complete tender', async () => {
+    vi.mocked(getRequirements).mockResolvedValue(read({
+      context_clauses: [requirementRow({ id: 'context-1', type: 'commercial',
+        source_role: 'cover', text: 'Synthetic delivery within 30 days' })],
+    }))
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+    chooseFile(container)
+    expect(await screen.findByText('Source context (1)')).toBeTruthy()
+    expect(screen.getByText('Synthetic delivery within 30 days')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Read this tender again' })).toBeTruthy()
+  })
+
   it('reads a tender, offers the corpus, and starts the chosen run', async () => {
     const started = vi.fn()
     const { container } = render(<UploadPage onStarted={started} />)
@@ -324,6 +339,39 @@ describe('UploadPage', () => {
     expect(screen.queryByRole('button', { name: 'Run the match' })).toBeNull()
     // One poll was enough: the state is final until the caller uploads again.
     expect(vi.mocked(getRequirements)).toHaveBeenCalledTimes(1)
+  })
+
+  it('resumes a stopped reading by asking for it again, not by re-uploading', async () => {
+    const globals = globalThis as { EventSource?: unknown }
+    globals.EventSource = FakeEventSource
+    vi.mocked(getRequirements).mockResolvedValue(
+      read({ status: 'rate_limited', error: 'the call budget stopped the read' }),
+    )
+    vi.mocked(readAgain).mockResolvedValue({ tender_id: 't1', status: 'queued' })
+
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+    chooseFile(container)
+
+    await waitFor(() => expect(FakeEventSource.last).not.toBeNull())
+    // The first attempt stops at the limit, so the page offers the resume.
+    const first = FakeEventSource.last as FakeEventSource
+    act(() => {
+      first.emit(
+        'end',
+        read({ status: 'rate_limited', error: 'the call budget stopped the read' }),
+      )
+    })
+    await screen.findByRole('button', { name: 'Read this tender again' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read this tender again' }))
+
+    // The resume action went to the read-again route with the tender's id.
+    await waitFor(() => expect(vi.mocked(readAgain)).toHaveBeenCalledWith('t1'))
+    // The initial upload is the only one: the resume asked for the read, not
+    // for the bytes a second time.
+    expect(vi.mocked(uploadTender)).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(FakeEventSource.last).not.toBe(first))
+    expect(FakeEventSource.last?.url).toContain('/api/tenders/t1/requirements/stream')
   })
 
   it('does not call an empty budget stop a tender with no requirements', async () => {

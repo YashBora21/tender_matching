@@ -5,6 +5,7 @@ import {
   getAttachments,
   getManufacturers,
   getRequirements,
+  readAgain,
   requirementsStreamUrl,
   startRun,
   uploadAttachment,
@@ -266,6 +267,34 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
     setError(null)
   }
 
+  /**
+   * Read the same tender again, under the limits in force now (step 5).
+   *
+   * A reading that stopped at a budget or a provider limit is resumed by
+   * asking for it, not by re-uploading bytes. The new attempt supersedes the
+   * saved requirements when it replaces them; the requirements, reports and
+   * reading history of earlier attempts are kept.
+   */
+  async function readAgainAction() {
+    if (!tender) return
+    setError(null)
+    follow.current = true
+    setWatching(true)
+    setPhase('reading')
+    try {
+      const answer = await readAgain(tender.tender_id)
+      await watch(answer.tender_id)
+    } catch (cause) {
+      if (!alive.current) return
+      setError(errorMessage(cause))
+      setPhase('idle')
+    }
+  }
+
+  const resumable =
+    (phase === 'rate_limited' || phase === 'incomplete' || phase === 'failed') &&
+    tender !== null
+
   const reading = phase === 'uploading' || phase === 'reading'
   /** The read is running *and* this page is still listening to it. */
   const following = reading && watching
@@ -386,6 +415,21 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
         {tender && <TenderSummary tender={tender} />}
       </section>
 
+      {!!tender?.context_clauses?.length && (
+        <section className="panel">
+          <details>
+            <summary>Source context ({tender.context_clauses.length})</summary>
+            <p>These clauses remain visible for review and do not block technical extraction.</p>
+            <ul>{tender.context_clauses.map((row) => (
+              <li key={row.id}>
+                <strong>{row.source_role ?? 'unknown'} · {row.type} · page {row.page}</strong>
+                <p>{row.source_text ?? row.text}</p>
+              </li>
+            ))}</ul>
+          </details>
+        </section>
+      )}
+
       {tender && phase !== 'uploading' && phase !== 'reading' && (
         <AttachmentsPanel tenderId={tender.tender_id} />
       )}
@@ -428,6 +472,18 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
                   : ' Review unresolved clauses, BOQ item assignments and extraction errors. After correcting the cause, upload the same tender to retry using valid cached answers.'}
           </p>
         </section>
+      )}
+
+      {(resumable || phase === 'ready') && (
+        <div className="actions">
+          <button type="button" className="button" onClick={() => void readAgainAction()}>
+            Read this tender again
+          </button>
+          <span className="muted">
+            A fresh reading under the current limits. It supersedes the saved
+            requirements; earlier attempts, reports and reading history stay.
+          </span>
+        </div>
       )}
 
       {(phase === 'ready' || phase === 'rate_limited') && tender && (
