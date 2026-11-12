@@ -318,13 +318,23 @@ describe('UploadPage', () => {
 
     chooseFile(container)
 
-    await screen.findByText(/stopped at the provider's limit/)
+    await screen.findByText(/reached a processing limit/)
     expect(screen.getByText(/retry in 24.9s/)).toBeTruthy()
-    // The requirements that were read are listed, and the match is offered.
     await screen.findByText('Choose manufacturers')
     expect(screen.getByRole('button', { name: 'Run the match' })).toBeTruthy()
     // One poll was enough: the state is final until the caller uploads again.
     expect(vi.mocked(getRequirements)).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not call an empty budget stop a tender with no requirements', async () => {
+    vi.mocked(getRequirements).mockResolvedValue(read({
+      status: 'rate_limited', requirements: [],
+      counts: { items: 1, requirements: 0, flagged: 0 }, error: 'Synthetic call budget exhausted',
+    }))
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+    chooseFile(container)
+    await screen.findByText('No requirements have been published yet')
+    expect(screen.queryByText(/The tender was read; the documents it contains state no technical requirement/)).toBeNull()
   })
 
   it('names an incomplete read, and refuses to run it', async () => {
@@ -387,6 +397,18 @@ describe('UploadPage', () => {
     expect(
       screen.queryByText(/Supply the missing document above/),
     ).toBeNull()
+  })
+
+  it('does not prescribe a missing file for interpretation failures', async () => {
+    vi.mocked(getRequirements).mockResolvedValue(read({
+      status: 'incomplete', reason_code: null,
+      error: 'Technical clauses have no extracted attributes',
+    }))
+    const { container } = render(<UploadPage onStarted={() => {}} />)
+    chooseFile(container)
+    await screen.findByText('Technical clauses have no extracted attributes')
+    expect(screen.getByText(/Review unresolved clauses, BOQ item assignments/)).toBeTruthy()
+    expect(screen.queryByText(/Supply the missing document above/)).toBeNull()
   })
 
   it('fills the list from the stream while the tender is still being read', async () => {

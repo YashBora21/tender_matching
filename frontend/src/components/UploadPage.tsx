@@ -158,8 +158,8 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
   /**
    * Follow the tender as it is read.
    *
-   * The requirements are pushed as each one is read (D-82), so the page fills
-   * in instead of waiting for the last one. The plain route is the fallback:
+   * The stream publishes the latest completed or paused checkpoint.
+   * The plain route is the fallback:
    * a browser without `EventSource`, or a stream that breaks mid-read, still
    * answers with everything read so far.
    */
@@ -419,9 +419,13 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
           <p className="muted">
             Running it now would be refused: a requirement nobody read is not a requirement the
             manufacturer fails.
-            {tender.reason_code === 'no_requirements_stated'
-              ? ''
-              : ' Supply the missing document above, then upload the same file again; the reading runs on from what is already stored.'}
+            {tender.reason_code === 'no_specification_found'
+              ? ' Add the missing specification above, then upload the same tender again.'
+              : tender.reason_code === 'specification_unreadable'
+                ? ' Improve the scan or OCR reading, then retry the same tender.'
+                : tender.reason_code === 'no_requirements_stated'
+                  ? ''
+                  : ' Review unresolved clauses, BOQ item assignments and extraction errors. After correcting the cause, upload the same tender to retry using valid cached answers.'}
           </p>
         </section>
       )}
@@ -430,8 +434,8 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
         <>
           {phase === 'rate_limited' && (
             <section className="panel">
-              <Notice variant="warning" title="The reading stopped at the provider's limit">
-                {tender.error ?? 'The model provider refused further calls.'}
+              <Notice variant="warning" title="The reading reached a processing limit">
+                {tender.error ?? 'The configured budget or provider limit stopped further calls.'}
               </Notice>
               <p className="muted">
                 The requirements below are the ones that were read before the limit. Nothing was
@@ -443,10 +447,11 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
           )}
           {tender.requirements.length === 0 ? (
             <section className="panel">
-              <h2>No technical requirements were extracted</h2>
+              <h2>{phase === 'rate_limited' ? 'No requirements have been published yet' : 'No technical requirements were extracted'}</h2>
               <p className="muted">
-                The tender was read; the documents it contains state no technical requirement
-                the pipeline could extract. There is nothing to match.
+                {phase === 'rate_limited'
+                  ? 'Reading stopped before any requirements were saved. Check the displayed budget or provider limit, then upload the same tender to resume.'
+                  : 'The tender was read; the documents it contains state no technical requirement the pipeline could extract. There is nothing to match.'}
               </p>
               <button type="button" className="button" onClick={reset}>
                 Upload another tender
@@ -673,8 +678,8 @@ function LiveRequirements({ tender }: { tender: TenderRequirements }) {
       <h2>Requirements read so far</h2>
       <p className="muted">
         {read === 0
-          ? 'The pages and the bill of quantities are being read. Requirements appear here as they are extracted.'
-          : `${plural(read, 'requirement', 'requirements')} read so far. The list grows as the reading continues; it is complete only when the reading stops.`}
+          ? 'The pages and bill of quantities are being read. Results appear when this reading attempt finishes or pauses.'
+          : `${plural(read, 'requirement', 'requirements')} in the last saved reading attempt. Updated results appear when the current attempt finishes or pauses.`}
       </p>
       {read > 0 && (
         <ul className="compact-list live-list">
