@@ -182,7 +182,7 @@ class CountingClient:
                     "type": "technical",
                     "attribute": "body material",
                     "operator": "eq",
-                    "value": "cast carbon steel" if "cast carbon steel" in user.casefold() else None,
+                    "value": user,
                     "unit": None,
                     "mandatory": True,
                 }
@@ -772,7 +772,7 @@ class FlakyClient:
                     "type": "technical",
                     "attribute": "body material",
                     "operator": "eq",
-                    "value": "cast carbon steel" if "cast carbon steel" in user.casefold() else None,
+                    "value": user,
                     "unit": None,
                     "mandatory": True,
                 }
@@ -793,7 +793,7 @@ def test_a_line_the_model_could_not_read_is_flagged_not_dropped(tmp_path, monkey
         "T1", directory, attachments, repo=FakeRepo(), cache=FakeCache(), client=client
     )
 
-    assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
+    assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_FAILED
     assert result.rate_limited is False
     # The first line was kept and flagged; the second was read normally.
     assert len(result.requirements) == 2
@@ -891,12 +891,8 @@ def test_a_rate_limited_stage_is_read_again_on_the_next_run(tmp_path, monkeypatc
 # --- the live requirement list (D-82) -------------------------------------
 
 
-def test_the_extraction_writes_what_it_has_read_so_far(tmp_path, monkeypatch):
-    """The UI shows the requirements as they are read, not after the last one.
-
-    Each write is a complete snapshot committed while the stage runs: an
-    uncommitted row is a requirement the streaming reader cannot see.
-    """
+def test_extraction_commits_cache_but_publishes_one_requirement_revision(tmp_path, monkeypatch):
+    """Synthetic rows publish once, while cache transactions remain resumable."""
     attachments, directory = _attachments(tmp_path)
     monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
     monkeypatch.setattr(pipeline, "time", Clock(step=2.0))
@@ -907,8 +903,8 @@ def test_the_extraction_writes_what_it_has_read_so_far(tmp_path, monkeypatch):
     )
 
     assert result.failure is None
-    # One write per requirement read, then the final complete set.
-    assert repo.requirement_writes == [1, 2, 2]
+    # No growing full-list snapshots or superseded progress revisions.
+    assert repo.requirement_writes == [2]
     assert repo.session.commits == 2
 
 
@@ -927,9 +923,8 @@ def test_the_progress_write_is_no_more_often_than_the_interval(tmp_path, monkeyp
     )
 
     assert result.failure is None
-    # The second requirement is read inside the interval, so it is only in the
-    # final write: a partial snapshot exists to be shown, not to be written.
-    assert repo.requirement_writes == [1, 2]
+    # Cache commits are throttled; final requirements are written once.
+    assert repo.requirement_writes == [2]
     assert repo.session.commits == 1
 
 
@@ -1211,3 +1206,71 @@ def test_wrapper_change_invalidates_reading_but_not_boq_items():
     assert before[STAGE_ITEMS] == after[STAGE_ITEMS]
     assert before[STAGE_REQUIREMENTS] != after[STAGE_REQUIREMENTS]
     assert before[STAGE_EXTRACTION] != after[STAGE_EXTRACTION]
+
+
+def test_source_extraction_failure_is_retried_instead_of_cached_as_done(tmp_path, monkeypatch):
+    """Synthetic malformed response must not strand an unchanged tender forever."""
+    attachments, directory = _attachments(tmp_path)
+    monkeypatch.setattr(pipeline, '_read_specification', lambda a, d: _spec_rows())
+    repo = FakeRepo()
+    failed = run_pipeline('T1', directory, attachments, repo=repo,
+                          cache=FakeCache(), client=CountingClient(answer={'invalid': []}))
+    assert failed.stages[STAGE_EXTRACTION].status == pipeline.STATUS_FAILED
+    valid_client = CountingClient()
+    retried = run_pipeline('T1', directory, attachments, repo=repo,
+                           cache=FakeCache(), client=valid_client)
+    assert retried.stages[STAGE_EXTRACTION].status != pipeline.STATUS_SKIPPED
+    assert valid_client.calls > 0
+    assert retried.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
+    assert not any('source_coverage_gap' in (r.review_reason or '') for r in retried.requirements)
+
+
+def test_output_budget_change_rechecks_extraction_stage(monkeypatch):
+    args = dict(prompt_version='synthetic', schema_version='synthetic',
+                model='synthetic', vocabulary_hash='synthetic')
+    monkeypatch.setenv('LLM_MAX_TOKENS', '512')
+    get_settings.cache_clear()
+    before = stage_keys([], **args)
+    monkeypatch.setenv('LLM_MAX_TOKENS', '4096')
+    get_settings.cache_clear()
+    after = stage_keys([], **args)
+    assert before[STAGE_REQUIREMENTS] == after[STAGE_REQUIREMENTS]
+    assert before[STAGE_EXTRACTION] != after[STAGE_EXTRACTION]
+
+
+def test_catalogue_absence_does_not_prevent_tender_extraction(tmp_path, monkeypatch):
+    """Synthetic source extraction is independent of manufacturer inventory."""
+    monkeypatch.setenv('OCR_BACKEND', 'paddle')
+    get_settings.cache_clear()
+    monkeypatch.setattr(pipeline, '_reader_version', lambda: 'synthetic-paddle-reader')
+    monkeypatch.setattr(pipeline, '_read_specification', lambda a, d: _spec_rows())
+    def forbidden(*args, **kwargs):
+        raise AssertionError('vendor catalogue queries belong to matching')
+    monkeypatch.setattr('app.repositories.part_coverage.source_part', forbidden)
+    monkeypatch.setattr('app.repositories.part_coverage.indexed_part_manufacturers', forbidden)
+    attachments, directory = _attachments(tmp_path)
+    client = CountingClient()
+    result = run_pipeline('T1', directory, attachments, repo=FakeRepo(),
+                          cache=FakeCache(), client=client)
+    assert client.calls == 2
+    assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
+
+
+@pytest.mark.parametrize('count', [2, 100, 332])
+def test_progress_never_rewrites_the_growing_requirement_list(tmp_path, monkeypatch, count):
+    """Synthetic large tender: constant full-list writes, independent of clause count."""
+    attachments, directory = _attachments(tmp_path)
+    boq = directory / 'raw' / 'boq.csv'
+    boq.write_text('Item Number,Item Title,Item Description,Item Quantity,Unit of Measure\n' +
+        ''.join(f'{i+1},Synthetic valve {i},Synthetic body material,1,pieces\n' for i in range(count)), encoding='utf-8')
+    attachments[0]['sha256'] = hashlib.sha256(boq.read_bytes()).hexdigest()
+    rows = [{'row':i+1,'page':1,'number':str(i+1),'title':f'Synthetic valve {i}',
+             'description':f'body material SYNTHETIC-GRADE-{i}', 'page_tag':'technical'}
+            for i in range(count)]
+    monkeypatch.setattr(pipeline, '_read_specification', lambda a,d: SpecificationRead(rows=rows))
+    monkeypatch.setattr(pipeline, 'time', Clock(step=2.0))
+    repo=FakeRepo()
+    result=run_pipeline('T1',directory,attachments,repo=repo,cache=FakeCache(),client=CountingClient())
+    assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
+    assert repo.requirement_writes == [count]
+    assert repo.session.commits == count

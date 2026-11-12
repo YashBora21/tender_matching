@@ -279,7 +279,6 @@ def stage_keys(
     model: str,
     vocabulary_hash: str,
     fetch_config: str = "",
-    corpus_fingerprint: str = "",
     wrapper_fingerprint: str = "",
     alias_fingerprint: str = "",
 ) -> dict[str, str]:
@@ -330,7 +329,8 @@ def stage_keys(
     )
 
     # The extraction: the requirements, and what read them.
-    extraction_parts = ["extraction", requirements_key, model, prompt_version, schema_version, corpus_fingerprint]
+    extraction_parts = ["extraction", requirements_key, model, prompt_version, schema_version,
+                        "source-first-2", get_settings().llm_max_tokens]
     from app.services.requirement.coverage import POLICY_VERSION
     extraction_parts.extend((POLICY_VERSION, vocabulary_hash))
     classification = _classification_signature()
@@ -435,11 +435,6 @@ def run_pipeline(
             _save_failed(repo, result, settings)
         return result
 
-    corpus_fingerprint = ''
-    if repo is not None and settings.ocr_backend == 'paddle':
-        from app.repositories.corpus import corpus_hash
-        corpus_fingerprint = corpus_hash(repo.session)
-
     from app.services.tender.collect import read_manifest
     wrapper_fingerprint = read_manifest(tender_dir / 'manifest.json').get('wrapper_sha256') or ''
     aliases = []
@@ -453,7 +448,6 @@ def run_pipeline(
         model=settings.llm_model or "",
         vocabulary_hash=_vocabulary_hash(),
         fetch_config=settings.fetch_allowed_domains,
-        corpus_fingerprint=corpus_fingerprint,
         wrapper_fingerprint=wrapper_fingerprint,
         alias_fingerprint=content_hash(sorted(aliases, key=lambda row: row['alias'])),
     )
@@ -465,6 +459,9 @@ def run_pipeline(
     )
 
     def changed(stage: str) -> bool:
+        if stage == STAGE_REQUIREMENTS and previous_status.get(STAGE_EXTRACTION) == STATUS_FAILED:
+            # Rebuild clean source records instead of inheriting failed-attempt flags.
+            return True
         if force or keys[stage] != previous.get(stage):
             return True
         # A stage that stopped short did not finish, even though it read the
@@ -668,20 +665,6 @@ def run_pipeline(
             _persist(repo, result, settings)
         return result
     # --- the extraction (the only stage that calls the LLM) ---
-    if repo is not None and settings.ocr_backend == 'paddle':
-        from app.repositories.part_coverage import source_part, indexed_part_manufacturers
-        repo.session.info['part_catalogue_evidence'] = {}
-        item_coverage = {}
-        for record in result.requirements:
-            part = source_part(repo.session, {'source_table_id': record.source_table_id,
-                                              'source_row_id': record.source_row_id})
-            if part:
-                record.corpus_evidence_found = bool(indexed_part_manufacturers(repo.session, part))
-                if record.item_id:
-                    item_coverage.setdefault(record.item_id, []).append(record.corpus_evidence_found)
-        for record in result.requirements:
-            if record.item_id in item_coverage and not any(item_coverage[record.item_id]):
-                record.corpus_evidence_found = False
     extraction_state = StageState(
         name=STAGE_EXTRACTION,
         key=keys[STAGE_EXTRACTION],
@@ -701,14 +684,11 @@ def run_pipeline(
             int(getattr(client, "retries", 0) or 0),
         )
         has_calls = getattr(client, "calls", None) is not None
-        # What has been read so far is written down while the stage runs, so a
-        # caller can watch the requirements appear instead of waiting for the
-        # last one (D-82). The writes are throttled, and each is a complete
-        # snapshot of the requirements read up to that moment: the table never
-        # holds half a requirement.
+        # Commit small response-cache entries during extraction; publish requirement
+        # revisions only at completion or a resumable stop.
         last_write = 0.0
 
-        def report(read_so_far) -> None:
+        def checkpoint_cache(_read_so_far) -> None:
             nonlocal last_write
             if repo is None:
                 return
@@ -716,25 +696,10 @@ def run_pipeline(
             if now - last_write < settings.stream_interval_seconds:
                 return
             last_write = now
-            repo.replace_requirements(
-                tender_id,
-                [
-                    to_stored(
-                        requirement,
-                        tender_id,
-                        model=settings.llm_model,
-                        prompt_version=_prompt_version(),
-                        schema_version=settings.schema_version,
-                    )
-                    for requirement in read_so_far
-                ],
-            )
-            # Committed now: the reader of the live list is another session,
-            # and a write it cannot see is a requirement it cannot show.
             repo.session.commit()
 
         extracted, calls, hits, limited, limit_detail = _extract_all(
-            result.requirements, cache=cache, client=client, on_read=report
+            result.requirements, cache=cache, client=client, on_read=checkpoint_cache
         )
         result.requirements = extracted
         # Source position and subject can correct proposed types; numeric recovery
@@ -769,7 +734,11 @@ def run_pipeline(
             result.rate_limited = True
             result.rate_limited_detail = extraction_state.detail
         else:
-            extraction_state.status = STATUS_DONE
+            from app.services.requirement.coverage import MARKER
+            gaps = sum(MARKER in (record.review_reason or '') for record in result.requirements)
+            extraction_state.status = STATUS_FAILED if gaps else STATUS_DONE
+            if gaps:
+                extraction_state.detail = f'{gaps} source clauses remain unextracted; retry uses valid cached answers'
     else:
         extraction_state.status = STATUS_SKIPPED
     extraction_state.rows = len(result.requirements)
@@ -1126,10 +1095,6 @@ def _extract_all(
             apply_clause_type(requirement)
             requirement.source_text = original_source
             added = [requirement]
-        elif requirement.corpus_evidence_found is False:
-            requirement.review_required = True
-            requirement.review_reason = '; '.join(part for part in (requirement.review_reason, 'No indexed catalogue evidence for the required source part; comparison awaits applicable catalogues.') if part)
-            added = [requirement]
         elif requirement.review_required and not requirement.item_id and not (
             get_settings().requirement_classification_enabled
             and requirement.requirement_type is RequirementType.UNKNOWN
@@ -1244,7 +1209,10 @@ def _extract_one(
     if cache is not None:
         cached = cache.get(input_hash, model, prompt_version, schema_version)
         if cached is not None:
-            return [_as_record(item) for item in cached], False, True, None
+            from app.services.requirement.coverage import uncovered_tokens
+            records = [_as_record(item) for item in cached]
+            if records and not uncovered_tokens(readable, records):
+                return records, False, True, None
 
     outcome = extract_requirements(
         readable,
@@ -1268,7 +1236,8 @@ def _extract_one(
         extracted.page_tag = requirement.page_tag
         extracted.source_section = requirement.source_section
         retype(extracted)
-    if cache is not None and outcome.requirements:
+    from app.services.requirement.coverage import uncovered_tokens
+    if cache is not None and outcome.requirements and not uncovered_tokens(readable, outcome.requirements):
         cache.put(
             input_hash,
             model,

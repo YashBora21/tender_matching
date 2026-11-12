@@ -125,7 +125,6 @@ class RequirementRecord:
     review_reason: Optional[str] = None
     source_table_id: Optional[str] = None
     source_row_id: Optional[str] = None
-    corpus_evidence_found: Optional[bool] = None
     source_text: Optional[str] = None
     normalization: Optional[dict] = None
 

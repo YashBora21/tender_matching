@@ -39,14 +39,14 @@ class Cache:
     def put(self,*args):self.data[args[:-1]]=args[-1]
 
 
-def test_cache_hits_keep_source_facet_gaps_and_separate_item_identity():
+def test_incomplete_facets_are_not_cached_and_item_identity_is_preserved():
     cache=Cache();client=Client();text='size 25 mm surface condition ZETA'
     for item in ('1','2'):
         rows,_,_,_,_=_extract_all([RequirementRecord(text=text,item_id=item)],cache=cache,client=client)
         assert rows[0].item_id==item and rows[0].source_text==text
         assert rows[0].review_required and MARKER in rows[0].review_reason
         assert completion_gaps({},[],[],[vars(rows[0])])
-    assert client.calls==1
+    assert client.calls==2 and not cache.data
 
 
 def test_empty_output_retains_the_whole_source_as_unknown():
@@ -101,3 +101,14 @@ def test_unreadable_clause_remains_a_gap_even_beside_valid_facts(text):
     assert len(rows)==1 and rows[0].source_text==text
     assert MARKER in rows[0].review_reason
     assert completion_gaps({},[],[],[vars(fact('pressure','12','bar')),vars(rows[0])])
+
+
+def test_legacy_incomplete_cached_answer_is_not_reused():
+    class LegacyCache(Cache):
+        def get(self, *key):
+            return [{'text':'size 25 mm','item_id':'1','type':'technical',
+                     'attribute':'size','operator':'eq','value':'25','unit':'mm','mandatory':True}]
+    client=Client()
+    _,calls,hits,_,_=_extract_all([RequirementRecord(
+        text='size 25 mm surface condition ZETA',item_id='1')],cache=LegacyCache(),client=client)
+    assert calls==1 and hits==0 and client.calls==1

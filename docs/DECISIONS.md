@@ -4747,3 +4747,14 @@ documented non-setting list.
 
 *Verified:* the image builds and the compose stack starts, runs the migrations to
 `0022_llm_spend` and answers `/api/health`; recorded in the gate 4 audit.
+
+
+## Source-first extraction and bounded persistence — 2026-11-12
+
+Separate tender extraction from manufacturer catalogue availability. Remove the catalogue preflight skip from ingestion; matching keeps its applicable-corpus preflight and still abstains when evidence is absent. Extraction stage identity now uses source-first-2 and the configured response-token limit, not a corpus fingerprint. Requirement prompt/schema and valid response-cache keys stay unchanged.
+
+Cache only source-complete extracted answers; validate coverage on old cache hits so a partial cached response cannot permanently strand the same source. Record extraction coverage/parse failures as a failed extraction stage eligible for retry; rebuild clean local source records for such retries to avoid inheriting failed-attempt flags. Valid complete cached answers remain reusable. Never relabel an unresolved reading as successful to satisfy a latency target.
+
+Progress commits persist only small response-cache entries, not successively larger full requirement revisions. Publish the full requirement snapshot at the end of an attempt or a resumable budget stop. Keep final evidence, old revisions, page accounting and run history. A measured rollback-only test of 332-row snapshots took 0.1358/0.1050/0.0822 seconds excluding commit; persistence is overhead, not a demonstrated explanation of the entire runtime. Synthetic 2/100/332-clause tests require exactly one full-list write.
+
+Replace the local smoke profile (one call, 2000 total tokens, 512 response tokens, no retry) with bounded 200-call/400000-token/4096-response-token/one-retry settings; document the same example profile. Existing persistent monetary-cap work is separate and is not enabled or claimed validated here. No paid provider requests are made in this repair. UI recovery advice distinguishes source-file problems from interpretation failures, and empty budget stops no longer claim the source states no requirements.
