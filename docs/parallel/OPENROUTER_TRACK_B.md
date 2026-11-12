@@ -55,9 +55,9 @@ Do not implement Track A's extraction/classification/completion changes.
 ```powershell
 New-Item -ItemType Directory -Force .\backups | Out-Null
 $BackupFile = ".\backups\tender-before-reset-$(Get-Date -Format yyyyMMdd-HHmmss).dump"
-docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc --no-owner --no-acl -f /tmp/tender-before-reset.dump'
-docker compose cp db:/tmp/tender-before-reset.dump $BackupFile
-docker compose exec -T db pg_restore --list /tmp/tender-before-reset.dump
+docker exec tender-pg-local sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc --no-owner --no-acl -f /tmp/tender-before-reset.dump'
+docker cp tender-pg-local:/tmp/tender-before-reset.dump $BackupFile
+docker exec tender-pg-local pg_restore --list /tmp/tender-before-reset.dump
 Get-FileHash -Algorithm SHA256 -LiteralPath $BackupFile
 ```
 
