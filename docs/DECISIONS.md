@@ -4792,3 +4792,8 @@ LLM_MAX_RETRIES is one shared retry allowance per JSON request, including transp
 ## Whole-clause quote prompt alignment — 2026-11-12
 
 Three user-approved external clause tests used 968 input and 115 output tokens. Warranty was classified commercial; an isolated salutation remained unknown; a partial letterhead quote was rejected. Classifier prompt4 now explicitly requests the entire clause, including labels and punctuation, for commercial/eligibility/informational types, matching its existing validator. Prompt signature invalidates classifier response-cache keys. No additional external calls, stored tender mutation or local classifier enablement. Full-tender completion remains unvalidated.
+
+
+## Logical form regions, nearby context and table-cell evidence — 2026-11-12
+
+Reader14 preserves unnumbered multiline table cells as one source region; numbered specification rows retain parameter lines. Classifiers receive adjacent clauses only from the same document/page/section, subject to the existing request-size bound. Nearby sources are context, never substitute citations or guessed BOQ assignments; store/cache them alongside each source. Classifier cache keys already include the context envelope. Requirement prompt7 requests uniquely locatable verbatim quotes and original identifier spacing; signature/version invalidate extraction cache. Exact source-header attributes must additionally be supported by their corresponding table cell, even if a broad row quote passes. No verifier relaxation.

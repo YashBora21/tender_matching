@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 
 # The version of the prompt below. A change to the prompt is a change to
 # every answer, so it is part of the cache key (FR-12, FR-34).
-PROMPT_VERSION = "6"
+PROMPT_VERSION = "7"
 
 # The types a clause can be, and what happens to each (FR-14). Only the
 # technical and certification ones go to matching; the commercial and
@@ -123,6 +123,11 @@ header wording for open-vocabulary attributes. Copy source_quote exactly from
 source_text, not from the JSON syntax or a generated paraphrase. Account for all
 nonempty cells; blank remarks need no entry. Physical units belong in unit; codes
 and ordering units remain values, with unit=null when not a physical measurement.
+Every source_quote must locate the field uniquely within source_text. If a short
+value occurs more than once, include enough verbatim neighbouring text to identify
+its occurrence. Preserve spacing and punctuation in identifiers and descriptions;
+do not repair apparent source typos. A broad unique quote must still support the
+complete proposed value; never shorten a range or change an identifier.
 """
 
 SYSTEM_PROMPT += (
@@ -217,7 +222,19 @@ def extract_requirements(
     from app.comparison.units import parse_unit
     for item in parsed.requirements:
         span = quote_span(readable, item.source_quote)
-        if span is None or not span_holds(readable, span, item.value):
+        cell_supported = True
+        if table_context and item.attribute:
+            headers = table_context.get('headers', [])
+            cells = table_context.get('cells', [])
+            indices = [index for index, header in enumerate(headers)
+                       if ' '.join(str(header).casefold().split()) == ' '.join(item.attribute.casefold().split())]
+            if indices:
+                from app.services.requirement.evidence import span_supports
+                cell_supported = len(indices) == 1 and indices[0] < len(cells)
+                if cell_supported:
+                    cell = str(cells[indices[0]] or '')
+                    cell_supported = span_supports(cell, (0, len(cell)), item.value)
+        if span is None or not span_holds(readable, span, item.value) or not cell_supported:
             result.rejected.append(item.text)
             continue
         unresolved_unit = bool(item.unit and parse_unit(item.unit) is None)

@@ -157,3 +157,26 @@ def test_table_context_survives_extraction_cache_and_storage():
         stored = to_stored(records[0], 'synthetic-tender', model='synthetic',
                            prompt_version='synthetic', input_hash='synthetic')
         assert stored.normalization['source_context']['table'] == context
+
+
+def test_nearby_source_context_survives_storage_and_cache():
+    from app.services.tender.pipeline import _as_dict, _as_record
+    row=fact('Synthetic field','Synthetic value')
+    row.source_neighbors=['Synthetic preceding sentence.','Synthetic following sentence.']
+    assert _as_record(_as_dict(row)).source_neighbors==row.source_neighbors
+    stored=to_stored(row,'synthetic',model='synthetic',prompt_version='synthetic',input_hash='synthetic')
+    assert stored.normalization['source_context']['nearby_source_clauses']==row.source_neighbors
+
+
+@pytest.mark.parametrize('value,accepted',[('7',True),('42',False)])
+def test_full_row_quote_cannot_borrow_value_from_another_column(value, accepted):
+    from app.services.requirement.extract import extract_requirements
+    class TableClient:
+        def complete_json(self,system,user):
+            return {'requirements':[{'text':'Synthetic quantity','source_quote':'42 7',
+                'attribute':'Qty','value':value,'unit':None,'type':'commercial',
+                'operator':'eq','mandatory':True}]}
+    outcome=extract_requirements('42 7','synthetic',client=TableClient(),
+        table_context={'headers':['Synthetic part','Qty'],'cells':['42','7']})
+    assert bool(outcome.requirements)==accepted
+    assert bool(outcome.rejected)!=accepted

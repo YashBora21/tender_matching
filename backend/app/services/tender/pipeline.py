@@ -565,6 +565,7 @@ def run_pipeline(
                 RequirementRecord(
                     text=row.get("description", ""),
                     source_text=row.get("row_text") or row.get("description", ""),
+                    source_neighbors=row.get('source_neighbors'),
                     table_context=({"headers": row["source_headers"], "cells": row["source_cells"]}
                                    if row.get("source_headers") and row.get("source_cells") else None),
                     item_id="",
@@ -965,6 +966,10 @@ def _read_package(tender_id, directory, attachments, specification, repo):
         for page in read.pages:
             page.source_key, page.attachment_id = source_key, attachment_id
             page_rows = [row for row in read.rows if row['page'] == page.page]
+            for index, row in enumerate(page_rows):
+                row['source_neighbors'] = [candidate.get('row_text') or candidate['description']
+                    for candidate in page_rows[max(0, index - 1):index + 2]
+                    if candidate is not row and candidate.get('title') == row.get('title')]
             context = page.source_context
             if context is None:
                 context = {'headers': next((row['source_headers'] for row in page_rows if row.get('source_headers')), ['Field', 'Value'] if any(row.get('source_cells') for row in page_rows) else []),
@@ -1047,7 +1052,9 @@ def _classification_signature():
 
 def _classify_unscoped(readable, requirement, *, cache=None, client=None):
     from app.services.requirement.classify import classify_clause
-    label, called, hit, error = classify_clause(readable, context={'section': english_half(requirement.source_section or '')}, cache=cache, client=client)
+    label, called, hit, error = classify_clause(readable, context={
+        'section': english_half(requirement.source_section or ''),
+        'nearby_source_clauses': [english_half(text) for text in requirement.source_neighbors or []]}, cache=cache, client=client)
     if label is None:
         return None, called, hit, error
     from app.services.tender.classify import classify_page, NUMBER_WITH_UNIT
@@ -1177,6 +1184,7 @@ def _extract_all(
                     added.append(requirement)
                 for extracted in outcome:
                     extracted.table_context = requirement.table_context
+                    extracted.source_neighbors = requirement.source_neighbors
                     extracted.source_text = original_source
                     extracted.page_tag = requirement.page_tag
                     extracted.source_section = requirement.source_section
@@ -1273,6 +1281,7 @@ def _as_dict(item: RequirementRecord) -> dict:
         "source_section": item.source_section,
         "normalization": item.normalization,
         "table_context": item.table_context,
+        "source_neighbors": item.source_neighbors,
         "span": list(item.source_span) if item.source_span else None,
         "type": item.requirement_type.value,
         "attribute": item.attribute,
@@ -1304,6 +1313,7 @@ def _as_record(item) -> RequirementRecord:
         source_section=item.get("source_section"),
         normalization=item.get("normalization"),
         table_context=item.get("table_context"),
+        source_neighbors=item.get('source_neighbors'),
         item_id="",
         requirement_type=_type_of(item.get("type", "unknown")),
         attribute=item.get("attribute"),
@@ -1364,6 +1374,7 @@ def _stored_records(repo, tender_id: str) -> list[RequirementRecord]:
                 page_tag=tag,
                 normalization=row.get("normalization"),
                 table_context=normalization.get("source_context", {}).get("table"),
+                source_neighbors=normalization.get('source_context', {}).get('nearby_source_clauses'),
                 confidence=row.get("confidence"),
                 review_required=bool(row.get("review_required")),
                 review_reason=reason,
@@ -1421,5 +1432,6 @@ def to_stored(
         source_row_id=requirement.source_row_id,
         source_span=requirement.source_span,
         normalization=dict(requirement.normalization or {},
-                           source_context={"page_tag": requirement.page_tag, "table": requirement.table_context}),
+                           source_context={"page_tag": requirement.page_tag, "table": requirement.table_context,
+                                           "nearby_source_clauses": requirement.source_neighbors}),
     )

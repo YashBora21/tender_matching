@@ -71,7 +71,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "13"
+READER_VERSION = "14"
 
 
 @dataclass
@@ -127,6 +127,7 @@ class RequirementRecord:
     source_row_id: Optional[str] = None
     source_text: Optional[str] = None
     table_context: Optional[dict] = None
+    source_neighbors: Optional[list[str]] = None
     normalization: Optional[dict] = None
 
 
@@ -905,7 +906,7 @@ def _read_tables(
             # distance 122mm" is four, and as one it parsed no attribute at all
             # (D-146). Each line is a row of its own, with the row's own
             # provenance - page, item number and section are unchanged.
-            for line in description.split("\n"):
+            for line in (description.split("\n") if number else [" ".join(description.split())]):
                 rows.append(
                     {
                         "row": index,
@@ -1205,6 +1206,7 @@ def assign_to_items(
             RequirementRecord(
                 text=row["description"],
                 source_text=row.get("row_text") or row["description"],
+                source_neighbors=row.get('source_neighbors'),
                 table_context=({"headers": row["source_headers"], "cells": row["source_cells"]}
                                if row.get("source_headers") and row.get("source_cells") else None),
                 item_id=item.item_id,

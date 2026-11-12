@@ -709,3 +709,15 @@ def test_wrapped_description_uses_complete_row_for_exact_item_assignment():
                                                 TenderItem(item_id='2',title='Synthetic other')])
     assert not unresolved and len(assigned)==2
     assert all(row.item_id=='1' for row in assigned)
+
+
+def test_unnumbered_multiline_cell_is_one_source_region(tmp_path):
+    """Synthetic form cell: physical line wraps do not create separate clauses."""
+    path=tmp_path/'synthetic-form.pdf'
+    _multiline_table_pdf(path,[['Sr. No.','Item','Descriptions','Qty','Unit'],
+        ['','Synthetic declaration','Synthetic supplier undertakes that\nall supplied goods are covered.','1','Nos'],
+        ['','Synthetic declaration','Synthetic second statement.','2','Nos']])
+    read=read_specification(path)
+    descriptions=[row['description'] for row in read.rows]
+    assert any('undertakes that all supplied goods' in text for text in descriptions)
+    assert not any(text=='all supplied goods are covered.' for text in descriptions)
