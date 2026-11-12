@@ -4776,3 +4776,9 @@ Source coverage v2 may count an open-vocabulary value only when its source span 
 ## Incomplete-report admission — 2026-11-12
 
 Supersede the earlier D8/D75 allowance for starting a new manufacturer comparison from rate-limited ingestion: finish extraction first. Historical incomplete reports remain readable but do not display normal manufacturer rankings in React/HTML.
+
+## Bounded malformed JSON retries and source-scope repair — 2026-11-12
+
+Retry malformed JSON using LLM_MAX_RETRIES, with the unchanged source/prompt and existing call/token checks on every attempt; permanent HTTP errors still escape immediately. Reader13 preserves complete wrapped row descriptions for exact BOQ title matching and preserves full row/header context on unassigned records. No identifier inference or fuzzy assignment is added.
+
+Clause classifier version3 requires a complete source quote before proposing nontechnical exclusion. With the existing opt-in classification setting, source-wide commercial/eligibility/informational readings may populate clause type without assigning a BOQ item, only when local technical cues/physical quantities and technical-page context are absent. These rows retain review flags and sources; technical/certification/unknown proposals retain unresolved item scope. Extraction policy changes from proposal-only-1 to source-scope-2; prompt signature invalidates classifier cache. Uncertainty never becomes a capability failure. This remains bounded clause-by-clause reading, not whole-tender prompting.

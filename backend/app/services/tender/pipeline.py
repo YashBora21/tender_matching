@@ -564,6 +564,9 @@ def run_pipeline(
             result.requirements.append(
                 RequirementRecord(
                     text=row.get("description", ""),
+                    source_text=row.get("row_text") or row.get("description", ""),
+                    table_context=({"headers": row["source_headers"], "cells": row["source_cells"]}
+                                   if row.get("source_headers") and row.get("source_cells") else None),
                     item_id="",
                     requirement_type=RequirementType.INFORMATIONAL if tag in {DISCOVERY, WRAPPER_METADATA} else RequirementType.UNKNOWN,
                     page=row.get("page"),
@@ -1039,7 +1042,7 @@ def _classification_signature():
     enabled = get_settings().requirement_classification_enabled
     return (enabled, signature() if enabled else None,
             get_settings().requirement_classification_max_chars if enabled else None,
-            "proposal-only-1" if enabled else None)
+            "source-scope-2" if enabled else None)
 
 
 def _classify_unscoped(readable, requirement, *, cache=None, client=None):
@@ -1047,6 +1050,15 @@ def _classify_unscoped(readable, requirement, *, cache=None, client=None):
     label, called, hit, error = classify_clause(readable, context={'section': english_half(requirement.source_section or '')}, cache=cache, client=client)
     if label is None:
         return None, called, hit, error
+    from app.services.tender.classify import classify_page, NUMBER_WITH_UNIT
+    nontechnical = label in {RequirementType.COMMERCIAL, RequirementType.ELIGIBILITY, RequirementType.INFORMATIONAL}
+    technical_context = classify_page(readable).scores.get('technical', 0) or NUMBER_WITH_UNIT.search(readable)
+    if nontechnical and not technical_context and requirement.page_tag != 'technical':
+        requirement.requirement_type = label
+        requirement.source_text = requirement.source_text or readable
+        requirement.review_required = True
+        requirement.review_reason = 'Source-wide nontechnical classification; retained for review outside capability scoring.'
+        return [requirement], called, hit, None
     requirement.review_required = True
     requirement.review_reason = '; '.join(part for part in (
         requirement.review_reason, f'Proposed clause type: {label.value}; classification and BOQ scope require review.'
@@ -1091,7 +1103,7 @@ def _extract_all(
         readable = english_half(original_source)
         source_type = classify_clause(original_source, page_tag=requirement.page_tag,
                                       source_section=requirement.source_section)
-        if source_type.kind == 'eligibility' and not source_type.review_required:
+        if source_type.kind in {'commercial', 'eligibility', 'informational'} and not source_type.review_required:
             apply_clause_type(requirement)
             requirement.source_text = original_source
             added = [requirement]

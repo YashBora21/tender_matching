@@ -71,7 +71,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "12"
+READER_VERSION = "13"
 
 
 @dataclass
@@ -913,6 +913,7 @@ def _read_tables(
                         "number": number,
                         "title": title,
                         "description": line,
+                        "row_description": " ".join(description.split()),
                         "quantity": quantity,
                         "unit": unit,
                         "row_text": row_text,
@@ -1182,6 +1183,8 @@ def assign_to_items(
             item = by_title.get(_title_key(row.get("title") or ""))
         if item is None:
             item = by_title.get(_title_key(row.get("description") or ""))
+        if item is None:
+            item = by_title.get(_title_key(row.get("row_description") or ""))
         if item is None and row.get('part_number'):
             title = _title_key(row.get('title') or '')
             candidates = [candidate for candidate in items if title and _title_key(candidate.title).endswith(title)]

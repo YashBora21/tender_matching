@@ -58,9 +58,10 @@ def test_classification_preserves_original_text_and_unresolved_scope(monkeypatch
     result, calls, _, limited, _ = _extract_all([row], client=Client({"type":label,"quote":row.text}))
     assert len(result) == calls == 1 and not limited
     assert result[0].text == row.text and result[0].item_id == ""
-    assert result[0].requirement_type is RequirementType.UNKNOWN and result[0].attribute is None
-    assert f'Proposed clause type: {label}' in result[0].review_reason
-    assert result[0].review_required and 'synthetic unresolved item' in result[0].review_reason
+    expected = RequirementType(label) if label in {'commercial', 'eligibility', 'informational'} else RequirementType.UNKNOWN
+    assert result[0].requirement_type is expected and result[0].attribute is None
+    assert ('Source-wide nontechnical' if label in {'commercial', 'eligibility', 'informational'} else f'Proposed clause type: {label}') in result[0].review_reason
+    assert result[0].review_required
     assert result[0].source_table_id == 'synthetic-table' and result[0].source_row_id == 'synthetic-row'
 
 
@@ -147,5 +148,5 @@ def test_wrong_informational_proposal_cannot_exclude_a_technical_clause(monkeypa
         raise AssertionError('unresolved source must not reach matching')
     outcome,_=_assess(None,pending,{},manufacturer_name='Synthetic manufacturer',matcher=forbidden,client=None)
     assert outcome.review_required
-    assert 'Proposed clause type: informational' in outcome.review_reason
+    assert 'classification_requires_complete_source' in outcome.review_reason
     assert 'pressure 12 bar' in outcome.requirement_text

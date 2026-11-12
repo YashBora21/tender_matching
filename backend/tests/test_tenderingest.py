@@ -698,3 +698,14 @@ def test_assignment_preserves_complete_table_source_beyond_display_name():
     assert not unassigned
     assert assigned[0].text=='Synthetic component'
     assert assigned[0].source_text==row['row_text']
+
+
+def test_wrapped_description_uses_complete_row_for_exact_item_assignment():
+    """Synthetic wrapped product name; never assign individual word fragments."""
+    rows=[{'description':line,'row_description':'Synthetic device right hand',
+           'row_text':'Synthetic device right hand','page':1}
+          for line in ('Synthetic device right','hand')]
+    assigned, unresolved = assign_to_items(rows,[TenderItem(item_id='1',title='Synthetic device right hand'),
+                                                TenderItem(item_id='2',title='Synthetic other')])
+    assert not unresolved and len(assigned)==2
+    assert all(row.item_id=='1' for row in assigned)
