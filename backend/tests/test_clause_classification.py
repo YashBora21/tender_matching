@@ -11,7 +11,7 @@ class Client:
         self.answer = answer
         self.error = error
         self.calls = 0
-    def complete_json(self, system, user):
+    def complete_json(self, system, user, **kwargs):
         self.calls += 1
         if self.error:
             raise self.error
@@ -113,7 +113,7 @@ def test_oversize_clause_is_retained_without_a_provider_call(monkeypatch):
 def test_source_context_is_in_payload_and_separates_cache_entries():
     import json
     class Capture(Client):
-        def complete_json(self,system,user):
+        def complete_json(self,system,user, **kwargs):
             self.payload=json.loads(user)
             return super().complete_json(system,user)
     text='Synthetic certificate requested in annexure'
@@ -163,3 +163,31 @@ def test_full_quote_nontechnical_proposal_cannot_hide_product_cues(monkeypatch, 
     result,_,_,_,_=_extract_all([row],client=Client({'type':'informational','quote':text}))
     assert result[0].requirement_type is RequirementType.UNKNOWN
     assert result[0].review_required and result[0].item_id==''
+
+
+@pytest.mark.parametrize('text,label,expected',[
+ ('Synthetic technical clarifications allowed in 2 Days.','commercial','commercial'),
+ ('Synthetic bidder past performance 80 %.','eligibility','eligibility'),
+ ('Synthetic efficiency minimum 80 %.','informational','unknown')])
+def test_subject_and_units_separate_administration_from_product_values(monkeypatch,text,label,expected):
+    from app.core.config import get_settings
+    monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_ENABLED','true');get_settings.cache_clear()
+    result,_,_,_,_=_extract_all([source(text)],client=Client({'type':label,'quote':text}))
+    assert result[0].requirement_type.value==expected
+
+
+def test_nearby_context_is_bounded_without_truncating_source(monkeypatch):
+    import json
+    from app.core.config import get_settings
+    monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_ENABLED','true')
+    monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_MAX_CHARS','400');get_settings.cache_clear()
+    row=source('Synthetic standalone form field')
+    row.source_neighbors=['Synthetic long context '*100,'Synthetic short context']
+    class Capture(Client):
+        def complete_json(self,system,user,**kwargs):
+            assert len(user)<=400
+            envelope=json.loads(user)
+            assert envelope['clause']==row.text
+            assert envelope['context']['nearby_source_clauses']==['Synthetic short context']
+            return {'type':'informational','quote':row.text}
+    assert _extract_all([row],client=Capture())[0][0].requirement_type is RequirementType.INFORMATIONAL

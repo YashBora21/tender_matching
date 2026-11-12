@@ -4802,3 +4802,8 @@ Reader14 preserves unnumbered multiline table cells as one source region; number
 ## Structured response validation shares the retry budget — 2026-11-12
 
 Allow source/schema validators inside complete_json so invalid schema, quote, value or table-cell support uses the same retry allowance as malformed JSON/transport. Retry the unchanged bounded request; invalid evidence is never accepted or cached. No prompt or cache-key change for this retry mechanism; already-valid answers remain valid. Update test client protocol and exercise shared ceilings.
+
+
+## Source assembly and subject-aware clause interpretation — 2026-11-12
+
+Reader15 does not end unfinished prose at blank OCR blocks or colons. Preserve same-document/page/section source context in source order; include as much as fits the existing configured classification request-size limit, without clipping the target clause. Scope policy source-scope-4 uses product-subject decisions, dimensional physical quantities and labelled numeric attributes rather than generic page-scoring words. Administrative percentages remain dimensionless, while physical quantities and explicit product criteria still require technical review. Classifier prompt5 distinguishes complete structural labels from unfinished obligations using supplied context, with whole-clause quotes unchanged. Prompt signature/context payload and reader version invalidate affected caches. No BOQ assignment is guessed and unknowns remain review cases.

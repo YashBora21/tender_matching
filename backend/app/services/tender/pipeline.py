@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -966,9 +967,9 @@ def _read_package(tender_id, directory, attachments, specification, repo):
         for page in read.pages:
             page.source_key, page.attachment_id = source_key, attachment_id
             page_rows = [row for row in read.rows if row['page'] == page.page]
-            for index, row in enumerate(page_rows):
+            for row in page_rows:
                 row['source_neighbors'] = [candidate.get('row_text') or candidate['description']
-                    for candidate in page_rows[max(0, index - 1):index + 2]
+                    for candidate in page_rows
                     if candidate is not row and candidate.get('title') == row.get('title')]
             context = page.source_context
             if context is None:
@@ -1047,20 +1048,34 @@ def _classification_signature():
     enabled = get_settings().requirement_classification_enabled
     return (enabled, signature() if enabled else None,
             get_settings().requirement_classification_max_chars if enabled else None,
-            "source-scope-2" if enabled else None)
+            "source-scope-4" if enabled else None)
 
 
 def _classify_unscoped(readable, requirement, *, cache=None, client=None):
     from app.services.requirement.classify import classify_clause
-    label, called, hit, error = classify_clause(readable, context={
-        'section': english_half(requirement.source_section or ''),
-        'nearby_source_clauses': [english_half(text) for text in requirement.source_neighbors or []]}, cache=cache, client=client)
+    context = {'section': english_half(requirement.source_section or ''), 'nearby_source_clauses': []}
+    for source in requirement.source_neighbors or []:
+        candidate = dict(context, nearby_source_clauses=context['nearby_source_clauses'] + [english_half(source)])
+        if len(json.dumps({'clause': readable, 'context': candidate}, ensure_ascii=False)) <= get_settings().requirement_classification_max_chars:
+            context = candidate
+    label, called, hit, error = classify_clause(readable, context=context, cache=cache, client=client)
     if label is None:
         return None, called, hit, error
-    from app.services.tender.classify import classify_page, NUMBER_WITH_UNIT
+    from app.services.tender.classify import NUMBER_WITH_UNIT, classify_clause as source_clause
+    from app.services.requirement.retype import _attribute
+    from app.comparison.units import parse_unit, REGISTRY
     nontechnical = label in {RequirementType.COMMERCIAL, RequirementType.ELIGIBILITY, RequirementType.INFORMATIONAL}
-    technical_context = classify_page(readable).scores.get('technical', 0) or NUMBER_WITH_UNIT.search(readable)
-    if nontechnical and not technical_context and requirement.page_tag != 'technical':
+    source_decision = source_clause(readable, page_tag=requirement.page_tag,
+                                    source_section=requirement.source_section)
+    physical_quantity = False
+    for match in NUMBER_WITH_UNIT.finditer(readable):
+        unit = parse_unit(re.sub(r'^[\d.,\s]+', '', match.group()))
+        if unit is None or not REGISTRY.Unit(unit).dimensionless:
+            physical_quantity = True
+            break
+    labelled_value = bool(_attribute(readable) and any(character.isdigit() for character in readable))
+    technical_context = source_decision.kind == 'technical' or physical_quantity or labelled_value
+    if nontechnical and not technical_context:
         requirement.requirement_type = label
         requirement.source_text = requirement.source_text or readable
         requirement.review_required = True

@@ -71,7 +71,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "14"
+READER_VERSION = "15"
 
 
 @dataclass
@@ -1046,7 +1046,8 @@ def _prose_clauses(text: str) -> list[tuple[Optional[str], str]]:
     for raw in text.split("\n"):
         line = " ".join(raw.split())
         if not line:
-            flush()
+            if buffer.endswith((".", "!", "?")):
+                flush()
             continue
         if _is_heading(line):
             flush()
@@ -1054,7 +1055,7 @@ def _prose_clauses(text: str) -> list[tuple[Optional[str], str]]:
             continue
         if not buffer:
             buffer = line
-        elif buffer.endswith((".", "!", "?", ":")):
+        elif buffer.endswith((".", "!", "?")):
             flush()
             buffer = line
         else:

@@ -721,3 +721,11 @@ def test_unnumbered_multiline_cell_is_one_source_region(tmp_path):
     descriptions=[row['description'] for row in read.rows]
     assert any('undertakes that all supplied goods' in text for text in descriptions)
     assert not any(text=='all supplied goods are covered.' for text in descriptions)
+
+
+def test_blank_ocr_blocks_do_not_sever_an_unfinished_obligation():
+    from app.services.tender.ingest import _prose_clauses
+    clauses=_prose_clauses('Synthetic supplier undertakes that\n\nit will repair defects.\n\nSynthetic label:\n\nSynthetic value.')
+    assert [text for _,text in clauses]==[
+        'Synthetic supplier undertakes that it will repair defects.',
+        'Synthetic label: Synthetic value.']
