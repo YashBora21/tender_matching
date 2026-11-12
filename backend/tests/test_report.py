@@ -252,7 +252,10 @@ def test_a_failed_page_labels_the_tender_incomplete_ingestion():
     pages = report["tender"]["pages"]
     assert pages["incomplete_ingestion"] is True
     assert pages["unresolved"] == [{"page": 2}]
-    assert "Incomplete ingestion" in render_html(report)
+    page = render_html(report)
+    assert "Incomplete ingestion" in page
+    assert "Ranking unavailable" in page
+    assert "Ranked by compatibility" not in page
 
 
 def test_a_ledger_short_of_the_page_count_is_incomplete_too():
@@ -274,10 +277,12 @@ def test_a_ledger_short_of_the_page_count_is_incomplete_too():
 
 
 def test_a_fully_read_tender_is_not_incomplete():
-    pages = _report()["tender"]["pages"]
+    report = _report()
+    pages = report["tender"]["pages"]
     assert pages["accounted"] == 2
     assert pages["unaccounted"] == 0
     assert pages["incomplete_ingestion"] is False
+    assert "Ranked by compatibility" in render_html(report)
 
 
 def test_wrapper_pages_missing_from_attachment_ledger_are_incomplete():
@@ -337,6 +342,8 @@ def test_an_extraction_that_stopped_short_is_not_a_final_report():
     assert "the extraction of requirements stopped short" in page
     assert "the model is rate limited" in page
     assert "This is not a final compatibility report" in page
+    assert "Ranking unavailable" in page
+    assert "Ranked by compatibility" not in page
 
 
 def test_a_skipped_page_keeps_its_reason():
