@@ -7,7 +7,7 @@ from app.services.requirement.extract import extract_requirements
 class Client:
     calls = 0
     def __init__(self, answer): self.answer = answer
-    def complete_json(self, *args):
+    def complete_json(self, *args, **kwargs):
         self.calls += 1
         return self.answer
 
@@ -158,7 +158,7 @@ def test_budget_stop_preserves_unread_source_as_resumable_work():
     from app.services.tender.ingest import RequirementRecord
     text = 'Synthetic size 25 mm'
     class Budget:
-        def complete_json(self, *args): raise LLMBudgetExceeded('synthetic call budget stop')
+        def complete_json(self, *args, **kwargs): raise LLMBudgetExceeded('synthetic call budget stop')
     rows, _, _, limited, detail = _extract_all(
         [RequirementRecord(text=text, item_id='synthetic-item')], client=Budget())
     assert limited and 'synthetic call budget stop' in detail

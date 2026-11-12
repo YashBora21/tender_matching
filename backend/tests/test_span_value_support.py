@@ -72,7 +72,7 @@ def test_extractor_rejects_value_outside_its_quote_without_repair_or_retry():
     text = 'Synthetic size 25 mm and pressure 80 bar'
     class Client:
         calls = 0
-        def complete_json(self, *args):
+        def complete_json(self, *args, **kwargs):
             self.calls += 1
             return {'requirements': [{'text': 'Synthetic size proposal',
                 'source_quote': text[text.index('pressure'):], 'type': 'technical',
@@ -89,7 +89,7 @@ def test_invalid_source_span_is_not_cached_and_original_clause_stays_reviewable(
     from app.services.requirement.coverage import MARKER
     text = 'Synthetic size 25 mm and pressure 80 bar'
     class Client:
-        def complete_json(self, *args):
+        def complete_json(self, *args, **kwargs):
             return {'requirements': [{'text': 'Synthetic size proposal',
                 'source_quote': text[text.index('pressure'):], 'type': 'technical',
                 'attribute': 'size', 'value': '25', 'operator': 'eq'}]}

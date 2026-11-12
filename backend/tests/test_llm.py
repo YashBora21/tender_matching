@@ -621,3 +621,18 @@ def test_transport_and_json_share_one_retry_ceiling(monkeypatch):
     monkeypatch.setattr(client,'_chat_once',reply)
     with pytest.raises(LLMError):client.complete_json('synthetic','synthetic')
     assert len(attempts)==4 and client.retries==3
+
+
+def test_structured_validation_uses_shared_retry_allowance(monkeypatch):
+    from app.core.config import get_settings
+    monkeypatch.setenv('LLM_MAX_RETRIES','3')
+    get_settings.cache_clear()
+    client=LLMClient();seen=[]
+    def reply(system,user,**kwargs):
+        seen.append((system,user))
+        return LLMResult(content='{"value":"wrong"}' if len(seen)<4 else '{"value":"source"}')
+    monkeypatch.setattr(client,'chat',reply)
+    def validate(answer):
+        if answer['value']!='source':raise LLMError('synthetic evidence failure')
+    assert client.complete_json('synthetic','source',validate=validate)=={'value':'source'}
+    assert len(seen)==4 and len(set(seen))==1 and client.retries==3

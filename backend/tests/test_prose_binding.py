@@ -149,7 +149,7 @@ def test_native_geometry_is_preserved_locally_without_expanding_model_context(ba
     from app.services.match.facts import extract_fact, extract_fact_batch
     context = {'page': 1, 'native_lines': [line('SYNTHETIC_GEOMETRY_ONLY')], 'tables': []}
     class Client:
-        def complete_json(self, system, user):
+        def complete_json(self, system, user, **kwargs):
             assert 'SYNTHETIC_GEOMETRY_ONLY' not in user and 'native_lines' not in user
             return {'passages': [{'passage_id': 0, 'requirements': []}]} if batch else {'requirements': []}
     if batch:

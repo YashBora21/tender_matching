@@ -206,7 +206,14 @@ def extract_requirements(
     try:
         client = client or LLMClient()
         payload = json.dumps({'source_text': readable, 'table': table_context}, ensure_ascii=False) if table_context else readable
-        answer = client.complete_json(SYSTEM_PROMPT, payload)
+        def validate(answer):
+            try:
+                parsed_answer = ExtractionResponse(**answer)
+            except (ValidationError, TypeError):
+                raise LLMError('extraction_schema_validation_failed') from None
+            if any(_verified_span(readable, item, table_context) is None for item in parsed_answer.requirements):
+                raise LLMError('source_quote_or_value_validation_failed')
+        answer = client.complete_json(SYSTEM_PROMPT, payload, validate=validate)
         parsed = ExtractionResponse(**answer)
     except (LLMRateLimited, LLMBudgetExceeded):
         # The provider's limit is not a failed reading: the line was never
@@ -221,20 +228,8 @@ def extract_requirements(
 
     from app.comparison.units import parse_unit
     for item in parsed.requirements:
-        span = quote_span(readable, item.source_quote)
-        cell_supported = True
-        if table_context and item.attribute:
-            headers = table_context.get('headers', [])
-            cells = table_context.get('cells', [])
-            indices = [index for index, header in enumerate(headers)
-                       if ' '.join(str(header).casefold().split()) == ' '.join(item.attribute.casefold().split())]
-            if indices:
-                from app.services.requirement.evidence import span_supports
-                cell_supported = len(indices) == 1 and indices[0] < len(cells)
-                if cell_supported:
-                    cell = str(cells[indices[0]] or '')
-                    cell_supported = span_supports(cell, (0, len(cell)), item.value)
-        if span is None or not span_holds(readable, span, item.value) or not cell_supported:
+        span = _verified_span(readable, item, table_context)
+        if span is None:
             result.rejected.append(item.text)
             continue
         unresolved_unit = bool(item.unit and parse_unit(item.unit) is None)
@@ -259,3 +254,20 @@ def extract_requirements(
         )
 
     return result
+
+
+def _verified_span(readable, item, table_context):
+    span = quote_span(readable, item.source_quote)
+    cell_supported = True
+    if table_context and item.attribute:
+        headers = table_context.get('headers', [])
+        cells = table_context.get('cells', [])
+        indices = [index for index, header in enumerate(headers)
+                   if ' '.join(str(header).casefold().split()) == ' '.join(item.attribute.casefold().split())]
+        if indices:
+            from app.services.requirement.evidence import span_supports
+            cell_supported = len(indices) == 1 and indices[0] < len(cells)
+            if cell_supported:
+                cell = str(cells[indices[0]] or '')
+                cell_supported = span_supports(cell, (0, len(cell)), item.value)
+    return span if span is not None and span_holds(readable, span, item.value) and cell_supported else None

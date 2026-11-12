@@ -13,7 +13,7 @@ class Client:
         self.schema = schema
         self.calls = 0
 
-    def complete_json(self, system, user):
+    def complete_json(self, system, user, **kwargs):
         self.calls += 1
         assert json.dumps(self.schema.model_json_schema(), separators=(',', ':')) in system
         return self.answer

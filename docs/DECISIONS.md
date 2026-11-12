@@ -4797,3 +4797,8 @@ Three user-approved external clause tests used 968 input and 115 output tokens. 
 ## Logical form regions, nearby context and table-cell evidence — 2026-11-12
 
 Reader14 preserves unnumbered multiline table cells as one source region; numbered specification rows retain parameter lines. Classifiers receive adjacent clauses only from the same document/page/section, subject to the existing request-size bound. Nearby sources are context, never substitute citations or guessed BOQ assignments; store/cache them alongside each source. Classifier cache keys already include the context envelope. Requirement prompt7 requests uniquely locatable verbatim quotes and original identifier spacing; signature/version invalidate extraction cache. Exact source-header attributes must additionally be supported by their corresponding table cell, even if a broad row quote passes. No verifier relaxation.
+
+
+## Structured response validation shares the retry budget — 2026-11-12
+
+Allow source/schema validators inside complete_json so invalid schema, quote, value or table-cell support uses the same retry allowance as malformed JSON/transport. Retry the unchanged bounded request; invalid evidence is never accepted or cached. No prompt or cache-key change for this retry mechanism; already-valid answers remain valid. Update test client protocol and exercise shared ceilings.

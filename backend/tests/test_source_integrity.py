@@ -18,7 +18,7 @@ def test_changed_source_is_detected_before_any_cached_stage_or_llm(tmp_path):
         def save_stage(self,*args,**kwargs):self.stage=kwargs
         def stage_keys(self,*args):raise AssertionError('cache must not be read before source validation')
     class Client:
-        def complete_json(self,*args):raise AssertionError('corrupt source must never reach model')
+        def complete_json(self,*args, **kwargs):raise AssertionError('corrupt source must never reach model')
     repo=Repo();result=run_pipeline('synthetic-tender',tmp_path,[record],repo=repo,client=Client())
     assert result.failure=='source integrity check failed'
     assert result.stages[STAGE_ATTACHMENTS].status==STATUS_FAILED

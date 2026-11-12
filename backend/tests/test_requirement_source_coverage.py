@@ -29,7 +29,7 @@ def test_distinct_structured_facts_cover_an_atomic_source_without_inventing_valu
 
 class Client:
     def __init__(self,empty=False):self.calls=0;self.empty=empty
-    def complete_json(self,system,user):
+    def complete_json(self,system,user, **kwargs):
         self.calls+=1
         return {'requirements':[] if self.empty else [{'text':user,'source_quote':user,'type':'technical',
                 'attribute':'size','operator':'eq','value':'25','unit':'mm','mandatory':True}]}
@@ -77,7 +77,7 @@ def test_numeric_value_does_not_cover_an_unassessed_connection_in_attribute_name
 
 def test_refresh_reads_one_original_source_not_each_generated_paraphrase():
     class CompoundClient(Client):
-        def complete_json(self,system,user):
+        def complete_json(self,system,user, **kwargs):
             self.calls+=1
             assert user=='pressure 12 bar and temperature 40 C'
             return {'requirements':[{'text':'Synthetic pressure paraphrase','source_quote':user,
@@ -133,7 +133,7 @@ def test_table_context_survives_extraction_cache_and_storage():
     class TableClient:
         calls = 0
 
-        def complete_json(self, system, user):
+        def complete_json(self, system, user, **kwargs):
             self.calls += 1
             envelope = json.loads(user)
             assert envelope == {'source_text': text, 'table': context}
@@ -172,7 +172,7 @@ def test_nearby_source_context_survives_storage_and_cache():
 def test_full_row_quote_cannot_borrow_value_from_another_column(value, accepted):
     from app.services.requirement.extract import extract_requirements
     class TableClient:
-        def complete_json(self,system,user):
+        def complete_json(self,system,user, **kwargs):
             return {'requirements':[{'text':'Synthetic quantity','source_quote':'42 7',
                 'attribute':'Qty','value':value,'unit':None,'type':'commercial',
                 'operator':'eq','mandatory':True}]}

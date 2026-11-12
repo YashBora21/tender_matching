@@ -8,7 +8,7 @@ class Client:
         self.answer = answer
         self.calls = 0
 
-    def complete_json(self, *args):
+    def complete_json(self, *args, **kwargs):
         self.calls += 1
         return self.answer
 
@@ -73,7 +73,7 @@ def test_budget_exhaustion_propagates_instead_of_becoming_silence(monkeypatch):
     from app.services.llm import LLMBudgetExceeded
     from app.services.match.facts import extract_fact
     class Exhausted:
-        def complete_json(self,*args):
+        def complete_json(self,*args, **kwargs):
             raise LLMBudgetExceeded('Synthetic budget exhausted')
     monkeypatch.setenv('MATCH_EXTRACTION_BATCH_SIZE','2')
     with pytest.raises(LLMBudgetExceeded):
