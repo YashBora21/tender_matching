@@ -605,3 +605,19 @@ def test_malformed_json_retries_without_changing_source(monkeypatch):
     monkeypatch.setattr(client, 'chat', response)
     assert client.complete_json('synthetic system', 'synthetic source') == {'ok': True}
     assert len(seen) == 4 and len(set(seen)) == 1 and client.retries == 3
+
+
+def test_transport_and_json_share_one_retry_ceiling(monkeypatch):
+    from app.services.llm import _TransientFailure
+    from app.core.config import get_settings
+    monkeypatch.setenv('LLM_MAX_RETRIES','3')
+    monkeypatch.setenv('LLM_RETRY_SECONDS','0')
+    get_settings.cache_clear()
+    client=LLMClient(); attempts=[]
+    def reply(*args,**kwargs):
+        attempts.append(True)
+        if len(attempts) <= 2: raise _TransientFailure('synthetic temporary failure')
+        return LLMResult(content='malformed synthetic JSON')
+    monkeypatch.setattr(client,'_chat_once',reply)
+    with pytest.raises(LLMError):client.complete_json('synthetic','synthetic')
+    assert len(attempts)==4 and client.retries==3

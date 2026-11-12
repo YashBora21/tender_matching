@@ -368,7 +368,7 @@ class LLMClient:
                 f"the token budget of {settings.llm_token_budget} is spent ({spent})"
             )
 
-    def chat(self, system: str, user: str, *, max_tokens: Optional[int] = None) -> LLMResult:
+    def chat(self, system: str, user: str, *, max_tokens: Optional[int] = None, _max_retries: Optional[int] = None) -> LLMResult:
         """Ask the model one question and get one answer.
 
         A rate-limited call is retried only while the retry budget allows it.
@@ -377,14 +377,15 @@ class LLMClient:
         not carry on reading lines it cannot ask about.
         """
         settings = get_settings()
+        retry_limit = settings.llm_max_retries if _max_retries is None else min(settings.llm_max_retries, _max_retries)
         last_error: Optional[str] = None
         budget = max_tokens or settings.llm_max_tokens
-        for attempt in range(settings.llm_max_retries + 1):
+        for attempt in range(retry_limit + 1):
             self._check_budget()
             try:
                 result = self._chat_once(system, user, max_tokens=budget)
             except _TransientFailure as exc:
-                if attempt >= settings.llm_max_retries:
+                if attempt >= retry_limit:
                     raise LLMError(str(exc)) from None
                 self.retries += 1
                 logger.warning('temporary LLM failure, retrying (%d/%d)', attempt + 1, settings.llm_max_retries)
@@ -393,7 +394,7 @@ class LLMClient:
             except _RateLimited as exc:
                 last_error = str(exc)
                 wait = _retry_after(exc, settings.llm_retry_seconds * (attempt + 1))
-                if attempt >= settings.llm_max_retries:
+                if attempt >= retry_limit:
                     raise LLMRateLimited(last_error, retry_after=wait) from exc
                 self.retries += 1
                 logger.warning(
@@ -408,7 +409,7 @@ class LLMClient:
                 # The model thought and never answered: it ran out of budget
                 # before it got to the answer. A bigger budget is the fix.
                 last_error = "the model spent its whole budget reasoning"
-                if attempt >= settings.llm_max_retries:
+                if attempt >= retry_limit:
                     break
                 self.retries += 1
                 budget = int(budget * 2)
@@ -488,12 +489,14 @@ class LLMClient:
 
     def complete_json(self, system: str, user: str, *, max_tokens: Optional[int] = None) -> Any:
         """Ask the model for JSON and return it parsed."""
+        retry_start = self.retries
         for attempt in range(get_settings().llm_max_retries + 1):
-            result = self.chat(system, user, max_tokens=max_tokens)
+            remaining = get_settings().llm_max_retries - (self.retries - retry_start)
+            result = self.chat(system, user, max_tokens=max_tokens, _max_retries=remaining)
             try:
                 return result.parsed
             except LLMError:
-                if attempt >= get_settings().llm_max_retries:
+                if self.retries - retry_start >= get_settings().llm_max_retries:
                     raise
                 self.retries += 1
                 logger.warning('invalid LLM JSON, retrying within configured budgets')
