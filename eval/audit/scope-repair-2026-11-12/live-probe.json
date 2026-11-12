@@ -1,0 +1,34 @@
+{
+  "calls": 3,
+  "input_tokens": 968,
+  "output_tokens": 115,
+  "results": [
+    {
+      "source_id": "3c7ed891-9bf8-466d-967c-c605c8534599",
+      "type": "unknown",
+      "error": "classification_requires_complete_source",
+      "seconds": 1.161,
+      "review_required": true
+    },
+    {
+      "source_id": "a4993223-ed79-4cd2-9c69-1468bf87b933",
+      "type": "unknown",
+      "error": null,
+      "seconds": 0.792,
+      "review_required": true
+    },
+    {
+      "source_id": "0298e8ca-f3b3-4f59-bb74-0c029910e336",
+      "type": "commercial",
+      "error": null,
+      "seconds": 1.0,
+      "review_required": true
+    }
+  ],
+  "database_writes": 0,
+  "estimated_cost_inr": null,
+  "approved_scope": "three unresolved tender clauses to configured private text provider",
+  "prompt_alignment_version": "clause-type-4",
+  "additional_calls_after_alignment": 0,
+  "full_tender_validated": false
+}
