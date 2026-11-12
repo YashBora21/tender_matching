@@ -150,3 +150,16 @@ def test_wrong_informational_proposal_cannot_exclude_a_technical_clause(monkeypa
     assert outcome.review_required
     assert 'classification_requires_complete_source' in outcome.review_reason
     assert 'pressure 12 bar' in outcome.requirement_text
+
+
+@pytest.mark.parametrize('text', [
+    'Synthetic equipment withstands 100 kg.',
+    'Synthetic equipment withstands pressure 12 bar.'])
+def test_full_quote_nontechnical_proposal_cannot_hide_product_cues(monkeypatch, text):
+    from app.core.config import get_settings
+    monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_ENABLED','true')
+    get_settings.cache_clear()
+    row=source(text)
+    result,_,_,_,_=_extract_all([row],client=Client({'type':'informational','quote':text}))
+    assert result[0].requirement_type is RequirementType.UNKNOWN
+    assert result[0].review_required and result[0].item_id==''
