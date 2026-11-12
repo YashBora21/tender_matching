@@ -77,6 +77,11 @@ class _RateLimited(Exception):
         self.wait = wait
 
 
+class _TransientFailure(LLMError):
+    """A temporary transport/provider failure may use the configured retries."""
+
+
+
 NO_MODEL = "no LLM model is configured (set LLM_MODEL)"
 NO_API_KEY = "no text API key is configured (set LLM_TEXT_API_KEY or LLM_API_KEY)"
 NO_BASE_URL = "no LLM endpoint is configured (set LLM_BASE_URL)"
@@ -378,6 +383,13 @@ class LLMClient:
             self._check_budget()
             try:
                 result = self._chat_once(system, user, max_tokens=budget)
+            except _TransientFailure as exc:
+                if attempt >= settings.llm_max_retries:
+                    raise LLMError(str(exc)) from None
+                self.retries += 1
+                logger.warning('temporary LLM failure, retrying (%d/%d)', attempt + 1, settings.llm_max_retries)
+                time.sleep(settings.llm_retry_seconds * (attempt + 1))
+                continue
             except _RateLimited as exc:
                 last_error = str(exc)
                 wait = _retry_after(exc, settings.llm_retry_seconds * (attempt + 1))
@@ -447,9 +459,13 @@ class LLMClient:
                     "the model is rate limited (HTTP 429)",
                     wait=_limit_seconds(exc.headers, body),
                 ) from None
+            if exc.code in {408, 500, 502, 503, 504}:
+                raise _TransientFailure(f'temporary LLM failure (HTTP {exc.code})') from None
             raise LLMError(
                 f"the configured LLM returned HTTP {exc.code}"
             ) from None
+        except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+            raise _TransientFailure(f'LLM transport failed ({type(exc).__name__})') from None
         except Exception as exc:  # noqa: BLE001 - the reason is reported, not raised past
             raise LLMError(f"LLM transport failed ({type(exc).__name__})") from None
 

@@ -30,7 +30,7 @@ downgrade: ## Roll back one migration
 	cd backend && ../$(VENV)/Scripts/alembic.exe downgrade -1
 
 run: ## Start the API locally
-	cd backend && ../$(VENV)/Scripts/uvicorn.exe app.main:app --reload --port 8000
+	$(PY) scripts/dev_backend.py
 
 test: ## Run all tests (integration tests skip without TEST_DATABASE_URL)
 	cd backend && ../$(VENV)/Scripts/python.exe -m pytest

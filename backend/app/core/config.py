@@ -320,6 +320,12 @@ class Settings(BaseSettings):
             "data_dir": str(self.data_dir),
             "llm_configured": bool(self.text_api_key and self.llm_model and self.llm_base_url),
             "embedding_model_configured": bool(self.embedding_model),
+            "processing_limits": {
+                "call_budget": self.llm_call_budget,
+                "token_budget": self.llm_token_budget,
+                "max_output_tokens": self.llm_max_tokens,
+                "max_retries": self.llm_max_retries,
+            },
             "cors_origins": self.cors_origin_list,
         }
 

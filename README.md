@@ -133,6 +133,17 @@ to point a monitor at.
 
 ### Independent text and vision credentials
 
+For local development, run `make run` (or `venv\Scripts\python.exe scripts/dev_backend.py`
+in PowerShell). This launcher loads the private root and backend `.env` files
+before startup, overriding stale values inherited from an older terminal.
+Restart it after editing configuration. `/api/health` shows effective numeric
+processing limits without exposing credentials or model targets.
+
+`LLM_MAX_RETRIES=3` allows four attempts for rate limits and temporary provider
+or connection failures, within the call/token budgets. Invalid requests and
+authentication errors fail immediately. A retry limit is separate from
+`LLM_CALL_BUDGET`; three retries cannot fit inside a one-call budget.
+
 `LLM_API_KEY` remains the legacy key. Set `LLM_TEXT_API_KEY` to use a different
 credential for text extraction/matching; a blank override falls back to the
 legacy key. Keep both provider credentials in the ignored local environment.

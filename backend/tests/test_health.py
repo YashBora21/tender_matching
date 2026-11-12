@@ -60,3 +60,15 @@ def test_health_reports_the_configured_environment(
     monkeypatch.setattr(get_settings(), "app_environment", "staging")
     body = client.get("/api/health").json()
     assert body["environment"] == "staging"
+
+
+def test_health_reports_effective_numeric_limits_without_provider_values(client,monkeypatch):
+    from app.core.config import get_settings
+    monkeypatch.setenv('LLM_CALL_BUDGET','600')
+    monkeypatch.setenv('LLM_MAX_RETRIES','3')
+    get_settings.cache_clear()
+    monkeypatch.setattr('app.api.routes.ping',lambda:None)
+    body=client.get('/api/health').json()
+    assert body['config']['processing_limits']['call_budget']==600
+    assert body['config']['processing_limits']['max_retries']==3
+    assert 'llm_model' not in body['config'] and 'llm_api_key' not in body['config']

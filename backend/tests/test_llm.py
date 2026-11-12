@@ -570,3 +570,24 @@ def test_no_budget_means_no_ceiling(monkeypatch):
         client._check_budget()
     except LLMBudgetExceeded:  # pragma: no cover - the failure is the bug
         raise AssertionError("a zero budget must not stop a run")
+
+
+@pytest.mark.parametrize('status,expected_attempts', [(503,4),(400,1)])
+def test_three_retries_apply_to_transient_failures_not_invalid_requests(monkeypatch,status,expected_attempts):
+    import urllib.error
+    from app.core.config import get_settings
+    monkeypatch.setenv('LLM_MAX_RETRIES','3')
+    monkeypatch.setenv('LLM_CALL_BUDGET','10')
+    monkeypatch.setenv('LLM_RETRY_SECONDS','0')
+    monkeypatch.setenv('LLM_MODEL','synthetic-model')
+    monkeypatch.setenv('LLM_API_KEY','synthetic-key')
+    get_settings.cache_clear()
+    attempts=[]
+    def fail(request,**kwargs):
+        attempts.append(True)
+        raise urllib.error.HTTPError(request.full_url,status,'synthetic failure',{},None)
+    monkeypatch.setattr('app.services.llm.urllib.request.urlopen',fail)
+    client=LLMClient()
+    with pytest.raises(LLMError):client.chat('synthetic system','synthetic user')
+    assert len(attempts)==client.calls==expected_attempts
+    assert client.retries==expected_attempts-1

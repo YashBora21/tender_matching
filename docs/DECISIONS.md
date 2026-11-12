@@ -4758,3 +4758,9 @@ Cache only source-complete extracted answers; validate coverage on old cache hit
 Progress commits persist only small response-cache entries, not successively larger full requirement revisions. Publish the full requirement snapshot at the end of an attempt or a resumable budget stop. Keep final evidence, old revisions, page accounting and run history. A measured rollback-only test of 332-row snapshots took 0.1358/0.1050/0.0822 seconds excluding commit; persistence is overhead, not a demonstrated explanation of the entire runtime. Synthetic 2/100/332-clause tests require exactly one full-list write.
 
 Replace the local smoke profile (one call, 2000 total tokens, 512 response tokens, no retry) with bounded 200-call/400000-token/4096-response-token/one-retry settings; document the same example profile. Existing persistent monetary-cap work is separate and is not enabled or claimed validated here. No paid provider requests are made in this repair. UI recovery advice distinguishes source-file problems from interpretation failures, and empty budget stops no longer claim the source states no requirements.
+
+## Effective development configuration and temporary retries — 2026-11-12
+
+A live API retained terminal overrides (one call, 2000 tokens, 512 output, zero retries) and a different text credential from the private file. Preserve normal production environment precedence, but make the explicit local-development launcher load private dotenv values with override=True before app startup. Watch application code only. Health exposes numeric effective limits, never keys/model targets. Restarted the idle project API with a clean environment; old reports keep original snapshots.
+
+Three retries mean up to four attempts for HTTP429, temporary HTTP408/5xx and connection/timeouts, still bounded by call/token budgets. Invalid HTTP400/401/403 requests are not retried blindly. This phase does not add automatic malformed-output/schema retries.
