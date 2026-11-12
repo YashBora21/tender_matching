@@ -71,5 +71,12 @@
     "full_tender_latency_or_accuracy_claimed": false,
     "gem_discovery_deferred_at_user_request": true
   },
-  "audit_note": "Python ran on an isolated committed tree excluding unrelated uncommitted work; frontend ran on the same committed component source. Six tests need local artifacts absent from that snapshot."
+  "audit_note": "Python ran on an isolated committed tree excluding unrelated uncommitted work; frontend ran on the same committed component source. Six tests need local artifacts absent from that snapshot.",
+  "latest_effective_limits_check": {
+    "LLM_CALL_BUDGET": 600,
+    "LLM_TOKEN_BUDGET": 1500000,
+    "LLM_MAX_TOKENS": 4096,
+    "LLM_MAX_RETRIES": 3
+  },
+  "limit_note": "Local configuration was independently changed after the repair profile was set; newer local values were verified and preserved. The committed example remains a bounded 200/400000/4096/1 recommendation."
 }

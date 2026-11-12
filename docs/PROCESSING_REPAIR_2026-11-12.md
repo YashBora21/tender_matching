@@ -3,8 +3,10 @@
 Tested source: `99a7ceb73b9f538b066ffaff77ed3504676ce350`; candidate `rc-2026-11-12.1`.
 
 The local smoke profile allowed one call, 2,000 total tokens and 512 output tokens.
-It is now a bounded 200 calls, 400,000 total tokens, 4,096 output tokens and one
-retry. These are process limits, not a guarantee that any document or monthly
+The repair initially set 200 calls, 400,000 total tokens, 4,096 output tokens and
+one retry. A later independent local edit was preserved: final verification
+reported 600 calls, 1,500,000 total tokens, 4,096 output tokens and three retries.
+The committed example keeps the smaller bounded recommendation. These are process limits, not a guarantee that any document or monthly
 cost will fit. Restart the backend to reload private configuration, then upload
 the same tender to use the changed extraction-stage identity.
 
