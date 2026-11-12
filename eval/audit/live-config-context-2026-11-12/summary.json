@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-12",
+  "tested_source_commit": "c8dacabe09fc0e723011969acdab267e5de9bf3f",
+  "historical_report_run": "235f3d1a-b7a8-4752-bb9d-c43bd8e0c924",
+  "historical_report_changed": false,
+  "root_causes": [
+    "stale terminal values overrode private dotenv limits and text credential",
+    "table row assignment discarded identifiers, quantities and header context",
+    "raw attribute names and adjacent table fields could promote quantity to technical",
+    "incomplete ingestion admitted normal manufacturer comparison/ranking"
+  ],
+  "historical_effective_limits": {
+    "call_budget": 1,
+    "token_budget": 2000,
+    "max_output_tokens": 512,
+    "max_retries": 0
+  },
+  "expected_live_limits": {
+    "call_budget": 600,
+    "token_budget": 1500000,
+    "max_output_tokens": 4096,
+    "max_retries": 3
+  },
+  "policy_versions": {
+    "reader": "12",
+    "requirement_prompt": "6",
+    "coverage": "structured-source-coverage-2"
+  },
+  "unit_tests": {
+    "passed": 1138,
+    "skipped": 6,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 63.807,
+    "snapshot": "git archive of tested_source_commit, excludes unrelated work",
+    "integration_tests": "not run"
+  },
+  "frontend": {
+    "tests_passed": 37,
+    "lint": "passed",
+    "production_build": "passed"
+  },
+  "provider_testing": {
+    "scope": "one real source row; three prompt/context probes",
+    "calls": 3,
+    "input_tokens": 3198,
+    "output_tokens": 742,
+    "estimated_cost_inr": null,
+    "cost_note": "No verified local tariff; persistent monetary enforcement is not enabled.",
+    "final_probe_seconds": 2.217,
+    "final_probe_fields": 6,
+    "final_probe_rejected": 0,
+    "final_probe_unrepresented_tokens": [],
+    "full_tender_accuracy_validated": false
+  },
+  "offline_live_response_replay": {
+    "provider_calls": 0,
+    "fields_preserved": 6,
+    "table_context_persisted": true,
+    "quantity_clause_type": "commercial"
+  },
+  "source_sha256": "6ab4fee2a0db188b4fe86c38f6dd0a1348a15845efee559919235747eb109b6c",
+  "private_config_scan": {
+    "new_lines_matching_local_private_values": 0
+  },
+  "grouping": "off; unchanged",
+  "remaining": [
+    "Full-tender extraction and matching with confirmed labels have not been rerun.",
+    "Unknown aliases and exact parts outside the catalogue must remain review/no-evidence.",
+    "Persistent spend ledger work is unrelated and excluded from these commits."
+  ],
+  "live_restart": {
+    "launcher": "scripts/dev_backend.py",
+    "health_http": 200,
+    "effective_processing_limits": {
+      "call_budget": 600,
+      "token_budget": 1500000,
+      "max_output_tokens": 4096,
+      "max_retries": 3
+    },
+    "active_tenders_before_restart": 0
+  },
+  "additional_html_regressions": {
+    "tests": 22,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "application_changes_after_full_unit_suite": false
+  }
+}
