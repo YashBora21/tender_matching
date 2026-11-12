@@ -4787,3 +4787,8 @@ Clause classifier version3 requires a complete source quote before proposing non
 ## Shared transport/JSON retry ceiling — 2026-11-12
 
 LLM_MAX_RETRIES is one shared retry allowance per JSON request, including transport failures, rate limits, reasoning-only answers and malformed JSON. Repeated JSON parsing never resets the transport retry allowance. The prompt/source and response cache key are unchanged.
+
+
+## Whole-clause quote prompt alignment — 2026-11-12
+
+Three user-approved external clause tests used 968 input and 115 output tokens. Warranty was classified commercial; an isolated salutation remained unknown; a partial letterhead quote was rejected. Classifier prompt4 now explicitly requests the entire clause, including labels and punctuation, for commercial/eligibility/informational types, matching its existing validator. Prompt signature invalidates classifier response-cache keys. No additional external calls, stored tender mutation or local classifier enablement. Full-tender completion remains unvalidated.
