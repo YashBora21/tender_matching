@@ -1,0 +1,18 @@
+{
+  "date": "2026-11-12",
+  "full_suite_source_commit": "392bf8fce2f2454ad739784b9c6841fe25671ee8",
+  "unit_tests": {
+    "tests": "1146",
+    "skipped": "6",
+    "failures": "0",
+    "errors": "0",
+    "time": "105.993"
+  },
+  "final_shared_retry_regressions": "88 focused tests passed after shared ceiling correction",
+  "provider_calls": 0,
+  "live_test": "automatic approval review blocked tender-text egress; specific user approval requested",
+  "runtime_classification_setting": "unchanged; optional path not enabled pending live validation",
+  "full_tender_pass": false,
+  "database_mutations": 0,
+  "grouping": "unchanged/off"
+}
