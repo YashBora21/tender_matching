@@ -1,0 +1,27 @@
+{
+  "seconds": 505.991,
+  "status": "incomplete",
+  "calls": 247,
+  "input_tokens": 88475,
+  "output_tokens": 10553,
+  "retries": 1,
+  "source_commit": "bc8863e427ed97a579e9bd96445a2c8199ebd190",
+  "cache_hits": 20,
+  "completion_gaps": [
+    "source clauses contain content not represented by structured requirements",
+    "some source clauses could not be interpreted or assigned"
+  ],
+  "remaining_blocking_rows": 131,
+  "active_rows": 506,
+  "types": {
+    "informational": 36,
+    "unknown": 341,
+    "technical": 6,
+    "commercial": 68,
+    "eligibility": 55
+  },
+  "estimated_cost_inr": null,
+  "cost_note": "Verified tariff unavailable; no invented cost estimate.",
+  "scope": "Live extraction using frozen tender sources; no manufacturer matching or gold-label accuracy claim.",
+  "runtime_opt_in": "Enabled for this test process only; user environment unchanged."
+}
