@@ -1,0 +1,75 @@
+{
+  "date": "2026-11-12",
+  "source_commit": "99a7ceb73b9f538b066ffaff77ed3504676ce350",
+  "python_snapshot_commit": "45c2273",
+  "tag": "rc-2026-11-12.1",
+  "scope": "general source extraction, retry/cache admission, progress persistence and recovery feedback",
+  "persistence_benchmark": {
+    "rows_per_snapshot": 332,
+    "seconds_per_snapshot": [
+      0.1358,
+      0.105,
+      0.0822
+    ],
+    "rows_inserted_in_rollback_only": 996,
+    "real_rows_unchanged_after_rollback": true,
+    "commit_time_included": false
+  },
+  "persistence_policy": {
+    "full_requirement_writes_per_attempt": 1,
+    "response_cache_commits_preserved": true,
+    "historical_requirements_and_results_preserved": true
+  },
+  "fixes": [
+    "manufacturer catalogue availability no longer suppresses tender extraction",
+    "source gaps are retryable instead of saved as finished",
+    "partial cache entries are not admitted or reused",
+    "failed retries rebuild original local source records",
+    "output-token configuration invalidates extraction stage",
+    "recovery guidance reflects interpretation versus missing source",
+    "empty budget stop does not claim no requirements"
+  ],
+  "local_limits": {
+    "LLM_CALL_BUDGET": 600,
+    "LLM_TOKEN_BUDGET": 1500000,
+    "LLM_MAX_TOKENS": 4096,
+    "LLM_MAX_RETRIES": 3
+  },
+  "verification": {
+    "python_collected": 1136,
+    "python_passed": 1130,
+    "python_skipped": 6,
+    "failures": 0,
+    "errors": 0,
+    "seconds": 51.552,
+    "skip_reasons": {
+      "the collected corpus is not present": 3,
+      "the catalogue PDFs are not present, so the quotes cannot be checked against their pages": 1,
+      "frozen local replay inputs are not installed": 2
+    },
+    "frontend_tests_passed": 37,
+    "frontend_lint": "passed",
+    "frontend_build": "passed",
+    "synthetic_large_clause_counts": [
+      2,
+      100,
+      332
+    ],
+    "generation_calls": 0,
+    "provider_model_catalog_check": {
+      "model_list_http_status": 200,
+      "configured_model_advertised": true,
+      "models_returned": 63,
+      "generation_calls": 0
+    },
+    "private_configuration_matches_in_committed_files": []
+  },
+  "unchanged_or_pending": {
+    "unrelated_spend_ledger_work_preserved_uncommitted": true,
+    "persistent_monetary_caps_not_changed_or_validated": true,
+    "live_tender_reextraction_run": false,
+    "full_tender_latency_or_accuracy_claimed": false,
+    "gem_discovery_deferred_at_user_request": true
+  },
+  "audit_note": "Python ran on an isolated committed tree excluding unrelated uncommitted work; frontend ran on the same committed component source. Six tests need local artifacts absent from that snapshot."
+}
