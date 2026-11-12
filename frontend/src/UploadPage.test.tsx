@@ -320,8 +320,8 @@ describe('UploadPage', () => {
 
     await screen.findByText(/reached a processing limit/)
     expect(screen.getByText(/retry in 24.9s/)).toBeTruthy()
-    await screen.findByText('Choose manufacturers')
-    expect(screen.getByRole('button', { name: 'Run the match' })).toBeTruthy()
+    await screen.findByText('Saved requirements')
+    expect(screen.queryByRole('button', { name: 'Run the match' })).toBeNull()
     // One poll was enough: the state is final until the caller uploads again.
     expect(vi.mocked(getRequirements)).toHaveBeenCalledTimes(1)
   })

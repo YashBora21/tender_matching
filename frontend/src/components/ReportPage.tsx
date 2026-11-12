@@ -209,8 +209,10 @@ export function ReportPage({
       </section>
 
       <section className="panel">
-        <h2>Ranking</h2>
-        {report.manufacturers.length === 0 ? (
+        <h2>{report.incomplete_ingestion || pages.incomplete_ingestion ? 'Ranking unavailable' : 'Ranking'}</h2>
+        {report.incomplete_ingestion || pages.incomplete_ingestion ? (
+          <p className="muted">Complete extraction and start a new run before comparing manufacturer rankings. This saved report retains the limits and results from its original attempt.</p>
+        ) : report.manufacturers.length === 0 ? (
           <div className="empty">
             <strong>No manufacturer summary was produced.</strong>
             <span className="muted">The run stored no results to summarise.</span>

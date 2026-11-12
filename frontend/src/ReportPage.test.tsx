@@ -102,6 +102,8 @@ describe('ReportPage', () => {
     renderReport()
 
     await screen.findByText('Incomplete ingestion')
+    expect(screen.getByText('Ranking unavailable')).toBeTruthy()
+    expect(screen.queryByText('80%')).toBeNull()
     expect(screen.getByText(/2 declared page\(s\) were never accounted for/)).toBeTruthy()
     expect(screen.getByText(/Pages that could not be read: 3/)).toBeTruthy()
   })

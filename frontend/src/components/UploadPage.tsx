@@ -270,7 +270,7 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
   /** The read is running *and* this page is still listening to it. */
   const following = reading && watching
   const canRun =
-    (phase === 'ready' || phase === 'rate_limited') &&
+    phase === 'ready' &&
     tender !== null &&
     tender.requirements.length > 0 &&
     selected.length > 0 &&
@@ -457,7 +457,7 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
                 Upload another tender
               </button>
             </section>
-          ) : (
+          ) : phase === 'ready' ? (
             <section className="panel">
               <h2>Choose manufacturers</h2>
               {corpusError && (
@@ -493,6 +493,11 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
                   <span className="muted">Choose at least one manufacturer.</span>
                 )}
               </div>
+            </section>
+          ) : (
+            <section className="panel">
+              <h2>Saved requirements</h2>
+              <p className="muted">Resume and complete extraction before starting manufacturer comparison.</p>
             </section>
           )}
         </>

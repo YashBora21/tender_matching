@@ -97,6 +97,7 @@ _UNREAD = frozenset(
     {
         TenderStatus.QUEUED.value,
         TenderStatus.PROCESSING.value,
+        TenderStatus.RATE_LIMITED.value,
         TenderStatus.FAILED.value,
         TenderStatus.INCOMPLETE.value,
     }

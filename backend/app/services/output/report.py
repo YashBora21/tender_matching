@@ -494,6 +494,8 @@ def _status_cell(status: Optional[str]) -> str:
 
 
 def _manufacturer_table(report: dict) -> str:
+    if report.get('incomplete_ingestion') or report['tender']['pages']['incomplete_ingestion']:
+        return '<h2>Ranking unavailable</h2><p>Complete extraction and start a new run before comparing manufacturers. This report preserves its original reading limits and results.</p>'
     rows = []
     for summary in report["manufacturers"]:
         counts = ", ".join(

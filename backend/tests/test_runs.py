@@ -893,9 +893,8 @@ def test_a_run_against_an_incomplete_tender_is_a_conflict(monkeypatch):
         create_run(FakeSession(), TENDER_ID)
 
 
-def test_a_run_against_a_rate_limited_tender_is_allowed(monkeypatch):
-    """The read stopped at the provider's limit and kept what it read. A run
-    over it is labelled incomplete, not refused (D8, D-75)."""
+def test_a_run_against_a_rate_limited_tender_is_refused(monkeypatch):
+    """An unfinished extraction must resume before manufacturer comparison."""
 
     class Limited(FakeTenderRepo):
         def get_tender(self, tender_id):
@@ -907,7 +906,8 @@ def test_a_run_against_a_rate_limited_tender_is_allowed(monkeypatch):
     )
     monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
 
-    assert create_run(FakeSession(), TENDER_ID, repo=FakeRunRepo()) == RUN_ID
+    with pytest.raises(ConflictError):
+        create_run(FakeSession(), TENDER_ID, repo=FakeRunRepo())
 
 
 def test_a_run_against_a_manufacturer_the_corpus_lacks_is_a_validation_error(monkeypatch):

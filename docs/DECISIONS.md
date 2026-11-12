@@ -4771,3 +4771,8 @@ Three retries mean up to four attempts for HTTP429, temporary HTTP408/5xx and co
 The first real row probe returned quantity alone because table headers/identifiers were dropped before extraction. Reader version12 preserves full row text plus headers/cells. Advance requirement prompt/cache version5 to6 and send a bounded JSON envelope containing source_text and table context. Require one entry per nonempty labelled cell, source header names, verbatim source quotes and explicit technical versus commercial/informational typing. Cache keys now include canonical table context; persist it beside source through normalized source metadata. No source/citation/normalization review is bypassed.
 
 Source coverage v2 may count an open-vocabulary value only when its source span supports it; canonical alias approval remains separate and unresolved mappings remain review_required. Field typing uses the labelled field rather than adjacent row columns and passes only approved canonical attributes to clause classification. This prevents an arbitrary raw label or nearby pressure column from promoting an ordering quantity.
+
+
+## Incomplete-report admission — 2026-11-12
+
+Supersede the earlier D8/D75 allowance for starting a new manufacturer comparison from rate-limited ingestion: finish extraction first. Historical incomplete reports remain readable but do not display normal manufacturer rankings in React/HTML.
