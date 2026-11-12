@@ -62,19 +62,6 @@ class FakeRepo:
         return dict(FakeRepo.stages.get(tender_id, {}))
 
 
-def test_context_is_visible_separately_and_does_not_inflate_requirement_flags():
-    from app.api.tenders import _requirements_payload
-    repo = FakeRepo(None)
-    FakeRepo.items['synthetic-context'] = []
-    FakeRepo.requirements['synthetic-context'] = [{
-        'id': 'synthetic-clause', 'text': 'Synthetic delivery within 30 days',
-        'type': 'commercial', 'review_required': False,
-        'normalization': {'source_context': {'source_role': 'cover', 'context_only': True}},
-    }]
-    body = _requirements_payload(repo, {'id': 'synthetic-context', 'status': 'done'})
-    assert body['requirements'] == [] and body['counts']['flagged'] == 0
-    assert body['context_clauses'][0]['source_role'] == 'cover'
-
     def count_requirements(self, tender_id):
         return len(FakeRepo.requirements.get(tender_id, []))
 
@@ -498,3 +485,16 @@ def test_the_stream_sends_a_snapshot_then_each_change_then_the_end(monkeypatch):
     # The tender stopped reading, so the stream says so and closes.
     assert events[2][1]["status"] == "done"
     assert repo.looks == 3
+
+def test_context_is_visible_separately_and_does_not_inflate_requirement_flags():
+    from app.api.tenders import _requirements_payload
+    repo = FakeRepo(None)
+    FakeRepo.items['synthetic-context'] = []
+    FakeRepo.requirements['synthetic-context'] = [{
+        'id': 'synthetic-clause', 'text': 'Synthetic delivery within 30 days',
+        'type': 'commercial', 'review_required': False,
+        'normalization': {'source_context': {'source_role': 'cover', 'context_only': True}},
+    }]
+    body = _requirements_payload(repo, {'id': 'synthetic-context', 'status': 'done'})
+    assert body['requirements'] == [] and body['counts']['flagged'] == 0
+    assert body['context_clauses'][0]['source_role'] == 'cover'

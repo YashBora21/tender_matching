@@ -4852,3 +4852,8 @@ Track B integration: every ingest attempt freezes current numeric limits, reader
 ## Scoped reset is a guarded preview until explicitly executed - 2026-11-12
 
 Track B integration: require explicit tender scope; default dry run. Protect nested gold/baseline data and audit references by tender/attachment IDs, hashes and filenames; name exclusion sources. --include-protected is the explicit override, --yes is required for writes. Execution freezes table writers while rebuilding the plan, rejects unknown schema/counts and cross-scope result references, then deletes only tender-derived tables in FK order in one transaction. Corpus tables and billing rows never enter the delete allowlist. Only cache provenance2 proving exclusively selected tender use permits deletion; legacy/uncertain and shared entries remain. Missing schemas produce unknown preview counts, never zeros. Backup commands use the verified running local container and avoid PowerShell binary redirection. No application reset, backup or migration executed.
+
+
+## Committed-snapshot tests must not depend on private configuration - 2026-11-12
+
+Validate an exported committed tree with no private .env. Retry/embedding tests now supply explicit synthetic configuration, and pipeline shape tests supply stub clients; no provider requests are made. Move the source-context test out of the fake repository class so its existing count/status methods remain available. This corrects test isolation and the new fixture placement; no prompt, cache or business-decision changes.

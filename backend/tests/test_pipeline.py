@@ -571,7 +571,7 @@ def test_a_malformed_attachment_does_not_stop_the_others(tmp_path, monkeypatch):
     attachments[1]['sha256'] = hashlib.sha256(b'not a pdf').hexdigest()
     monkeypatch.setattr(pipeline, "_read_specification", lambda a, d: _spec_rows())
 
-    result = run_pipeline("T1", directory, attachments, repo=FakeRepo())
+    result = run_pipeline("T1", directory, attachments, repo=FakeRepo(), client=CountingClient())
 
     # The bill of quantities is still read.
     assert len(result.items) == 2
@@ -597,7 +597,7 @@ def test_a_requirement_that_names_no_item_is_flagged_not_guessed(tmp_path, monke
         ),
     )
 
-    result = run_pipeline("T1", directory, attachments, repo=FakeRepo())
+    result = run_pipeline("T1", directory, attachments, repo=FakeRepo(), client=CountingClient())
 
     ambiguous = [r for r in result.requirements if r.review_required]
     assert len(ambiguous) == 1
@@ -624,7 +624,7 @@ def test_a_line_that_cannot_be_read_is_flagged_not_dropped(tmp_path, monkeypatch
         ),
     )
 
-    result = run_pipeline("T1", directory, attachments, repo=FakeRepo())
+    result = run_pipeline("T1", directory, attachments, repo=FakeRepo(), client=CountingClient())
 
     flagged = [r for r in result.requirements if r.review_required]
     assert flagged

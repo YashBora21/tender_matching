@@ -85,6 +85,7 @@ def test_the_http_backend_posts_the_openai_embeddings_shape(monkeypatch):
 def test_an_unknown_backend_is_refused(monkeypatch):
     """A typo in the environment must not silently produce no vectors."""
     monkeypatch.setenv("EMBEDDING_BACKEND", "sentence-transformerss")
+    monkeypatch.setenv('EMBEDDING_MODEL', 'synthetic-embedding')
     get_settings.cache_clear()
 
     with pytest.raises(llm.LLMError) as caught:

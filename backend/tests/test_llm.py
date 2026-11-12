@@ -597,7 +597,7 @@ def test_malformed_json_retries_without_changing_source(monkeypatch):
     from app.core.config import get_settings
     monkeypatch.setenv('LLM_MAX_RETRIES', '3')
     get_settings.cache_clear()
-    client = LLMClient()
+    client = LLMClient(model='synthetic-model', api_key='synthetic-key', base_url='https://synthetic-llm.example.test/v1')
     seen = []
     def response(system, user, **kwargs):
         seen.append((system, user))
@@ -613,7 +613,7 @@ def test_transport_and_json_share_one_retry_ceiling(monkeypatch):
     monkeypatch.setenv('LLM_MAX_RETRIES','3')
     monkeypatch.setenv('LLM_RETRY_SECONDS','0')
     get_settings.cache_clear()
-    client=LLMClient(); attempts=[]
+    client=LLMClient(model='synthetic-model', api_key='synthetic-key', base_url='https://synthetic-llm.example.test/v1'); attempts=[]
     def reply(*args,**kwargs):
         attempts.append(True)
         if len(attempts) <= 2: raise _TransientFailure('synthetic temporary failure')
@@ -627,7 +627,7 @@ def test_structured_validation_uses_one_repair_inside_shared_allowance(monkeypat
     from app.core.config import get_settings
     monkeypatch.setenv('LLM_MAX_RETRIES','3')
     get_settings.cache_clear()
-    client=LLMClient();seen=[]
+    client=LLMClient(model='synthetic-model', api_key='synthetic-key', base_url='https://synthetic-llm.example.test/v1');seen=[]
     def reply(system,user,**kwargs):
         seen.append((system,user))
         return LLMResult(content='{"value":"wrong"}')
@@ -646,7 +646,7 @@ def test_structured_validation_uses_one_repair_inside_shared_allowance(monkeypat
 def test_evidence_repair_can_pass_and_does_not_echo_unsafe_error_details(monkeypatch):
     from app.core.config import get_settings
     monkeypatch.setenv('LLM_MAX_RETRIES','3');get_settings.cache_clear()
-    client=LLMClient();seen=[]
+    client=LLMClient(model='synthetic-model', api_key='synthetic-key', base_url='https://synthetic-llm.example.test/v1');seen=[]
     def reply(system,user,**kwargs):
         seen.append(user)
         return LLMResult(content='{"ok":false}' if len(seen)==1 else '{"ok":true}')
@@ -663,7 +663,7 @@ def test_evidence_repair_can_pass_and_does_not_echo_unsafe_error_details(monkeyp
 def test_exhausted_shared_budget_prevents_an_evidence_repair(monkeypatch):
     from app.core.config import get_settings
     monkeypatch.setenv('LLM_MAX_RETRIES','0');get_settings.cache_clear()
-    client=LLMClient();seen=[]
+    client=LLMClient(model='synthetic-model', api_key='synthetic-key', base_url='https://synthetic-llm.example.test/v1');seen=[]
     monkeypatch.setattr(client,'chat',lambda *args,**kwargs: seen.append(True) or LLMResult(content='{}'))
     def validate(answer):raise LLMError('invalid_source_quote')
     with pytest.raises(LLMError):client.complete_json('synthetic','synthetic',validate=validate)
