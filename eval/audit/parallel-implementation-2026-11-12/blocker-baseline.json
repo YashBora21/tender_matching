@@ -1,0 +1,66 @@
+{
+  "tender_id": "373e9eb7-b5b2-4fa3-97cd-4ea478f571f0",
+  "filename": "GeM-Bidding-10103860.pdf",
+  "note": "Preserved historic reading; do not mix with older 487-row or latest 498-row reading.",
+  "reading": "2026-11-12 09:12:37.383049+00:00",
+  "rows": 506,
+  "review_rows": 506,
+  "blockers": 138,
+  "breakdown": [
+    {
+      "source": "cover",
+      "type": "unknown",
+      "reason": "classification proposal held by scope gate",
+      "count": 109
+    },
+    {
+      "source": "cover",
+      "type": "unknown",
+      "reason": "classification quote rejected",
+      "count": 17
+    },
+    {
+      "source": "cover",
+      "type": "unknown",
+      "reason": "source coverage/extraction gap",
+      "count": 1
+    },
+    {
+      "source": "cover",
+      "type": "unknown",
+      "reason": "unassigned source clause",
+      "count": 1
+    },
+    {
+      "source": "scanned",
+      "type": "unknown",
+      "reason": "classification proposal held by scope gate",
+      "count": 9
+    },
+    {
+      "source": "spec",
+      "type": "technical",
+      "reason": "quote/value validation failed",
+      "count": 1
+    }
+  ],
+  "stored_technical_or_certification_blockers": 1,
+  "deterministic_or_stored_candidate_blockers": 2,
+  "older_487": {
+    "types": {
+      "unknown": 475,
+      "informational": 8,
+      "technical": 4
+    },
+    "sources": {
+      "scanned": 32,
+      "cover": 449,
+      "spec": 6
+    },
+    "empty_attributes": 487,
+    "unmapped_attribute_flags": 487,
+    "review_flags": 487
+  },
+  "provider_calls_for_inventory": 0,
+  "database_writes": 0
+}

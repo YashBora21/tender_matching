@@ -4812,3 +4812,8 @@ Reader15 does not end unfinished prose at blank OCR blocks or colons. Preserve s
 ## Mixed nontechnical paragraphs remain source-covered — 2026-11-12
 
 A validated unknown clause type may trigger the existing bounded extractor only when local product-subject/physical evidence is absent. Accept this fallback only when every emitted entry is commercial/eligibility/informational and their verified spans/values cover the original source; otherwise retain the unresolved clause. No product scope is assigned. Prompt8 asks nontechnical entries to preserve verbatim clause values so coverage is evidence-based rather than inferred from paraphrases. Scope policy source-scope-5 and requirement prompt8 invalidate affected stages/response caches. The gate uses attribute-bound numeric values, not arbitrary digits elsewhere in a paragraph.
+
+
+## Two-track implementation ownership — 2026-11-12
+
+Split the accepted source-policy/reset work between Codex Track A (source roles, completion, deterministic triage/templates, batching and one evidence repair) and the user's OpenRouter Track B (reading lifecycle/current-limit resume/read again, preflight and reset preview). Ownership and backward-compatible source metadata/repository contracts are documented in docs/parallel/PLAN.md. Shared-checkout B changes remain unstaged; A owns integration and canonical decision/work logs. No live reruns, migrations, backup execution or deletion in this phase. Reset remains subject to user review.
