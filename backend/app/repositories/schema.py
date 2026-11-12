@@ -445,3 +445,25 @@ result = Table(
     Index("ix_result_run_id", "run_id"),
     Index("ix_result_requirement_id", "requirement_id"),
 )
+
+# --- spend ledger -----------------------------------------------------------
+
+# One row per billable model call, written as the call returns. It exists so a
+# cap survives a process restart: the client's own counters bound one run, and
+# a shell that restarts between runs would otherwise reset the day's spend to
+# zero (D-164). Cost is stored, not recomputed, because a price change must not
+# rewrite history.
+llm_spend = Table(
+    "llm_spend",
+    metadata,
+    _uuid_pk(),
+    Column("occurred_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+    Column("model", String(128), nullable=False),
+    # What the call was for: `text` extraction, `classify`, or a vision probe.
+    Column("purpose", String(64), nullable=False, server_default="text"),
+    Column("prompt_tokens", Integer, nullable=False, server_default="0"),
+    Column("completion_tokens", Integer, nullable=False, server_default="0"),
+    Column("cost_inr", Numeric(12, 4), nullable=False, server_default="0"),
+    Column("run_id", Uuid(), ForeignKey("run.id")),
+    Index("ix_llm_spend_occurred_at", "occurred_at"),
+)

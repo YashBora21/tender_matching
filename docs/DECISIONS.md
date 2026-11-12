@@ -4837,3 +4837,8 @@ Reader16 preserves source role, candidate type and context-only metadata before 
 ## Bounded independent clause classification batches - 2026-11-12
 
 Batch prompt clause-batch-1 classifies same-source/page unresolved candidates within the existing request character limit. Exact input IDs, one result per clause, own-clause quote validation and consistent duplicate interpretations are mandatory. Individual validated responses remain separately cached and reusable by single-clause reads; BOQ assessments are never merged. Cache identity includes clause text, safe source role/context, prompt/schema/model/policy identities and the one-repair validation policy. Reviewed context-independent templates exclude neighbors. Classifier signatures always participate in extraction-stage keys, including role-driven classification when the legacy opt-in is off. Actual client-call deltas replace row-count estimates; no live calls-after or speed claim until the reviewed reset/fresh run.
+
+
+## Publish the ledger schema prerequisite without enabling cap runtime - 2026-11-12
+
+Reading-attempt migration0023 depends on the existing local migration0022. Publish the spend table schema and migration as a self-contained prerequisite; reset retains every spend row and only detaches deleted run references. This change neither enables spend caps nor includes unfinished spend runtime/configuration work. No migration is applied to the application database.
