@@ -5,15 +5,14 @@ JSON and the answer is validated by Pydantic before anything downstream sees
 it, so a malformed or truncated answer is a failed extraction rather than a
 requirement that was never stated.
 
-The client speaks the OpenAI-compatible API, so the provider is a base URL:
-Groq serves gpt-oss. Embeddings are local by default (sentence-transformers,
-public weights, no account); the alternative `http` backend speaks the same
-OpenAI shape, which a local Ollama serves.
+The client speaks a compatible chat API configured entirely at runtime.
+Embeddings use either local weights or the configured HTTP backend.
 """
 
 from __future__ import annotations
 
 import json
+from hashlib import sha256
 import re
 import time
 import urllib.error
@@ -25,6 +24,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+STRUCTURED_VALIDATION_VERSION = 'one-evidence-repair-feedback-1'
 
 # A reasoning model may wrap its answer, or a chat model may fence it.
 _FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
@@ -488,21 +488,52 @@ class LLMClient:
         )
 
     def complete_json(self, system: str, user: str, *, max_tokens: Optional[int] = None, validate=None) -> Any:
-        """Ask the model for JSON and return it parsed."""
+        """Parse JSON; one evidence repair shares the transport/JSON retry budget."""
         retry_start = self.retries
+        repaired = False
+        request_user = user
+        self.validation_attempts = getattr(self, 'validation_attempts', [])
+        self.structured_requests = getattr(self, 'structured_requests', 0) + 1
+        request_id = self.structured_requests
+        source_hash = sha256(user.encode()).hexdigest()
+
+        def record(attempt, outcome, error=None):
+            if validate is not None:
+                self.validation_attempts.append({'request_id': request_id, 'source_hash': source_hash,
+                    'attempt': attempt + 1, 'call': self.calls, 'outcome': outcome, 'error': error})
+
         for attempt in range(get_settings().llm_max_retries + 1):
             remaining = get_settings().llm_max_retries - (self.retries - retry_start)
-            result = self.chat(system, user, max_tokens=max_tokens, _max_retries=remaining)
+            result = self.chat(system, request_user, max_tokens=max_tokens, _max_retries=remaining)
             try:
                 answer = result.parsed
-                if validate is not None:
-                    validate(answer)
-                return answer
             except LLMError:
-                if self.retries - retry_start >= get_settings().llm_max_retries:
+                record(attempt, 'invalid_json', 'invalid_json')
+                if repaired or self.retries - retry_start >= get_settings().llm_max_retries:
                     raise
                 self.retries += 1
-                logger.warning('invalid structured LLM response, retrying within configured budgets')
+                logger.warning('invalid LLM JSON, retrying within configured budgets')
+                continue
+            if validate is not None:
+                try:
+                    validate(answer)
+                except LLMError as exc:
+                    safe_errors = {'invalid_source_quote', 'classification_requires_complete_source',
+                        'invalid_classification_schema', 'source_quote_or_value_validation_failed',
+                        'extraction_schema_validation_failed', 'invalid_batch_classification',
+                        'batch_clause_id_mismatch', 'conflicting_clause_classification'}
+                    error = str(exc) if str(exc) in safe_errors else 'source_validation_failed'
+                    record(attempt, 'validation_failed', error)
+                    if repaired or self.retries - retry_start >= get_settings().llm_max_retries:
+                        raise
+                    repaired = True
+                    self.retries += 1
+                    request_user = user + ('\n\nValidation feedback: ' + error +
+                        '. Return a corrected response for the unchanged source above. '
+                        'Keep source text, values and identifiers verbatim; do not relax validation.')
+                    continue
+            record(attempt, 'passed')
+            return answer
 
 
 # The browser signature some providers require before they answer.

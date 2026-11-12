@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 
 # The version of the prompt below. A change to the prompt is a change to
 # every answer, so it is part of the cache key (FR-12, FR-34).
-PROMPT_VERSION = "8"
+PROMPT_VERSION = "9"
 
 # The types a clause can be, and what happens to each (FR-14). Only the
 # technical and certification ones go to matching; the commercial and

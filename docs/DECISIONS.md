@@ -4822,3 +4822,8 @@ Split the accepted source-policy/reset work between Codex Track A (source roles,
 ## Technical normalization is separate from clause review — 2026-11-12
 
 Normalize technical/certification records only. Commercial, eligibility, informational and untyped clauses retain their raw values and independent review flags without acquiring an unrelated technical alias/unit review failure. Preserve source_context metadata through normalization. Bump derived normalization policy to structured-values-2; its existing fingerprint invalidates resolution only. No LLM prompt/cache-key change, no aliases approved, no historical record mutation or review flag erasure.
+
+
+## One bounded evidence repair with recorded attempts - 2026-11-12
+
+A structured validation failure gets exactly one corrected generation with a safe validation code appended to the unchanged source. Transport, malformed JSON and the evidence repair share the configured retry and token/call ceilings. Validation remains unchanged; a second bad quote/value fails. Record request hash, attempt and outcome without source text or provider identifiers. Requirement prompt version 9 and structured-validation policy one-evidence-repair-feedback-1 invalidate affected responses; classification includes this policy in its signature in the following routing/batch changes. No live provider test in this phase.

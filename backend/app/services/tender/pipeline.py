@@ -162,6 +162,7 @@ class PipelineResult:
     # What the extraction cost, and whether it stopped on the provider's limit.
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    validation_attempts: list[dict] = field(default_factory=list)
     llm_retries: int = 0
     rate_limited: bool = False
     rate_limited_detail: Optional[str] = None
@@ -688,6 +689,7 @@ def run_pipeline(
             int(getattr(client, "completion_tokens", 0) or 0),
             int(getattr(client, "retries", 0) or 0),
         )
+        validation_start = len(getattr(client, "validation_attempts", []))
         has_calls = getattr(client, "calls", None) is not None
         # Commit small response-cache entries during extraction; publish requirement
         # revisions only at completion or a resumable stop.
@@ -731,6 +733,7 @@ def run_pipeline(
         result.prompt_tokens = after[1] - before[1]
         result.completion_tokens = after[2] - before[2]
         result.llm_retries = after[3] - before[3]
+        result.validation_attempts = list(getattr(client, "validation_attempts", []))[validation_start:]
         if limited:
             # The provider's limit was hit. The stage is resumable: the next
             # run picks it up where it stopped.

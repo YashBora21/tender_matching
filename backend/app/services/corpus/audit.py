@@ -52,6 +52,7 @@ class TenderAudit:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     llm_retries: int = 0
+    validation_attempts: list[dict] = field(default_factory=list)
     # True when the provider's limit stopped the extraction. The stage is
     # resumable, so this is not a failure of reading. `rate_limited_detail`
     # carries what the provider said, so the next run knows when to resume
@@ -232,6 +233,7 @@ def audit_tender(
         prompt_tokens=result.prompt_tokens,
         completion_tokens=result.completion_tokens,
         llm_retries=result.llm_retries,
+        validation_attempts=getattr(result, 'validation_attempts', []),
         rate_limited=result.rate_limited,
         rate_limited_detail=result.rate_limited_detail,
         stages={

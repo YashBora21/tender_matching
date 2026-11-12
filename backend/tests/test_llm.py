@@ -623,16 +623,48 @@ def test_transport_and_json_share_one_retry_ceiling(monkeypatch):
     assert len(attempts)==4 and client.retries==3
 
 
-def test_structured_validation_uses_shared_retry_allowance(monkeypatch):
+def test_structured_validation_uses_one_repair_inside_shared_allowance(monkeypatch):
     from app.core.config import get_settings
     monkeypatch.setenv('LLM_MAX_RETRIES','3')
     get_settings.cache_clear()
     client=LLMClient();seen=[]
     def reply(system,user,**kwargs):
         seen.append((system,user))
-        return LLMResult(content='{"value":"wrong"}' if len(seen)<4 else '{"value":"source"}')
+        return LLMResult(content='{"value":"wrong"}')
     monkeypatch.setattr(client,'chat',reply)
     def validate(answer):
-        if answer['value']!='source':raise LLMError('synthetic evidence failure')
-    assert client.complete_json('synthetic','source',validate=validate)=={'value':'source'}
-    assert len(seen)==4 and len(set(seen))==1 and client.retries==3
+        raise LLMError('source_quote_or_value_validation_failed')
+    with pytest.raises(LLMError):
+        client.complete_json('synthetic','synthetic source',validate=validate)
+    assert len(seen)==2 and client.retries==1
+    assert seen[0]==('synthetic','synthetic source')
+    assert seen[1][1].startswith('synthetic source')
+    assert 'source_quote_or_value_validation_failed' in seen[1][1]
+    assert [row['outcome'] for row in client.validation_attempts]==['validation_failed','validation_failed']
+
+
+def test_evidence_repair_can_pass_and_does_not_echo_unsafe_error_details(monkeypatch):
+    from app.core.config import get_settings
+    monkeypatch.setenv('LLM_MAX_RETRIES','3');get_settings.cache_clear()
+    client=LLMClient();seen=[]
+    def reply(system,user,**kwargs):
+        seen.append(user)
+        return LLMResult(content='{"ok":false}' if len(seen)==1 else '{"ok":true}')
+    monkeypatch.setattr(client,'chat',reply)
+    def validate(answer):
+        if not answer['ok']:raise LLMError('synthetic private failure details')
+    assert client.complete_json('synthetic','synthetic source',validate=validate)=={'ok':True}
+    assert len(seen)==2 and client.retries==1
+    assert 'synthetic private failure details' not in seen[1]
+    assert 'source_validation_failed' in seen[1]
+    assert [row['outcome'] for row in client.validation_attempts]==['validation_failed','passed']
+
+
+def test_exhausted_shared_budget_prevents_an_evidence_repair(monkeypatch):
+    from app.core.config import get_settings
+    monkeypatch.setenv('LLM_MAX_RETRIES','0');get_settings.cache_clear()
+    client=LLMClient();seen=[]
+    monkeypatch.setattr(client,'chat',lambda *args,**kwargs: seen.append(True) or LLMResult(content='{}'))
+    def validate(answer):raise LLMError('invalid_source_quote')
+    with pytest.raises(LLMError):client.complete_json('synthetic','synthetic',validate=validate)
+    assert len(seen)==1 and client.retries==0
