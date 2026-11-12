@@ -1,5 +1,6 @@
 """One completion gate shared by ingestion, recovery and reports."""
 from collections import Counter
+from app.services.tender.source_policy import blocking_requirement, source_role
 
 
 def page_coverage(tender, attachments, pages):
@@ -9,12 +10,12 @@ def page_coverage(tender, attachments, pages):
         if count is None:
             continue
         identity = attachment.get('sha256') or attachment.get('id') or attachment.get('url')
-        group = groups.setdefault(identity, {'keys': set(), 'pages': count})
+        group = groups.setdefault(identity, {'keys': set(), 'pages': count, 'source_role': source_role(attachment)})
         group['keys'].update(str(value) for value in (attachment.get('id'), attachment.get('sha256')) if value)
     wrapper_hash = tender.get('sha256') or tender.get('wrapper_sha256')
     wrapper_count = tender.get('page_count')
     if wrapper_count and wrapper_hash not in groups:
-        groups['wrapper'] = {'keys': {'wrapper'}, 'pages': wrapper_count}
+        groups['wrapper'] = {'keys': {'wrapper'}, 'pages': wrapper_count, 'source_role': 'cover'}
     missing = 0
     sources = []
     for identity, group in groups.items():
@@ -25,7 +26,12 @@ def page_coverage(tender, attachments, pages):
                       page.get('source_key', 'legacy') == 'legacy'}
         absent = sorted(set(range(1, group['pages'] + 1)) - actual)
         missing += len(absent)
-        sources.append({'source': str(identity), 'declared': group['pages'], 'missing_pages': absent})
+        roles = {tag.split(':', 1)[1] for page in pages
+                 if str(page.get('source_key') or page.get('attachment_id') or 'legacy') in group['keys']
+                 for tag in page.get('tags') or [] if tag.startswith('source_role:')}
+        role = next(iter(roles)) if len(roles) == 1 else group['source_role']
+        sources.append({'source': str(identity), 'declared': group['pages'], 'missing_pages': absent,
+                        'source_role': role})
     unresolved, skipped = [], []
     for page in pages:
         status = page.get('ledger_status')
@@ -49,6 +55,7 @@ def completion_gaps(tender, attachments, pages, requirements):
         gaps.append('source pages are failed, unaccounted for, or have invalid skip records')
     if any(attachment.get('status') in {'failed', 'restricted'} for attachment in attachments):
         gaps.append('a source attachment is unresolved')
+    requirements = [row for row in requirements if blocking_requirement(row)]
     if requirements and all(row.get('type', row.get('requirement_type')) == 'unknown' for row in requirements):
         gaps.append('all extracted clauses have unresolved requirement types')
     unresolved = [row for row in requirements if

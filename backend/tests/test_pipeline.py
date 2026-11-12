@@ -1030,7 +1030,7 @@ def test_every_page_read_ends_in_the_ledger(tmp_path, monkeypatch):
     assert [row["page"] for row in repo.pages] == [1, 2]
     assert [row["ledger_status"] for row in repo.pages] == ["parsed", "failed"]
     assert repo.pages[0]["extraction_method"] == "table"
-    assert repo.pages[0]["tags"] == ["technical"]
+    assert repo.pages[0]["tags"] == ["technical", "source_role:boq"]
     assert repo.pages[0]["attachment_id"] == "attachment-1"
     assert repo.pages[1]["skip_reason"] == "the OCR read nothing on this page"
 
@@ -1281,3 +1281,29 @@ def test_progress_never_rewrites_the_growing_requirement_list(tmp_path, monkeypa
     assert result.stages[STAGE_EXTRACTION].status == pipeline.STATUS_DONE
     assert repo.requirement_writes == [count]
     assert repo.session.commits == count
+
+
+def test_no_specification_uses_cover_only_for_deterministic_candidates(tmp_path):
+    """Synthetic cover certification remains readable without a spec attachment."""
+    import pymupdf
+    attachments, directory = _attachments(tmp_path)
+    attachments = [row for row in attachments if row['kind']=='boq-csv']
+    wrapper = directory/'synthetic-cover.pdf'
+    document=pymupdf.open();page=document.new_page()
+    page.insert_text((50,60),'Synthetic manufacturer must have ISO 9001 certification.')
+    document.save(wrapper);document.close()
+    (directory/'manifest.json').write_text(json.dumps({'filename':wrapper.name,
+        'wrapper_path':str(wrapper),'wrapper_sha256':hashlib.sha256(wrapper.read_bytes()).hexdigest(),
+        'page_count':1,'documents':[]}),encoding='utf-8')
+    class Reader:
+        calls=0
+        def complete_json(self,system,user,**kwargs):
+            self.calls+=1
+            return {'requirements':[{'text':user,'source_quote':user,'type':'eligibility',
+                'attribute':None,'value':user,'unit':None,'operator':'eq','mandatory':True}]}
+    client=Reader()
+    result=run_pipeline('synthetic-tender',directory,attachments,client=client)
+    assert result.failure is None and client.calls==1
+    assert result.requirements and all(row.source_role=='cover' for row in result.requirements)
+    assert all(row.context_only for row in result.requirements)
+    assert [page.source_key for page in result.pages]==['wrapper']

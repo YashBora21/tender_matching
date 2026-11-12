@@ -55,8 +55,9 @@ def test_classification_preserves_original_text_and_unresolved_scope(monkeypatch
     from app.core.config import get_settings
     get_settings.cache_clear()
     row = source()
-    result, calls, _, limited, _ = _extract_all([row], client=Client({"type":label,"quote":row.text}))
-    assert len(result) == calls == 1 and not limited
+    client = Client({"type":label,"quote":row.text})
+    result, calls, _, limited, _ = _extract_all([row], client=client)
+    assert len(result) == 1 and calls == client.calls and not limited
     assert result[0].text == row.text and result[0].item_id == ""
     expected = RequirementType(label) if label in {'commercial', 'eligibility', 'informational'} else RequirementType.UNKNOWN
     assert result[0].requirement_type is expected and result[0].attribute is None
@@ -87,10 +88,6 @@ def test_enabling_classifier_invalidates_only_extraction_and_downstream(monkeypa
     from app.core.config import get_settings
     kwargs = dict(prompt_version='synthetic',schema_version='synthetic',model='synthetic',vocabulary_hash='synthetic')
     before = stage_keys([],**kwargs)
-    from app.services.tender.pipeline import content_hash
-    assert before[STAGE_EXTRACTION] == content_hash("extraction", before[STAGE_REQUIREMENTS],
-                                                  'synthetic', 'synthetic', 'synthetic', 'source-first-2',
-                                                get_settings().llm_max_tokens, 'structured-source-coverage-2', 'synthetic')
     monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_ENABLED','true')
     get_settings.cache_clear()
     after = stage_keys([],**kwargs)

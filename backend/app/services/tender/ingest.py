@@ -71,7 +71,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "15"
+READER_VERSION = "16"
 
 
 @dataclass
@@ -128,6 +128,9 @@ class RequirementRecord:
     source_text: Optional[str] = None
     table_context: Optional[dict] = None
     source_neighbors: Optional[list[str]] = None
+    source_role: Optional[str] = None
+    context_only: bool = False
+    candidate_type: Optional[str] = None
     normalization: Optional[dict] = None
 
 
@@ -549,6 +552,7 @@ class PageRead:
     error: Optional[str] = None
     skip_reason: Optional[str] = None
     source_context: Optional[dict] = None
+    source_role: Optional[str] = None
     source_key: Optional[str] = None
     attachment_id: Optional[str] = None
 
@@ -1164,6 +1168,9 @@ def assign_to_items(
     unassigned: list[dict] = []
 
     for row in rows:
+        if row.get("context_only"):
+            unassigned.append(row)
+            continue
         identifier_review = False
         number = (row.get("number") or "").strip()
         item = by_number.get(number)
@@ -1208,12 +1215,16 @@ def assign_to_items(
                 text=row["description"],
                 source_text=row.get("row_text") or row["description"],
                 source_neighbors=row.get('source_neighbors'),
+                source_role=row.get("source_role"),
+                context_only=bool(row.get("context_only")),
+                candidate_type=row.get("candidate_type"),
                 table_context=({"headers": row["source_headers"], "cells": row["source_cells"]}
                                if row.get("source_headers") and row.get("source_cells") else None),
                 item_id=item.item_id,
                 # A clause on a page that is not a specification is recorded,
                 # but it is not a capability a document could state (D-87).
                 requirement_type=(
+                    RequirementType(row["clause_type"]) if row.get("clause_type") else
                     RequirementType.INFORMATIONAL if tag in {DISCOVERY, WRAPPER_METADATA} else
                     RequirementType.UNKNOWN if classified else RequirementType.TECHNICAL
                 ),
@@ -1377,7 +1388,7 @@ def drop_fragments(
     report = FragmentReport()
 
     for requirement in requirements:
-        if requirement.source_table_id:
+        if requirement.context_only or requirement.source_table_id:
             kept.append(requirement)
             continue
         if requirement.unreadable or is_mangled(requirement.text):
@@ -1392,6 +1403,7 @@ def drop_fragments(
         previous = kept[-1] if kept else None
         if (
             previous is not None
+            and not previous.context_only
             and previous.item_id == requirement.item_id
             and previous.page == requirement.page
             and _continues(previous.text, requirement.text)

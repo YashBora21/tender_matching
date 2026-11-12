@@ -69,10 +69,11 @@ def assessable(requirements: list[dict]) -> list[dict]:
     into "we checked it and found nothing", which is the absence-of-evidence
     trap (PRD 4, D-92). It is reported as *not assessed* instead.
     """
+    from app.services.tender.source_policy import context_only
     return [
         requirement
         for requirement in requirements
-        if _requirement_type(requirement.get("type")) is not RequirementType.UNKNOWN
+        if not context_only(requirement) and _requirement_type(requirement.get("type")) is not RequirementType.UNKNOWN
     ]
 
 

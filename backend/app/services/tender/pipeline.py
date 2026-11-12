@@ -39,6 +39,7 @@ from app.services.tender.classify import DISCOVERY, WRAPPER_METADATA, NON_TECHNI
 from app.services.requirement.retype import retype_technical, apply_clause_type, retype
 from app.services.requirement.structured_values import normalize_records, fingerprint as normalization_fingerprint
 from app.services.tender.classify import classify_clause, classification_policy_fingerprint
+from app.services.tender.source_policy import fingerprint as source_policy_fingerprint
 from app.services.tender.ingest import (
     PageRead,
     RequirementRecord,
@@ -328,6 +329,7 @@ def stage_keys(
         _ocr_signature(),
         wrapper_fingerprint,
         classification_policy_fingerprint(),
+        source_policy_fingerprint(),
     )
 
     # The extraction: the requirements, and what read them.
@@ -336,8 +338,7 @@ def stage_keys(
     from app.services.requirement.coverage import POLICY_VERSION
     extraction_parts.extend((POLICY_VERSION, vocabulary_hash))
     classification = _classification_signature()
-    if classification[0]:
-        extraction_parts.append(classification)
+    extraction_parts.append(classification)
     extraction_key = content_hash(*extraction_parts)
 
     # The resolution: what was extracted, and the vocabulary that reads it.
@@ -530,6 +531,16 @@ def run_pipeline(
     )
     spec = roles.specification
     if spec is None:
+        from app.services.tender.collect import read_manifest
+        from app.services.tender.upload import _wrapper
+        manifest_path = tender_dir / 'manifest.json'
+        manifest = read_manifest(manifest_path) if manifest_path.exists() else {}
+        wrapper = _wrapper(tender_dir, manifest) if manifest else None
+        if wrapper is not None:
+            spec = {'path': str(wrapper), 'sha256': manifest.get('wrapper_sha256'),
+                    'source_key': 'wrapper', 'pages': manifest.get('page_count'),
+                    'item_titles': [item.title for item in result.items]}
+    if spec is None:
         requirements_state.status = STATUS_FAILED
         requirements_state.detail = "no specification was found"
         result.stages[STAGE_REQUIREMENTS] = requirements_state
@@ -568,16 +579,21 @@ def run_pipeline(
                     text=row.get("description", ""),
                     source_text=row.get("row_text") or row.get("description", ""),
                     source_neighbors=row.get('source_neighbors'),
+                    source_role=row.get('source_role'),
+                    context_only=bool(row.get('context_only')),
+                    candidate_type=row.get('candidate_type'),
                     table_context=({"headers": row["source_headers"], "cells": row["source_cells"]}
                                    if row.get("source_headers") and row.get("source_cells") else None),
                     item_id="",
-                    requirement_type=RequirementType.INFORMATIONAL if tag in {DISCOVERY, WRAPPER_METADATA} else RequirementType.UNKNOWN,
+                    requirement_type=(RequirementType(row["clause_type"]) if row.get("clause_type") else
+                        RequirementType.INFORMATIONAL if tag in {DISCOVERY, WRAPPER_METADATA} else RequirementType.UNKNOWN),
                     page=row.get("page"),
                     source_section=row.get("title"),
                     extraction_method=row.get("extraction_method") or "table",
                     page_tag=tag or None,
-                    review_required=True,
+                    review_required=not bool(row.get("context_only")),
                     review_reason=(
+                        "Context retained: " + row["source_policy_reason"] if row.get("context_only") else
                         f"{NON_TECHNICAL_REASON} {tag}"
                         if classified
                         else "the specification row names no item in the bill of quantities"
@@ -607,6 +623,7 @@ def run_pipeline(
         # it: the clause is never assessed, and the report cannot say that it
         # was skipped (D-141). A clause the specification already stated for
         # the same item is not stated twice.
+        from app.services.tender.source_policy import triage
         stated = {
             (requirement.item_id or "", requirement.text.strip().lower())
             for requirement in result.requirements
@@ -616,6 +633,11 @@ def run_pipeline(
             if key in stated:
                 continue
             stated.add(key)
+            decision = triage(requirement.text, 'boq', section=requirement.source_section)
+            requirement.source_role = 'boq'
+            requirement.context_only = decision.context_only
+            requirement.candidate_type = decision.candidate_type
+            requirement.requirement_type = RequirementType(decision.clause_type)
             result.requirements.append(requirement)
 
         # A compound clause becomes one requirement per fact before the model
@@ -743,7 +765,9 @@ def run_pipeline(
             result.rate_limited_detail = extraction_state.detail
         else:
             from app.services.requirement.coverage import MARKER
-            gaps = sum(MARKER in (record.review_reason or '') for record in result.requirements)
+            from app.services.tender.source_policy import blocking_requirement
+            gaps = sum(MARKER in (record.review_reason or '') and blocking_requirement(vars(record))
+                       for record in result.requirements)
             extraction_state.status = STATUS_FAILED if gaps else STATUS_DONE
             if gaps:
                 extraction_state.detail = f'{gaps} source clauses remain unextracted; retry uses valid cached answers'
@@ -960,8 +984,11 @@ def _read_package(tender_id, directory, attachments, specification, repo):
         if identity in seen:
             continue
         seen.add(identity)
-        attachment_id = _attachment_id(repo, tender_id, source) if repo is not None else None
+        attachment_id = (_attachment_id(repo, tender_id, source)
+                         if repo is not None and source.get('source_key') != 'wrapper' else None)
         source_key = source.get('source_key') or attachment_id or source.get('sha256') or 'legacy'
+        from app.services.tender.source_policy import source_role, triage
+        role = source_role(source, specification=source is specification)
         read = _read_specification(source, directory)
         if read.error:
             combined.error = read.error
@@ -969,7 +996,14 @@ def _read_package(tender_id, directory, attachments, specification, repo):
                 read.pages.append(PageRead(number, '', LedgerStatus.FAILED.value, error=read.error))
         for page in read.pages:
             page.source_key, page.attachment_id = source_key, attachment_id
+            page.source_role = role
             page_rows = [row for row in read.rows if row['page'] == page.page]
+            for row in page_rows:
+                decision = triage(row.get('row_text') or row['description'], role,
+                                  page_tag=row.get('page_tag'), section=row.get('title'))
+                row.update(source_role=role, context_only=decision.context_only,
+                           candidate_type=decision.candidate_type, clause_type=decision.clause_type,
+                           source_policy_reason=decision.reason)
             for row in page_rows:
                 row['source_neighbors'] = [candidate.get('row_text') or candidate['description']
                     for candidate in page_rows
@@ -985,6 +1019,7 @@ def _read_package(tender_id, directory, attachments, specification, repo):
             if context is not None and repo is not None:
                 context['reading']['source_sha256'] = source.get('sha256')
                 context['reading']['source_key'] = source_key
+                context['reading']['source_role'] = role
                 columns = find_columns([label.casefold() for label in context['headers']])
                 for row in context['rows']:
                     index = columns.get('part_number')
@@ -1034,7 +1069,7 @@ def _page_rows(pages: list[PageRead], attachment_id: Optional[str]) -> list[dict
     return [
         {
             "page": page.page,
-            "tags": [page.tag] if page.tag else [],
+            "tags": ([page.tag] if page.tag else []) + (["source_role:" + page.source_role] if page.source_role else []),
             "extraction_method": page.method,
             "quality_warnings": [],
             "ledger_status": page.status,
@@ -1049,19 +1084,28 @@ def _page_rows(pages: list[PageRead], attachment_id: Optional[str]) -> list[dict
 def _classification_signature():
     from app.services.requirement.classify import signature
     enabled = get_settings().requirement_classification_enabled
-    return (enabled, signature() if enabled else None,
-            get_settings().requirement_classification_max_chars if enabled else None,
-            "source-scope-5" if enabled else None)
+    return (enabled, signature(), get_settings().requirement_classification_max_chars,
+            "source-scope-6")
 
 
-def _classify_unscoped(readable, requirement, *, cache=None, client=None):
-    from app.services.requirement.classify import classify_clause
-    context = {'section': english_half(requirement.source_section or ''), 'nearby_source_clauses': []}
+def _classification_context(readable, requirement):
+    context = {'source_role': requirement.source_role or 'unknown',
+               'section': english_half(requirement.source_section or ''), 'nearby_source_clauses': []}
     for source in requirement.source_neighbors or []:
         candidate = dict(context, nearby_source_clauses=context['nearby_source_clauses'] + [english_half(source)])
         if len(json.dumps({'clause': readable, 'context': candidate}, ensure_ascii=False)) <= get_settings().requirement_classification_max_chars:
             context = candidate
-    label, called, hit, error = classify_clause(readable, context=context, cache=cache, client=client)
+    from app.services.requirement.classify import cache_context
+    return cache_context(readable, context)
+
+
+def _classify_unscoped(readable, requirement, *, cache=None, client=None, proposal=None):
+    from app.services.requirement.classify import classify_clause
+    if proposal is None:
+        label, called, hit, error = classify_clause(readable,
+            context=_classification_context(readable, requirement), cache=cache, client=client)
+    else:
+        label, called, hit, error = proposal
     if label is None:
         return None, called, hit, error
     from app.services.tender.classify import NUMBER_WITH_UNIT, classify_clause as source_clause
@@ -1126,6 +1170,7 @@ def _extract_all(
     limited = False
     limit_detail: Optional[str] = None
 
+    client_calls_before = getattr(client, "calls", None)
     seen_sources = set()
     for index, requirement in enumerate(requirements):
         if requirement.source_text and requirement.source_table_id and requirement.source_row_id is not None:
@@ -1139,17 +1184,22 @@ def _extract_all(
         readable = english_half(original_source)
         source_type = classify_clause(original_source, page_tag=requirement.page_tag,
                                       source_section=requirement.source_section)
-        if source_type.kind in {'commercial', 'eligibility', 'informational'} and not source_type.review_required:
+        if requirement.context_only:
+            added = [requirement]
+        elif source_type.kind in {'commercial', 'eligibility', 'informational'} and not source_type.review_required:
             apply_clause_type(requirement)
+            if requirement.source_role:
+                requirement.context_only = True
+                requirement.candidate_type = None
             requirement.source_text = original_source
             added = [requirement]
-        elif requirement.review_required and not requirement.item_id and not (
+        elif requirement.review_required and not requirement.item_id and not requirement.candidate_type and not (
             get_settings().requirement_classification_enabled
             and requirement.requirement_type is RequirementType.UNKNOWN
         ):
             # An ambiguous mapping is flagged, not read.
             added = [requirement]
-        elif requirement.page_tag and is_non_technical(requirement.page_tag) and source_type.kind != "technical":
+        elif requirement.page_tag and is_non_technical(requirement.page_tag) and source_type.kind != "technical" and not requirement.candidate_type:
             # Keep unresolved nontechnical context for review. A decisive
             # product obligation in buyer-added terms bypasses this coarse tag.
             added = [requirement]
@@ -1173,9 +1223,9 @@ def _extract_all(
             try:
                 reader = (_classify_unscoped if not requirement.item_id and
                           requirement.requirement_type is RequirementType.UNKNOWN else _extract_one)
+                options = {}
                 outcome, was_call, was_hit, error = reader(
-                    readable, requirement, cache=cache, client=client
-                )
+                    readable, requirement, cache=cache, client=client, **options)
             except (LLMRateLimited, LLMBudgetExceeded) as exc:
                 # Stop at the first limit. Everything from here on was never
                 # asked about, so it stays as it was: the stage is resumable,
@@ -1212,6 +1262,17 @@ def _extract_all(
                     ) if part)
                     added.append(requirement)
                 for extracted in outcome:
+                    from app.services.requirement.structured_values import resolve_name
+                    canonical, _ = resolve_name(extracted.attribute)
+                    if (requirement.source_role and requirement.candidate_type == 'technical' and canonical
+                            and extracted.requirement_type.value in {'commercial', 'eligibility', 'informational'}):
+                        extracted.requirement_type = RequirementType.UNKNOWN
+                        extracted.review_required = True
+                        extracted.review_reason = 'Source candidate has a technical attribute; clause typing needs review'
+                    extracted.source_role = requirement.source_role
+                    extracted.context_only = requirement.context_only or bool(requirement.source_role and
+                        extracted.requirement_type.value in {'commercial', 'eligibility', 'informational'})
+                    extracted.candidate_type = requirement.candidate_type
                     extracted.table_context = requirement.table_context
                     extracted.source_neighbors = requirement.source_neighbors
                     extracted.source_text = original_source
@@ -1235,6 +1296,9 @@ def _extract_all(
         if on_read is not None:
             on_read(enriched)
 
+    client_calls_after = getattr(client, "calls", None)
+    if isinstance(client_calls_before, int) and isinstance(client_calls_after, int):
+        calls = client_calls_after - client_calls_before
     return enriched, calls, hits, limited, limit_detail
 
 
@@ -1255,7 +1319,8 @@ def _extract_one(
     input_hash = content_hash(readable, model, prompt_version, schema_version,
                               requirement.page_tag, requirement.source_section,
                               classification_policy_fingerprint(),
-                              json.dumps(requirement.table_context, sort_keys=True))
+                              json.dumps(requirement.table_context, sort_keys=True),
+                              requirement.source_role, requirement.candidate_type)
 
     if cache is not None:
         cached = cache.get(input_hash, model, prompt_version, schema_version)
@@ -1284,6 +1349,9 @@ def _extract_one(
         # run has to ask again.
         return None, True, False, outcome.error
     for extracted in outcome.requirements:
+        extracted.source_role = requirement.source_role
+        extracted.context_only = requirement.context_only
+        extracted.candidate_type = requirement.candidate_type
         extracted.table_context = requirement.table_context
         extracted.source_text = requirement.source_text or requirement.text
         extracted.page_tag = requirement.page_tag
@@ -1311,6 +1379,9 @@ def _as_dict(item: RequirementRecord) -> dict:
         "normalization": item.normalization,
         "table_context": item.table_context,
         "source_neighbors": item.source_neighbors,
+        "source_role": item.source_role,
+        "context_only": item.context_only,
+        "candidate_type": item.candidate_type,
         "span": list(item.source_span) if item.source_span else None,
         "type": item.requirement_type.value,
         "attribute": item.attribute,
@@ -1343,6 +1414,9 @@ def _as_record(item) -> RequirementRecord:
         normalization=item.get("normalization"),
         table_context=item.get("table_context"),
         source_neighbors=item.get('source_neighbors'),
+        source_role=item.get("source_role"),
+        context_only=bool(item.get("context_only")),
+        candidate_type=item.get("candidate_type"),
         item_id="",
         requirement_type=_type_of(item.get("type", "unknown")),
         attribute=item.get("attribute"),
@@ -1404,6 +1478,9 @@ def _stored_records(repo, tender_id: str) -> list[RequirementRecord]:
                 normalization=row.get("normalization"),
                 table_context=normalization.get("source_context", {}).get("table"),
                 source_neighbors=normalization.get('source_context', {}).get('nearby_source_clauses'),
+                source_role=normalization.get('source_context', {}).get('source_role'),
+                context_only=bool(normalization.get('source_context', {}).get('context_only')),
+                candidate_type=normalization.get('source_context', {}).get('candidate_type'),
                 confidence=row.get("confidence"),
                 review_required=bool(row.get("review_required")),
                 review_reason=reason,
@@ -1435,6 +1512,8 @@ def to_stored(
         schema_version = settings.schema_version
     if extraction_version is None:
         extraction_version = EXTRACTION_VERSION
+    if requirement.source_role and requirement.context_only and requirement.candidate_type is None:
+        model = None
     return StoredRequirement(
         tender_id=tender_id,
         item_id=requirement.item_id or None,
@@ -1462,5 +1541,7 @@ def to_stored(
         source_span=requirement.source_span,
         normalization=dict(requirement.normalization or {},
                            source_context={"page_tag": requirement.page_tag, "table": requirement.table_context,
-                                           "nearby_source_clauses": requirement.source_neighbors}),
+                                           "nearby_source_clauses": requirement.source_neighbors,
+                                           **({"source_role": requirement.source_role, "context_only": requirement.context_only,
+                                               "candidate_type": requirement.candidate_type} if requirement.source_role else {})}),
     )

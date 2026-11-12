@@ -120,7 +120,7 @@ def _operator(text: str) -> Optional[Operator]:
 
 def apply_clause_type(requirement: RequirementRecord) -> bool:
     """Apply a source-position/subject decision without changing values or quotes."""
-    if requirement.page_tag in clause_policy()['non_requirement_tags']:
+    if requirement.context_only or requirement.page_tag in clause_policy()['non_requirement_tags']:
         return False
     subject = requirement.source_text or requirement.text
     if requirement.table_context and requirement.attribute:

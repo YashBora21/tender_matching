@@ -642,3 +642,23 @@ def test_legacy_report_does_not_invent_item_labels():
     assert "Historical source context unknown" in render_html(report)
     assert report["requirements"][0]["item_title"] is None
     assert report["unsupported_requirements"] == []
+
+
+def test_context_is_visible_once_without_manufacturer_results_or_score():
+    import csv
+    import io
+    source='Synthetic administrative <script>context</script>'
+    context={'id':'synthetic-context','item_id':None,'text':source,'source_text':source,
+        'type':'unknown','mandatory':False,'page':1,'value':None,'unit':None,
+        'normalization':{'source_context':{'source_role':'cover','context_only':True,'candidate_type':None}}}
+    report=_report(requirements=[REQUIREMENTS[0],context],
+        results=[_result('r1','mfr-a','Acme','full_match',evidence=EVIDENCE)])
+    assert report['results']['expected']==1
+    assert len(report['context_clauses'])==1 and report['context_clauses'][0]['results']==[]
+    assert not report['not_assessed'] and report['unknown_requirements']['unknown']==0
+    html=render_html(report)
+    assert 'Source context' in html and '<script>' not in html
+    rows=list(csv.DictReader(io.StringIO(render_csv(report))))
+    saved=next(row for row in rows if row['requirement_id']=='synthetic-context')
+    assert saved['manufacturer']==saved['status']==saved['score']==''
+    assert saved['quote']==source

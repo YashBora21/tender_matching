@@ -1,0 +1,11 @@
+{
+  "version": "source-roles-1",
+  "primary_roles": ["specification", "boq"],
+  "restricted_roles": ["cover", "atc", "sla", "supporting", "unknown"],
+  "nontechnical_types": ["commercial", "eligibility", "informational"],
+  "template_min_distinct_tenders": 3,
+  "restricted_filename_patterns": {
+    "atc": ["(?:^|[^a-z])atc(?:[^a-z]|$)", "additional[ _-]+terms"],
+    "sla": ["(?:^|[^a-z])sla(?:[^a-z]|$)", "service[ _-]+level[ _-]+agreement"]
+  }
+}

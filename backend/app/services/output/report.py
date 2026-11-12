@@ -149,6 +149,9 @@ def _unknown_requirements(
     it belongs in the same measure. `unparsed` is what is left after the two
     explainable buckets, and the three add up to the total.
     """
+    from app.services.tender.source_policy import context_only
+    context_count = sum(context_only(row) for row in requirements)
+    requirements = [row for row in requirements if not context_only(row)]
     dropped, merged = _fragments(tender_repo, tender_id)
     unknown = 0
     non_technical = 0
@@ -163,6 +166,7 @@ def _unknown_requirements(
     untyped = unknown + dropped
     total = len(requirements) + dropped
     return {
+        "context": context_count,
         "unknown": untyped,
         "total": total,
         "percent": round(100.0 * untyped / total, 1) if total else 0.0,
@@ -248,6 +252,8 @@ def build_report(
     names = {row["manufacturer_id"]: row["manufacturer"] for row in results}
     order = {row["id"]: index for index, row in enumerate(requirements)}
 
+    from app.services.tender.source_policy import context_only, source_context
+    context_clauses: list[dict] = []
     matchable: list[dict] = []
     unsupported: list[dict] = []
     not_assessed: list[dict] = []
@@ -294,6 +300,14 @@ def build_report(
                 for row in rows
             ],
         }
+
+        entry['source_role'] = source_context(requirement).get('source_role')
+        entry['context_only'] = context_only(requirement)
+        if entry['context_only']:
+            entry['results'] = []
+            entry['reason'] = requirement.get('review_reason') or 'Source context; excluded from capability scoring'
+            context_clauses.append(entry)
+            continue
 
         # A clause nothing could type has no assessment to show: a result row
         # for it would read as "checked and nothing found" (D-92). It is kept
@@ -375,6 +389,7 @@ def build_report(
         "requirements": sorted(
             matchable, key=lambda entry: order.get(entry["requirement_id"], 0)
         ),
+        "context_clauses": context_clauses,
         "unsupported_requirements": sorted(
             unsupported, key=lambda entry: order.get(entry["requirement_id"], 0)
         ),
@@ -465,6 +480,12 @@ def render_csv(report: dict) -> str:
                         _csv_safe(row.get("reason_code")),
                     ]
                 )
+    for clause in report.get('context_clauses') or []:
+        writer.writerow([_csv_safe(clause['requirement_id']), _csv_safe(clause.get('item_id')),
+            _csv_safe(clause.get('text')), _csv_safe(clause.get('type')),
+            _csv_safe('yes' if clause.get('mandatory') else 'no'), '', '', '', '', '', '', '',
+            _csv_safe(clause.get('page')), _csv_safe(clause.get('source_text')), '', '',
+            _csv_safe(clause.get('reason')), ''])
     return buffer.getvalue()
 
 
@@ -584,6 +605,18 @@ def _unsupported_table(report: dict) -> str:
         "<table><thead><tr><th>Item</th><th>Requirement</th><th>Type</th>"
         f"<th>Why</th></tr></thead><tbody>{''.join(rows)}</tbody></table>"
     )
+
+
+def _context_table(report):
+    rows = ''.join('<tr><td>' + _escape(row.get('source_role')) + '</td><td>' +
+        _escape(row.get('type')) + '</td><td>' + _escape(row.get('page')) + '</td><td>' +
+        _escape(row.get('source_text') or row.get('text')) + '</td></tr>'
+        for row in report.get('context_clauses') or [])
+    if not rows:
+        return ''
+    return ('<h2>Source context</h2><p>These clauses are retained with their types and sources; '
+            'they are excluded from capability scoring.</p><table><thead><tr><th>Source</th>'
+            '<th>Type</th><th>Page</th><th>Text</th></tr></thead><tbody>' + rows + '</tbody></table>')
 
 
 def _not_assessed_table(report: dict) -> str:
@@ -815,6 +848,7 @@ values here are not directly comparable (FR-34).</p>
 {sections or '<p class="muted">No requirement was assessed.</p>'}
 {_unsupported_table(report)}
 {_not_assessed_table(report)}
+{_context_table(report)}
 <h2>Statuses</h2>
 <table><thead><tr><th>Status</th><th>Meaning</th></tr></thead>
 <tbody>{status_rows}</tbody></table>
