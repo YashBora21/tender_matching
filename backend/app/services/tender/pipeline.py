@@ -1164,6 +1164,7 @@ def _extract_all(
                     ) if part)
                     added.append(requirement)
                 for extracted in outcome:
+                    extracted.table_context = requirement.table_context
                     extracted.source_text = original_source
                     extracted.page_tag = requirement.page_tag
                     extracted.source_section = requirement.source_section
@@ -1204,7 +1205,8 @@ def _extract_one(
     schema_version = settings.schema_version
     input_hash = content_hash(readable, model, prompt_version, schema_version,
                               requirement.page_tag, requirement.source_section,
-                              classification_policy_fingerprint())
+                              classification_policy_fingerprint(),
+                              json.dumps(requirement.table_context, sort_keys=True))
 
     if cache is not None:
         cached = cache.get(input_hash, model, prompt_version, schema_version)
@@ -1224,6 +1226,7 @@ def _extract_one(
         # to say the same thing, or a prose clause would be recorded as a
         # table row and never be atomized on a rerun.
         extraction_method=requirement.extraction_method,
+        table_context=requirement.table_context,
     )
     if outcome.rejected:
         return None, True, False, 'source_coverage_gap: source_quote_or_value_validation_failed'
@@ -1232,6 +1235,7 @@ def _extract_one(
         # run has to ask again.
         return None, True, False, outcome.error
     for extracted in outcome.requirements:
+        extracted.table_context = requirement.table_context
         extracted.source_text = requirement.source_text or requirement.text
         extracted.page_tag = requirement.page_tag
         extracted.source_section = requirement.source_section
@@ -1256,6 +1260,7 @@ def _as_dict(item: RequirementRecord) -> dict:
         "page_tag": item.page_tag,
         "source_section": item.source_section,
         "normalization": item.normalization,
+        "table_context": item.table_context,
         "span": list(item.source_span) if item.source_span else None,
         "type": item.requirement_type.value,
         "attribute": item.attribute,
@@ -1286,6 +1291,7 @@ def _as_record(item) -> RequirementRecord:
         page_tag=item.get("page_tag"),
         source_section=item.get("source_section"),
         normalization=item.get("normalization"),
+        table_context=item.get("table_context"),
         item_id="",
         requirement_type=_type_of(item.get("type", "unknown")),
         attribute=item.get("attribute"),
@@ -1345,6 +1351,7 @@ def _stored_records(repo, tender_id: str) -> list[RequirementRecord]:
                 extraction_method=row.get("extraction_method") or "table",
                 page_tag=tag,
                 normalization=row.get("normalization"),
+                table_context=normalization.get("source_context", {}).get("table"),
                 confidence=row.get("confidence"),
                 review_required=bool(row.get("review_required")),
                 review_reason=reason,
@@ -1402,5 +1409,5 @@ def to_stored(
         source_row_id=requirement.source_row_id,
         source_span=requirement.source_span,
         normalization=dict(requirement.normalization or {},
-                           source_context={"page_tag": requirement.page_tag}),
+                           source_context={"page_tag": requirement.page_tag, "table": requirement.table_context}),
     )

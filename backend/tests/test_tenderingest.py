@@ -687,3 +687,14 @@ def test_encoding_artifacts_do_not_delete_values_or_part_identifiers():
     """Synthetic PDF CID markers are encoding residue, not source values."""
     assert english_half("(cid:42) विवरण/Part 001-AB (cid:1) pressure -20 bar") == "Part 001-AB pressure -20 bar"
     assert english_half("Pressure >= 10 bar") == "Pressure >= 10 bar"
+
+
+def test_assignment_preserves_complete_table_source_beyond_display_name():
+    """Synthetic identifier/quantity columns survive item-title assignment."""
+    row={'number':'1','title':'Synthetic component','description':'Synthetic component',
+         'row_text':'1 | SYNTHETIC-X-42 | Synthetic component | 7 | Nos',
+         'page':1,'extraction_method':'table'}
+    assigned,unassigned=assign_to_items([row],[TenderItem(item_id='1',title='Synthetic component')])
+    assert not unassigned
+    assert assigned[0].text=='Synthetic component'
+    assert assigned[0].source_text==row['row_text']

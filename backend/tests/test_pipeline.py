@@ -171,6 +171,9 @@ class CountingClient:
         self.answer = answer
 
     def complete_json(self, system, user, **kwargs):
+        if user.startswith('{'):
+            envelope = json.loads(user)
+            user = envelope.get('source_text', user)
         self.calls += 1
         if self.answer is not None:
             return self.answer
@@ -759,6 +762,9 @@ class FlakyClient:
         self.retries = 0
 
     def complete_json(self, system, user, **kwargs):
+        if user.startswith('{'):
+            envelope = json.loads(user)
+            user = envelope.get('source_text', user)
         self.calls += 1
         if self.calls == self.fail_on:
             raise self.error

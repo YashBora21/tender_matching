@@ -71,7 +71,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "11"
+READER_VERSION = "12"
 
 
 @dataclass
@@ -126,6 +126,7 @@ class RequirementRecord:
     source_table_id: Optional[str] = None
     source_row_id: Optional[str] = None
     source_text: Optional[str] = None
+    table_context: Optional[dict] = None
     normalization: Optional[dict] = None
 
 
@@ -1200,6 +1201,9 @@ def assign_to_items(
         assigned.append(
             RequirementRecord(
                 text=row["description"],
+                source_text=row.get("row_text") or row["description"],
+                table_context=({"headers": row["source_headers"], "cells": row["source_cells"]}
+                               if row.get("source_headers") and row.get("source_cells") else None),
                 item_id=item.item_id,
                 # A clause on a page that is not a specification is recorded,
                 # but it is not a capability a document could state (D-87).

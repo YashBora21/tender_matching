@@ -112,3 +112,48 @@ def test_legacy_incomplete_cached_answer_is_not_reused():
     _,calls,hits,_,_=_extract_all([RequirementRecord(
         text='size 25 mm surface condition ZETA',item_id='1')],cache=LegacyCache(),client=client)
     assert calls==1 and hits==0 and client.calls==1
+
+
+def test_quoted_open_vocabulary_value_is_read_without_approving_the_alias():
+    from app.services.requirement.structured_values import normalize_fields
+    text='Synthetic identity ABC-X-42'
+    record=fact('Synthetic identity','ABC-X-42')
+    record.source_span=(0,len(text))
+    assert '42' not in uncovered_tokens(text,[record])
+    assert normalize_fields(record.attribute,record.value,None)['review_required']
+
+
+def test_table_context_survives_extraction_cache_and_storage():
+    """Synthetic source: headers affect the answer/cache, not just the display."""
+    import json
+    from app.services.tender.pipeline import _as_record
+    context = {'headers': ['Synthetic identifier', 'Qty'], 'cells': ['SYN-X-42', '7']}
+    text = 'SYN-X-42 7'
+
+    class TableClient:
+        calls = 0
+
+        def complete_json(self, system, user):
+            self.calls += 1
+            envelope = json.loads(user)
+            assert envelope == {'source_text': text, 'table': context}
+            return {'requirements': [
+                {'text': value, 'source_quote': value, 'type': kind,
+                 'attribute': header, 'operator': 'eq', 'value': value,
+                 'unit': None, 'mandatory': True}
+                for header, value, kind in zip(context['headers'], context['cells'],
+                                               ('informational', 'commercial'))]}
+
+    client, cache = TableClient(), Cache()
+    contexts = (context, context,
+                dict(context, headers=['Synthetic alternate identifier', 'Qty']))
+    for context, expected_calls in zip(contexts, (1, 1, 2)):
+        source = RequirementRecord(text=text, item_id='synthetic', table_context=context)
+        records, _, _, limited, _ = _extract_all([source], client=client, cache=cache)
+        assert not limited and client.calls == expected_calls
+        assert all(row.table_context == context for row in records)
+        assert all(_as_record(value).table_context == context
+                   for value in list(cache.data.values())[-1])
+        stored = to_stored(records[0], 'synthetic-tender', model='synthetic',
+                           prompt_version='synthetic', input_hash='synthetic')
+        assert stored.normalization['source_context']['table'] == context

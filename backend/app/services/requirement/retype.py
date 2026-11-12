@@ -122,9 +122,15 @@ def apply_clause_type(requirement: RequirementRecord) -> bool:
     """Apply a source-position/subject decision without changing values or quotes."""
     if requirement.page_tag in clause_policy()['non_requirement_tags']:
         return False
-    decision = classify_clause(requirement.source_text or requirement.text,
+    subject = requirement.source_text or requirement.text
+    if requirement.table_context and requirement.attribute:
+        # Classify the labelled field, not neighbouring columns in the same row.
+        subject = ' '.join(str(value) for value in (requirement.attribute, requirement.value, requirement.unit) if value)
+    from app.services.requirement.structured_values import resolve_name
+    canonical, _ = resolve_name(requirement.attribute)
+    decision = classify_clause(subject,
         page_tag=requirement.page_tag, source_section=requirement.source_section,
-        attribute=requirement.attribute)
+        attribute=canonical)
     if decision.review_required:
         if requirement.requirement_type in (RequirementType.UNKNOWN, RequirementType.TECHNICAL, RequirementType.CERTIFICATION):
             requirement.review_required = True

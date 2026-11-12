@@ -136,3 +136,15 @@ def test_pipeline_normalization_policy_only_invalidates_resolution(monkeypatch):
     monkeypatch.setattr(pipeline, 'normalization_fingerprint', lambda: 'synthetic-policy-change')
     after = pipeline.stage_keys([], **kwargs)
     assert [key for key in before if before[key] != after[key]] == [pipeline.STAGE_RESOLUTION]
+
+
+def test_table_quantity_does_not_inherit_pressure_column_type():
+    from app.services.tender.ingest import RequirementRecord
+    from app.services.requirement.retype import apply_clause_type
+    from app.schemas.enums import RequirementType
+    row=RequirementRecord(text='Synthetic quantity 5',item_id='synthetic',attribute='Qty',value='5',
+        requirement_type=RequirementType.COMMERCIAL,page_tag='technical',
+        source_text='Working pressure 12 bar Qty 5',
+        table_context={'headers':['Working pressure','Qty'],'cells':['12 bar','5']})
+    apply_clause_type(row)
+    assert row.requirement_type is RequirementType.COMMERCIAL
