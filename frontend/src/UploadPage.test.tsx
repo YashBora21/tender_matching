@@ -458,7 +458,7 @@ describe('UploadPage', () => {
       )
     })
     await screen.findByText('The end connection shall be flanged')
-    expect(screen.getByText(/2 requirements read so far/)).toBeTruthy()
+    expect(screen.getByText(/2 requirements in the last saved reading attempt/)).toBeTruthy()
 
     // The read stops, so the page moves on and closes the connection.
     act(() => {
