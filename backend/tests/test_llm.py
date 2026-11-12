@@ -591,3 +591,17 @@ def test_three_retries_apply_to_transient_failures_not_invalid_requests(monkeypa
     with pytest.raises(LLMError):client.chat('synthetic system','synthetic user')
     assert len(attempts)==client.calls==expected_attempts
     assert client.retries==expected_attempts-1
+
+
+def test_malformed_json_retries_without_changing_source(monkeypatch):
+    from app.core.config import get_settings
+    monkeypatch.setenv('LLM_MAX_RETRIES', '3')
+    get_settings.cache_clear()
+    client = LLMClient()
+    seen = []
+    def response(system, user, **kwargs):
+        seen.append((system, user))
+        return LLMResult(content='bad' if len(seen) < 4 else '{"ok": true}')
+    monkeypatch.setattr(client, 'chat', response)
+    assert client.complete_json('synthetic system', 'synthetic source') == {'ok': True}
+    assert len(seen) == 4 and len(set(seen)) == 1 and client.retries == 3

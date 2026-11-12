@@ -488,7 +488,15 @@ class LLMClient:
 
     def complete_json(self, system: str, user: str, *, max_tokens: Optional[int] = None) -> Any:
         """Ask the model for JSON and return it parsed."""
-        return self.chat(system, user, max_tokens=max_tokens).parsed
+        for attempt in range(get_settings().llm_max_retries + 1):
+            result = self.chat(system, user, max_tokens=max_tokens)
+            try:
+                return result.parsed
+            except LLMError:
+                if attempt >= get_settings().llm_max_retries:
+                    raise
+                self.retries += 1
+                logger.warning('invalid LLM JSON, retrying within configured budgets')
 
 
 # The browser signature some providers require before they answer.
