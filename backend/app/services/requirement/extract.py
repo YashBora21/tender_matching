@@ -36,7 +36,7 @@ logger = get_logger(__name__)
 
 # The version of the prompt below. A change to the prompt is a change to
 # every answer, so it is part of the cache key (FR-12, FR-34).
-PROMPT_VERSION = "7"
+PROMPT_VERSION = "8"
 
 # The types a clause can be, and what happens to each (FR-14). Only the
 # technical and certification ones go to matching; the commercial and
@@ -123,6 +123,10 @@ header wording for open-vocabulary attributes. Copy source_quote exactly from
 source_text, not from the JSON syntax or a generated paraphrase. Account for all
 nonempty cells; blank remarks need no entry. Physical units belong in unit; codes
 and ordering units remain values, with unit=null when not a physical measurement.
+For prose with multiple clauses, return separate source-supported entries for each
+obligation or structural field. For commercial, eligibility or informational entries,
+preserve the entire exact source clause as value, with unit=null; do not replace it
+with a summary or infer product properties. Technical values remain typed values.
 Every source_quote must locate the field uniquely within source_text. If a short
 value occurs more than once, include enough verbatim neighbouring text to identify
 its occurrence. Preserve spacing and punctuation in identifiers and descriptions;

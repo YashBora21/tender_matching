@@ -1048,7 +1048,7 @@ def _classification_signature():
     enabled = get_settings().requirement_classification_enabled
     return (enabled, signature() if enabled else None,
             get_settings().requirement_classification_max_chars if enabled else None,
-            "source-scope-4" if enabled else None)
+            "source-scope-5" if enabled else None)
 
 
 def _classify_unscoped(readable, requirement, *, cache=None, client=None):
@@ -1062,7 +1062,7 @@ def _classify_unscoped(readable, requirement, *, cache=None, client=None):
     if label is None:
         return None, called, hit, error
     from app.services.tender.classify import NUMBER_WITH_UNIT, classify_clause as source_clause
-    from app.services.requirement.retype import _attribute
+    from app.services.requirement.retype import _attribute, _value
     from app.comparison.units import parse_unit, REGISTRY
     nontechnical = label in {RequirementType.COMMERCIAL, RequirementType.ELIGIBILITY, RequirementType.INFORMATIONAL}
     source_decision = source_clause(readable, page_tag=requirement.page_tag,
@@ -1073,7 +1073,7 @@ def _classify_unscoped(readable, requirement, *, cache=None, client=None):
         if unit is None or not REGISTRY.Unit(unit).dimensionless:
             physical_quantity = True
             break
-    labelled_value = bool(_attribute(readable) and any(character.isdigit() for character in readable))
+    labelled_value = bool(_attribute(readable) and _value(readable)[0] is not None)
     technical_context = source_decision.kind == 'technical' or physical_quantity or labelled_value
     if nontechnical and not technical_context:
         requirement.requirement_type = label
@@ -1081,6 +1081,17 @@ def _classify_unscoped(readable, requirement, *, cache=None, client=None):
         requirement.review_required = True
         requirement.review_reason = 'Source-wide nontechnical classification; retained for review outside capability scoring.'
         return [requirement], called, hit, None
+    if label is RequirementType.UNKNOWN and not technical_context:
+        outcome, extracted_call, extracted_hit, extraction_error = _extract_one(
+            readable, requirement, cache=cache, client=client)
+        from app.services.requirement.coverage import uncovered_tokens
+        if (outcome and all(row.requirement_type in {
+                RequirementType.COMMERCIAL, RequirementType.ELIGIBILITY, RequirementType.INFORMATIONAL}
+                for row in outcome) and not uncovered_tokens(readable, outcome)):
+            for row in outcome:
+                row.review_required = True
+                row.review_reason = 'Source-supported nontechnical clauses; retained for review outside capability scoring.'
+            return outcome, called or extracted_call, hit and extracted_hit, None
     requirement.review_required = True
     requirement.review_reason = '; '.join(part for part in (
         requirement.review_reason, f'Proposed clause type: {label.value}; classification and BOQ scope require review.'

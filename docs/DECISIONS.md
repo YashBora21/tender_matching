@@ -4807,3 +4807,8 @@ Allow source/schema validators inside complete_json so invalid schema, quote, va
 ## Source assembly and subject-aware clause interpretation — 2026-11-12
 
 Reader15 does not end unfinished prose at blank OCR blocks or colons. Preserve same-document/page/section source context in source order; include as much as fits the existing configured classification request-size limit, without clipping the target clause. Scope policy source-scope-4 uses product-subject decisions, dimensional physical quantities and labelled numeric attributes rather than generic page-scoring words. Administrative percentages remain dimensionless, while physical quantities and explicit product criteria still require technical review. Classifier prompt5 distinguishes complete structural labels from unfinished obligations using supplied context, with whole-clause quotes unchanged. Prompt signature/context payload and reader version invalidate affected caches. No BOQ assignment is guessed and unknowns remain review cases.
+
+
+## Mixed nontechnical paragraphs remain source-covered — 2026-11-12
+
+A validated unknown clause type may trigger the existing bounded extractor only when local product-subject/physical evidence is absent. Accept this fallback only when every emitted entry is commercial/eligibility/informational and their verified spans/values cover the original source; otherwise retain the unresolved clause. No product scope is assigned. Prompt8 asks nontechnical entries to preserve verbatim clause values so coverage is evidence-based rather than inferred from paraphrases. Scope policy source-scope-5 and requirement prompt8 invalidate affected stages/response caches. The gate uses attribute-bound numeric values, not arbitrary digits elsewhere in a paragraph.

@@ -191,3 +191,26 @@ def test_nearby_context_is_bounded_without_truncating_source(monkeypatch):
             assert envelope['context']['nearby_source_clauses']==['Synthetic short context']
             return {'type':'informational','quote':row.text}
     assert _extract_all([row],client=Capture())[0][0].requirement_type is RequirementType.INFORMATIONAL
+
+
+def test_mixed_nontechnical_prose_can_be_read_without_assigning_a_product(monkeypatch):
+    import json
+    from app.core.config import get_settings
+    from app.services.tender.completeness import completion_gaps
+    monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_ENABLED','true');get_settings.cache_clear()
+    clauses=['Synthetic delivery required within 10 days.','Synthetic bidder must provide registration.']
+    text=' '.join(clauses)
+    class MixedClient:
+        calls=0
+        def complete_json(self,system,user,**kwargs):
+            self.calls+=1
+            if user.startswith('{') and 'clause' in json.loads(user):
+                return {'type':'unknown','quote':text}
+            return {'requirements':[{'text':clause,'source_quote':clause,'type':kind,
+                'attribute':None,'value':clause,'unit':None,'operator':'eq','mandatory':True}
+                for clause,kind in zip(clauses,['commercial','eligibility'])]}
+    client=MixedClient();result,_,_,_,_=_extract_all([source(text)],client=client)
+    assert len(result)==2 and client.calls==2
+    assert [r.requirement_type.value for r in result]==['commercial','eligibility']
+    assert all(r.item_id=='' and r.review_required for r in result)
+    assert not completion_gaps({},[],[],[vars(r) for r in result])
