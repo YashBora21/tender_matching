@@ -4817,3 +4817,8 @@ A validated unknown clause type may trigger the existing bounded extractor only 
 ## Two-track implementation ownership — 2026-11-12
 
 Split the accepted source-policy/reset work between Codex Track A (source roles, completion, deterministic triage/templates, batching and one evidence repair) and the user's OpenRouter Track B (reading lifecycle/current-limit resume/read again, preflight and reset preview). Ownership and backward-compatible source metadata/repository contracts are documented in docs/parallel/PLAN.md. Shared-checkout B changes remain unstaged; A owns integration and canonical decision/work logs. No live reruns, migrations, backup execution or deletion in this phase. Reset remains subject to user review.
+
+
+## Technical normalization is separate from clause review — 2026-11-12
+
+Normalize technical/certification records only. Commercial, eligibility, informational and untyped clauses retain their raw values and independent review flags without acquiring an unrelated technical alias/unit review failure. Preserve source_context metadata through normalization. Bump derived normalization policy to structured-values-2; its existing fingerprint invalidates resolution only. No LLM prompt/cache-key change, no aliases approved, no historical record mutation or review flag erasure.

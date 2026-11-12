@@ -1,0 +1,10 @@
+{
+  "tests": 202,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "seconds": 31.578,
+  "provider_calls": 0,
+  "live_database_changes": 0,
+  "scope": "Track A normalization separation; full combined source-policy implementation still pending"
+}

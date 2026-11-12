@@ -10,8 +10,9 @@ from app.comparison.attributes import attribute_by_term
 from app.comparison.vocabulary import load_vocabulary, vocabulary_path, normalise_token
 from app.comparison.units import parse_unit
 from app.core.config import get_settings
+from app.schemas.enums import RequirementType
 
-VERSION = 'structured-values-1'
+VERSION = 'structured-values-2'
 _NUMBER = r'[+-]?(?:\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)'
 _QUANTITY = re.compile(rf'^\s*(?P<prefix>[A-Za-z]+)?\s*(?P<low>{_NUMBER})(?:\s*(?:–|—|-|\bto\b)\s*(?P<high>{_NUMBER}))?\s*(?P<unit>[^\d]*)\s*$')
 
@@ -120,7 +121,18 @@ def normalize_fields(attribute, value, unit, *, aliases=()):
 
 def normalize_records(records, aliases=()):
     for record in records:
+        source_context = (record.normalization or {}).get('source_context')
+        if record.requirement_type not in {RequirementType.TECHNICAL, RequirementType.CERTIFICATION}:
+            # Clause-type/scope uncertainty is independent of technical alias resolution.
+            record.normalization = {'policy': fingerprint(), 'attribute': None,
+                'value': record.value, 'unit': record.unit,
+                'review_required': False, 'review_reason': None}
+            if source_context is not None:
+                record.normalization['source_context'] = source_context
+            continue
         record.normalization = normalize_fields(record.attribute, record.value, record.unit, aliases=aliases)
+        if source_context is not None:
+            record.normalization['source_context'] = source_context
         if record.normalization['review_required']:
             record.review_required = True
             record.review_reason = '; '.join(filter(None, (record.review_reason, record.normalization['review_reason'])))

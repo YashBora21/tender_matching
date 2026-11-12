@@ -6,6 +6,37 @@ from app.comparison.registry import ComparisonRequest, evaluate
 from app.schemas.enums import Operator, RequirementStatus, ValueType
 
 
+@pytest.mark.parametrize('kind', ['commercial', 'eligibility', 'informational', 'unknown'])
+def test_nontechnical_and_untyped_clauses_do_not_get_technical_alias_flags(kind):
+    """Synthetic administrative clauses carry no technical attribute to map."""
+    from app.schemas.enums import RequirementType
+    from app.services.tender.ingest import RequirementRecord
+    from app.services.requirement.structured_values import normalize_records
+    row = RequirementRecord(text='Synthetic source clause', item_id='',
+        requirement_type=RequirementType(kind), value='Synthetic source value',
+        normalization={'source_context': {'source_role': 'cover', 'context_only': True}})
+    normalize_records([row])
+    assert not row.review_required and row.review_reason is None
+    assert not row.normalization['review_required']
+    assert row.normalization['source_context']['context_only']
+    assert (row.text, row.value) == ('Synthetic source clause', 'Synthetic source value')
+
+
+def test_normalizing_context_preserves_independent_review_and_unmapped_technical_flags():
+    from app.schemas.enums import RequirementType
+    from app.services.tender.ingest import RequirementRecord
+    from app.services.requirement.structured_values import normalize_records
+    context = RequirementRecord(text='Synthetic ambiguous scope', item_id='',
+        requirement_type=RequirementType.UNKNOWN, review_required=True,
+        review_reason='Synthetic scope needs review')
+    technical = RequirementRecord(text='Synthetic property', item_id='1',
+        attribute='Synthetic unmapped property', value='Synthetic value')
+    normalize_records([context, technical])
+    assert context.review_required and context.review_reason == 'Synthetic scope needs review'
+    assert technical.review_required and technical.normalization['attribute'] is None
+    assert technical.review_reason == 'unmapped attribute'
+
+
 @pytest.mark.parametrize('value,unit,expected', [('2"', 'inch', '2'), ("6''", None, '6'),
     ('DN150', None, '6'), ('150', 'mm', '6'), ('NPS6', None, '6'),
     ('10–16 inches', None, '10-16')])
