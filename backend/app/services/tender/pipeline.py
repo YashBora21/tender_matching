@@ -1171,6 +1171,7 @@ def _extract_all(
     limit_detail: Optional[str] = None
 
     client_calls_before = getattr(client, "calls", None)
+    batch_proposals = {}
     seen_sources = set()
     for index, requirement in enumerate(requirements):
         if requirement.source_text and requirement.source_table_id and requirement.source_row_id is not None:
@@ -1224,6 +1225,20 @@ def _extract_all(
                 reader = (_classify_unscoped if not requirement.item_id and
                           requirement.requirement_type is RequirementType.UNKNOWN else _extract_one)
                 options = {}
+                if (reader is _classify_unscoped and requirement.source_role and
+                        requirement.candidate_type and requirement.source_table_id):
+                    if index not in batch_proposals:
+                        cohort = [(position, candidate) for position, candidate in enumerate(requirements[index:], index)
+                            if not candidate.item_id and not candidate.context_only and candidate.candidate_type
+                            and candidate.requirement_type is RequirementType.UNKNOWN
+                            and candidate.source_table_id == requirement.source_table_id
+                            and candidate.page == requirement.page and candidate.source_role == requirement.source_role]
+                        from app.services.requirement.classify import classify_batch
+                        answers = classify_batch([{'text': english_half(candidate.source_text or candidate.text),
+                            'context': _classification_context(english_half(candidate.source_text or candidate.text), candidate)}
+                            for _, candidate in cohort], cache=cache, client=client)
+                        batch_proposals.update({position: answer for (position, _), answer in zip(cohort, answers)})
+                    options['proposal'] = batch_proposals[index]
                 outcome, was_call, was_hit, error = reader(
                     readable, requirement, cache=cache, client=client, **options)
             except (LLMRateLimited, LLMBudgetExceeded) as exc:
