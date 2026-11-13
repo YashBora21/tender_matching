@@ -734,7 +734,8 @@ def run_pipeline(
             repo.session.commit()
 
         extracted, calls, hits, limited, limit_detail = _extract_all(
-            result.requirements, cache=cache, client=client, on_read=checkpoint_cache
+            result.requirements, cache=cache, client=client, on_read=checkpoint_cache,
+            preserve_extracted=keys[STAGE_EXTRACTION] == previous.get(STAGE_EXTRACTION),
         )
         result.requirements = extracted
         # Source position and subject can correct proposed types; numeric recovery
@@ -1161,6 +1162,7 @@ def _extract_all(
     cache: Optional[LLMCache] = None,
     client=None,
     on_read=None,
+    preserve_extracted=False,
 ) -> tuple[list[RequirementRecord], int, int, bool, Optional[str]]:
     """Read every requirement with the LLM, using the cache where it fits.
 
@@ -1181,21 +1183,34 @@ def _extract_all(
 
     client_calls_before = getattr(client, "calls", None)
     batch_proposals = {}
-    seen_sources = set()
+    groups = []
+    source_indices = {}
+    for offset, row in enumerate(requirements):
+        key = ((row.item_id, row.page, row.source_table_id, row.source_row_id, row.source_text)
+               if row.source_text and row.source_table_id and row.source_row_id is not None else ('record', offset))
+        if key not in source_indices:
+            source_indices[key] = len(groups)
+            groups.append([])
+        groups[source_indices[key]].append(row)
+    # A source owns all its children; a context child cannot stand in for them.
+    requirements = [next((row for row in group if not row.context_only), group[0]) for group in groups]
     for index, requirement in enumerate(requirements):
-        if requirement.source_text and requirement.source_table_id and requirement.source_row_id is not None:
-            source_key = (requirement.item_id, requirement.page, requirement.source_table_id,
-                          requirement.source_row_id, requirement.source_text)
-            if source_key in seen_sources:
-                continue
-            seen_sources.add(source_key)
+        siblings = groups[index]
         added: list[RequirementRecord] = []
         original_source = requirement.source_text or requirement.text
         readable = english_half(original_source)
         source_type = classify_clause(original_source, page_tag=requirement.page_tag,
                                       source_section=requirement.source_section)
-        if requirement.context_only:
-            added = [requirement]
+        from app.services.requirement.coverage import MARKER
+        from app.services.requirement.extract import span_holds
+        candidates = [row for row in siblings if not row.context_only]
+        complete = preserve_extracted and bool(candidates) and all(
+            row.attribute and row.source_span and row.source_text
+            and MARKER not in (row.review_reason or '')
+            and span_holds(row.source_text, row.source_span, row.value)
+            for row in candidates)
+        if requirement.context_only or complete:
+            added = list(siblings)
         elif source_type.kind in {'commercial', 'eligibility', 'informational'} and not source_type.review_required:
             apply_clause_type(requirement)
             if requirement.source_role:
@@ -1257,7 +1272,7 @@ def _extract_all(
                 # stated. What was read before the limit is already written.
                 limited = True
                 limit_detail = str(exc)
-                enriched.extend(requirements[index:])
+                enriched.extend(row for group in groups[index:] for row in group)
                 break
 
             calls += int(was_call)
@@ -1273,7 +1288,7 @@ def _extract_all(
                     f"the model could not read this line: {error}" if error else "the line could not be read",
                     'source_coverage_gap: extraction did not resolve the source clause' if reader is _extract_one else None
                 ) if part)
-                added = [requirement]
+                added = list(siblings)
             else:
                 from app.services.requirement.coverage import uncovered_tokens, MARKER
                 gap = uncovered_tokens(readable, outcome) if reader is _extract_one else []
@@ -1314,6 +1329,13 @@ def _extract_all(
                     retype(extracted)
                     added.append(extracted)
 
+        # Retain previously extracted candidates on partial/error outcomes too.
+        identity = lambda row: (row.requirement_type, row.attribute, row.value, row.unit, row.source_span, row.text if not row.attribute else None)
+        retained = {identity(row) for row in added}
+        for sibling in siblings:
+            if (sibling.context_only or (preserve_extracted and sibling.attribute)) and identity(sibling) not in retained:
+                added.append(sibling)
+                retained.add(identity(sibling))
         for record in added:
             retype(record)
         enriched.extend(added)
