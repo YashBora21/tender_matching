@@ -1008,7 +1008,9 @@ def _read_package(tender_id, directory, attachments, specification, repo, *, ali
             page.source_key, page.attachment_id = source_key, attachment_id
             page.source_role = role
             page_rows = [row for row in read.rows if row['page'] == page.page]
-            for row in page_rows:
+            for position, row in enumerate(page_rows):
+                if row.get('source_row_id') is None:
+                    row['source_row_id'] = f'prose:{position}'
                 decision = triage(row.get('row_text') or row['description'], role,
                                   page_tag=row.get('page_tag'), section=row.get('title'),
                                   table=(row.get('extraction_method') in {'table', 'item'} or

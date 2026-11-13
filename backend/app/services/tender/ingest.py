@@ -71,7 +71,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "17"
+READER_VERSION = "18"
 
 
 @dataclass
