@@ -4867,3 +4867,8 @@ Reader17 records a source page as skipped with a rendered_blank_page reason only
 ## Integration checkpoint and delegated deployment - 2026-11-13
 
 The exported code snapshot4d700b3 passes1158 unit tests with3 local-corpus skips; all4 no-hardcoding checks pass separately with the corpus present. Frontend39 tests and lint/build pass;8 disposable-database checks validate migration/reading/cache/reset paths. Record release candidate rc-2026-11-13.1 at the tested code hash, with live acceptance still pending. Template review and reset remain manual review steps. The user delegates migration/retry to the second agent; application revision0023 was observed read-only, never applied by Codex. Reader17 source evidence is in the audit. No paid rerun, approved template, reset execution or new correctness/speed/cost claim in this phase. Preserve unrelated local monetary-cap runtime/config work unstaged.
+
+
+## Bound Alembic connections like application connections - 2026-11-13
+
+Alembic now passes the existing DB_CONNECT_TIMEOUT to its engine, matching application connection handling. A read-only diagnosis found that localhost IPv6 timed out while the IPv4 loopback connected immediately; the private database URL was changed only to the verified working address, retaining database, port and credentials. alembic current now returns0023_reading_attempts promptly. No application migration, provider change, LLM prompt/cache-key change or data reset in this fix.

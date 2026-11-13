@@ -65,7 +65,8 @@ def run_migrations_online() -> None:
         return
 
     connectable = engine_from_config(
-        configuration, prefix="sqlalchemy.", poolclass=pool.NullPool
+        configuration, prefix="sqlalchemy.", poolclass=pool.NullPool,
+        connect_args={"connect_timeout": get_settings().db_connect_timeout},
     )
     with connectable.connect() as connection:
         context.configure(
