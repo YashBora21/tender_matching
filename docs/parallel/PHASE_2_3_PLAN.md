@@ -6,9 +6,14 @@ Verification: 1264 Python unit passes, 6 artifact-dependent skips; 8 disposable-
 database checks; 40 frontend tests, lint and build pass. Four local corpus
 no-hardcoding checks also pass. No paid calls, application migration or reset.
 See eval/audit/phase2-fragments-2026-11-13/results.json for the tested code hash.
-The separate Phase 1 diagnostics and spend-runtime edits remain outside these
-Phase 2 commits. Integrate/review them before freezing the next measured RC.
-Phase 3 still awaits approval; no full-tender speed or accuracy gain is claimed.
+Phase 1 diagnostics were integrated into the subsequently measured RC; they were
+outside the Phase 2 commits above. Unfinished spend-runtime edits remain excluded.
+Phase 3 was subsequently approved and measured against rc-2026-11-13.3.
+394 calls cost an estimated INR 23.79 and took 668.31 seconds across the bounded
+read and resume. The reservation cap stopped further requests; ingestion remains
+incomplete. Resume also drops technical siblings from a shared source row.
+See eval/audit/phase3-valve-2026-11-13/README.md. Fix preservation before any
+further paid rerun; no extraction or speed acceptance pass is claimed.
 
 ## Confirmed code findings
 
@@ -75,7 +80,7 @@ requirements API metadata; frontend report/upload types/views; targeted tests.
 No overlap with the Phase 1 llm.py/e2e.py files. Preserve existing spend WIP.
 Stop with tests and a reviewable diff after Phase 2; wait for Phase 3 approval.
 
-## Phase 3 - prepare now, execute only after integration and approval
+## Phase 3 - approved measurement plan (see the execution audit above)
 
 - Freeze an RC containing both agents' changes. Keep grouping off. Do not run
   a paid benchmark on an uncommitted mixed checkout.

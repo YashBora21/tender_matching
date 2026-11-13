@@ -1,0 +1,559 @@
+{
+  "date": "2026-11-13",
+  "release_candidate": "rc-2026-11-13.3",
+  "code_commit": "eecced68afe5ae31af0e765abc66d24e1a2640e0",
+  "app_code_from_exported_rc": true,
+  "grouping_enabled": false,
+  "tender_id": "2bc8f917-262d-4ea8-a1c9-b2997ef1f256",
+  "tender_filename": "GEM_9671792_Valve.pdf",
+  "tender_sha256": "9752351d63e446f8aa7c0ac719b85cd82fdebd1b3062aa243fa4f040fe408b6f",
+  "source_integrity": "All four attachments and wrapper match frozen hashes; no attachment refetch in timing",
+  "baseline": {
+    "status": "rate_limited",
+    "active_rows": 21,
+    "reading_attempt_rows": 0,
+    "historical_calls": null,
+    "historical_cost": null,
+    "reason": "No comparable historical attempt or spend rows"
+  },
+  "bounded": {
+    "attempt_id": "7459877f-c25f-451d-a574-081c22322ac7",
+    "status": "rate_limited",
+    "stop_reason": "the call budget of 20 is spent (20 calls, 36395 tokens)",
+    "limits": {
+      "call_budget": 20,
+      "token_budget": 80000,
+      "max_output_tokens": 4096,
+      "max_retries": 3,
+      "req_min_chars": 20,
+      "req_min_words": 4,
+      "spend_caps_enabled": false,
+      "schema_version": "1",
+      "app_version": "0.1.0",
+      "reader_version": "17",
+      "source_policy": "2116a0ccd7196fcc4311efe52d9400d7e32ee96462b457920c5d6a7deb23fdfb",
+      "phase3_estimated_inr_cap": 25.0,
+      "phase3_usd_inr_budget_rate": 100.0,
+      "phase3_input_per_million_inr": 30.0,
+      "phase3_output_per_million_inr": 250.0
+    },
+    "metrics": {
+      "llm_calls": 20,
+      "llm_cache_hits": 0,
+      "prompt_tokens": 27118,
+      "completion_tokens": 9277,
+      "llm_retries": 5,
+      "requirements": 951,
+      "pages_read": 60,
+      "items": 11,
+      "wall_seconds": 78.06652000005124,
+      "stage_seconds": {
+        "_read_items": 0.4840866000158712,
+        "_read_package": 14.00318800000241,
+        "_extract_all": 43.47566629998619,
+        "_persist": 0.5255417000153102
+      },
+      "combined_estimated_inr": 3.13279,
+      "rc_commit": "eecced6",
+      "local_extraction_context_cache_validation_seconds": 2.4651389999780804,
+      "other_setup_resolution_seconds": 19.578037400031462
+    },
+    "calls": {
+      "http_attempts": 20,
+      "answered": 20,
+      "uncertain": 0,
+      "prompt_tokens": 27118,
+      "completion_tokens": 9277,
+      "estimated_inr": 3.13279,
+      "http_attempt_seconds": 41.01052730000811,
+      "http_p50_seconds": 2.137840050010709,
+      "http_p95_nearest_rank_seconds": 2.579992900020443
+    },
+    "stage_states": {
+      "attachments": "done",
+      "items": "done",
+      "requirements": "done",
+      "extraction": "rate_limited",
+      "resolution": "done"
+    },
+    "validation_outcomes": {
+      "validation_failed": 6,
+      "passed": 13,
+      "invalid_json": 1
+    }
+  },
+  "resume": {
+    "attempt_id": "64f68cd0-9f85-4c3b-9a4f-a90ddf5fde1d",
+    "status": "rate_limited",
+    "stop_reason": "the phase 3 estimated INR reservation cap would be exceeded",
+    "limits": {
+      "call_budget": 600,
+      "token_budget": 1500000,
+      "max_output_tokens": 4096,
+      "max_retries": 3,
+      "req_min_chars": 20,
+      "req_min_words": 4,
+      "spend_caps_enabled": false,
+      "schema_version": "1",
+      "app_version": "0.1.0",
+      "reader_version": "17",
+      "source_policy": "2116a0ccd7196fcc4311efe52d9400d7e32ee96462b457920c5d6a7deb23fdfb",
+      "phase3_estimated_inr_cap": 25.0,
+      "phase3_usd_inr_budget_rate": 100.0,
+      "phase3_input_per_million_inr": 30.0,
+      "phase3_output_per_million_inr": 250.0,
+      "phase3_driver_sha256": "d3a98c839d89766ca4888a05ae0729d6cf8329e1b4abac74d89c8babd2ff25f0"
+    },
+    "metrics": {
+      "llm_calls": 374,
+      "llm_cache_hits": 0,
+      "prompt_tokens": 407640,
+      "completion_tokens": 33723,
+      "llm_retries": 2,
+      "requirements": 976,
+      "pages_read": 60,
+      "items": 11,
+      "wall_seconds": 590.2448914000415,
+      "stage_seconds": {
+        "_read_items": 0.47275470005115494,
+        "_extract_all": 572.2734128000448,
+        "_persist": 1.0397478999802843
+      },
+      "combined_estimated_inr": 23.79274,
+      "rc_commit": "eecced6",
+      "local_extraction_context_cache_validation_seconds": 33.22670670080697,
+      "other_setup_resolution_seconds": 16.458975999965332
+    },
+    "calls": {
+      "http_attempts": 374,
+      "answered": 374,
+      "uncertain": 0,
+      "prompt_tokens": 407640,
+      "completion_tokens": 33723,
+      "estimated_inr": 20.65995,
+      "http_attempt_seconds": 539.0467060992378,
+      "http_p50_seconds": 1.430529299977934,
+      "http_p95_nearest_rank_seconds": 1.912306299956981
+    },
+    "stage_states": {
+      "attachments": "skipped",
+      "items": "skipped",
+      "requirements": "skipped",
+      "extraction": "rate_limited",
+      "resolution": "skipped"
+    },
+    "validation_outcomes": {
+      "validation_failed": 3,
+      "passed": 371
+    }
+  },
+  "combined_calls": {
+    "http_attempts": 394,
+    "answered": 394,
+    "uncertain": 0,
+    "prompt_tokens": 434758,
+    "completion_tokens": 43000,
+    "estimated_inr": 23.79274,
+    "http_attempt_seconds": 580.0572333992459,
+    "http_p50_seconds": 1.4533691499673296,
+    "http_p95_nearest_rank_seconds": 2.0862378000165336
+  },
+  "combined_wall_seconds": 668.3114114000928,
+  "stop_cause": "benchmark_estimated_spend_cap",
+  "status_note": "Legacy rate_limited state represents a resumable budget stop here; every HTTP attempt returned an answer",
+  "resume_response_analysis": {
+    "schemas": {
+      "requirements": 148,
+      "clauses": 226
+    },
+    "classification_batch_sizes": {
+      "3": 9,
+      "1": 199,
+      "2": 13,
+      "4": 4,
+      "5": 1
+    },
+    "proposed_clause_types": {
+      "informational": 86,
+      "unknown": 67,
+      "eligibility": 65,
+      "commercial": 50,
+      "technical": 5
+    },
+    "duplicate_http_payloads": 20,
+    "scope": "Saved resume responses only; proposals are not confirmed gold labels"
+  },
+  "read_only_database_verification": {
+    "active_rows": 1013,
+    "review_flagged": 696,
+    "superseded_rows": 1009,
+    "cache_entries_for_tender_by_prompt": [
+      {
+        "prompt_version": "9",
+        "count": 50
+      },
+      {
+        "prompt_version": "clause-batch-1",
+        "count": 273
+      }
+    ],
+    "ledger": {
+      "calls": 394,
+      "distinct_configured_models": 1,
+      "prompt_tokens": 434758,
+      "completion_tokens": 43000,
+      "recorded_estimated_inr": "23.7939"
+    },
+    "offline_classification_cache_probe": {
+      "unassigned_unknown_rows_checked": 283,
+      "cached_types_available": 83,
+      "generation_calls": 0,
+      "note": "Measures classification-only availability, not a complete-row extraction cache hit"
+    },
+    "resume_boq_candidate_preservation": {
+      "before": 18,
+      "after": 3,
+      "previous_revision_rows_still_stored": 988,
+      "note": "These are extracted technical candidates, not verified manufacturer matches"
+    }
+  },
+  "cost_assumptions": {
+    "configured_model_tariff_found": true,
+    "usd_input_per_million": 0.3,
+    "usd_output_per_million": 2.5,
+    "price_source": "https://aistudio.google.com/docs/pricing",
+    "retrieved": "2026-11-13",
+    "tier": "standard text",
+    "usd_inr_budgeting_rate": 100,
+    "conversion_note": "Conservative budgeting assumption, not a current market quote",
+    "prior_monthly_spend": "unknown; ledger has no historical coverage"
+  },
+  "budget": {
+    "combined_estimated_cap_inr": 25,
+    "guard": "UTF-8 byte-count input upper bound plus framing and max output reservation before HTTP",
+    "unknown_or_failed_http_attempts": "Keep full reservation",
+    "monthly_cap_verified": false,
+    "historical_monthly_spend": "unknown",
+    "scope": "This benchmark only; production spend runtime is separate unfinished work"
+  },
+  "source_counts": [
+    {
+      "role": "boq",
+      "type": "commercial",
+      "classification": "context",
+      "count": 2
+    },
+    {
+      "role": "boq",
+      "type": "informational",
+      "classification": "context",
+      "count": 10
+    },
+    {
+      "role": "boq",
+      "type": "technical",
+      "classification": "candidate",
+      "count": 3
+    },
+    {
+      "role": "cover",
+      "type": "certification",
+      "classification": "candidate",
+      "count": 5
+    },
+    {
+      "role": "cover",
+      "type": "commercial",
+      "classification": "context",
+      "count": 21
+    },
+    {
+      "role": "cover",
+      "type": "eligibility",
+      "classification": "context",
+      "count": 12
+    },
+    {
+      "role": "cover",
+      "type": "informational",
+      "classification": "context",
+      "count": 1
+    },
+    {
+      "role": "cover",
+      "type": "technical",
+      "classification": "candidate",
+      "count": 57
+    },
+    {
+      "role": "cover",
+      "type": "unknown",
+      "classification": "candidate",
+      "count": 11
+    },
+    {
+      "role": "cover",
+      "type": "unknown",
+      "classification": "context",
+      "count": 147
+    },
+    {
+      "role": "cover",
+      "type": "unknown",
+      "classification": "fragment",
+      "count": 37
+    },
+    {
+      "role": "specification",
+      "type": "certification",
+      "classification": "candidate",
+      "count": 11
+    },
+    {
+      "role": "specification",
+      "type": "commercial",
+      "classification": "context",
+      "count": 180
+    },
+    {
+      "role": "specification",
+      "type": "eligibility",
+      "classification": "context",
+      "count": 71
+    },
+    {
+      "role": "specification",
+      "type": "informational",
+      "classification": "context",
+      "count": 72
+    },
+    {
+      "role": "specification",
+      "type": "technical",
+      "classification": "candidate",
+      "count": 97
+    },
+    {
+      "role": "specification",
+      "type": "unknown",
+      "classification": "candidate",
+      "count": 276
+    }
+  ],
+  "page_states": {
+    "parsed": 60
+  },
+  "page_ledger": [
+    {
+      "source_key": "007334ce-3b06-4206-b623-1dca452fffe6",
+      "state": "parsed",
+      "count": 2
+    },
+    {
+      "source_key": "15d2c59d-e7b0-459f-adb0-fb80a8e45cde",
+      "state": "parsed",
+      "count": 24
+    },
+    {
+      "source_key": "3bbecde9-2bb9-4786-9535-de65445c712a",
+      "state": "parsed",
+      "count": 17
+    },
+    {
+      "source_key": "wrapper",
+      "state": "parsed",
+      "count": 17
+    }
+  ],
+  "wrapper_pages": 17,
+  "potential_unresolved_rows": 460,
+  "unresolved_by_role_type_primary_cause": [
+    {
+      "source_role": "boq",
+      "type": "technical",
+      "cause": "quote_or_value_validation",
+      "count": 3
+    },
+    {
+      "source_role": "cover",
+      "type": "certification",
+      "cause": "unassigned_item",
+      "count": 5
+    },
+    {
+      "source_role": "cover",
+      "type": "technical",
+      "cause": "source_coverage",
+      "count": 6
+    },
+    {
+      "source_role": "cover",
+      "type": "technical",
+      "cause": "unassigned_item",
+      "count": 51
+    },
+    {
+      "source_role": "cover",
+      "type": "unknown",
+      "cause": "source_coverage",
+      "count": 4
+    },
+    {
+      "source_role": "cover",
+      "type": "unknown",
+      "cause": "unresolved_type",
+      "count": 7
+    },
+    {
+      "source_role": "specification",
+      "type": "certification",
+      "cause": "unassigned_item",
+      "count": 11
+    },
+    {
+      "source_role": "specification",
+      "type": "technical",
+      "cause": "source_coverage",
+      "count": 61
+    },
+    {
+      "source_role": "specification",
+      "type": "technical",
+      "cause": "unassigned_item",
+      "count": 36
+    },
+    {
+      "source_role": "specification",
+      "type": "unknown",
+      "cause": "source_coverage",
+      "count": 46
+    },
+    {
+      "source_role": "specification",
+      "type": "unknown",
+      "cause": "unresolved_type",
+      "count": 230
+    }
+  ],
+  "real_validation_replay": [
+    {
+      "call": 1,
+      "source_hash": "65af5a9f705e9d8ad95eb4e6da6972a680d88c4fe7f1b9ae1a15d4e4219aeae9",
+      "candidate_count": 5,
+      "failed_candidates": [
+        {
+          "attribute": "Sr. No.",
+          "value": "1",
+          "quote": "1",
+          "quote_occurrences": 5,
+          "reason": "ambiguous_quote",
+          "unique_quote_found": false,
+          "value_in_quote": false
+        }
+      ],
+      "source_text": "1 GATE VALVE, SIZE-150 MM, CLASS-150 Flanged Gate valve 6\" Class 150 Cast carbon steel Face to face distance 267mm 13 Nos.",
+      "table": {
+        "cells": [
+          "1",
+          "GATE VALVE, SIZE-150 MM, CLASS-150",
+          "Flanged Gate valve 6\" Class 150 Cast carbon steel Face to face distance 267mm",
+          "13",
+          "Nos.",
+          "",
+          ""
+        ],
+        "headers": [
+          "Sr. No.",
+          "Item",
+          "Descriptions",
+          "Qty",
+          "Unit",
+          "Rate/Unit",
+          "Amount"
+        ]
+      }
+    },
+    {
+      "call": 2,
+      "source_hash": "f717ecc7a70aff3c2a0ddd9d6042aca8bd4f1466297bf79d7bf2951afcb1b6ed",
+      "candidate_count": 5,
+      "failed_candidates": [
+        {
+          "attribute": "Sr. No.",
+          "value": "1",
+          "quote": "1",
+          "quote_occurrences": 5,
+          "reason": "ambiguous_quote",
+          "unique_quote_found": false,
+          "value_in_quote": false
+        }
+      ],
+      "source_text": "1 GATE VALVE, SIZE-150 MM, CLASS-150 Flanged Gate valve 6\" Class 150 Cast carbon steel Face to face distance 267mm 13 Nos.",
+      "table": {
+        "cells": [
+          "1",
+          "GATE VALVE, SIZE-150 MM, CLASS-150",
+          "Flanged Gate valve 6\" Class 150 Cast carbon steel Face to face distance 267mm",
+          "13",
+          "Nos.",
+          "",
+          ""
+        ],
+        "headers": [
+          "Sr. No.",
+          "Item",
+          "Descriptions",
+          "Qty",
+          "Unit",
+          "Rate/Unit",
+          "Amount"
+        ]
+      }
+    }
+  ],
+  "resume_sibling_regression": {
+    "synthetic": true,
+    "input_sibling_facts": 2,
+    "retained_facts": 1,
+    "technical_sibling_preserved": false,
+    "model_calls": 0,
+    "cause": "source-level dedup runs before per-record context handling"
+  },
+  "quality": {
+    "complete_tender_pass": false,
+    "manufacturer_assessments": 0,
+    "confirmed_manufacturer_answers": null,
+    "false_confident_manufacturer_claims": null,
+    "reason": "No matching on incomplete ingestion; six confirmed compound manufacturer labels do not grade all extraction rows",
+    "whole_tender_extraction_accuracy": null,
+    "whole_tender_gold": "Not available"
+  },
+  "verification": {
+    "backend_unit_tests": 1207,
+    "backend_unit_passed": 1204,
+    "backend_unit_skipped": 3,
+    "backend_failures": 0,
+    "backend_errors": 0,
+    "driver_synthetic_guard_checks": 4
+  },
+  "timing_limits": [
+    "Saved-package read; network collection excluded",
+    "Local extraction remainder includes context prep, cache and validation, not isolated preparation time",
+    "Bounded plus resume is reported together; resume-only time is not a fresh-tender time"
+  ],
+  "next_work": [
+    "Preserve every atomic technical child when resuming a shared source row",
+    "Source role and paragraph/table assembly before model triage",
+    "Unique quote evidence and per-candidate rejection diagnostics without relaxing verification",
+    "Evidence-backed item assignment for annexure specifications",
+    "Integrate and verify persistent budget enforcement before routine paid use"
+  ],
+  "artifacts_sha256": {
+    "bounded.json": "584de4736f3ba9da0d66c2979b511547833410d2e2858cd3b96039374bd1f55e",
+    "resume.json": "e035fb936a94cc958f209cc1858705a0883d8a11e243efda3b984470ba7f6d44",
+    "calls.jsonl": "380a799d6e946e7f26983192d9c4d97e7f80d9474cc1a00b70c915f76b8ca7cb",
+    "responses.jsonl": "19206217b7b5bb5599a94884fe77bc3e391b76263a8139cc44cb8dc67d60ec69",
+    "phase3_read.py": "d3a98c839d89766ca4888a05ae0729d6cf8329e1b4abac74d89c8babd2ff25f0",
+    "phase3-unit.xml": "7757d48301f79be2bfc6877098461e9557215331c83c7093ba21c41400a5ad99"
+  }
+}

@@ -4094,3 +4094,59 @@ runtime/configuration work separate; they are not included in the Phase 2
 commits or isolated checks. Before Phase 3, review/integrate that work, freeze an
 RC and obtain the agreed measured-read approval. Audit:
 eval/audit/phase2-fragments-2026-11-13/results.json.
+
+
+## 2026-11-13 - Phase 3 paid measurement fails acceptance and exposes resume loss
+
+User approved Phase 3, then explicitly approved a larger paid resume after
+automatic review rejected the initially conditional 600-call request. The other
+agent froze Phase 1 diagnostics with Phase 2 in rc-2026-11-13.3 at
+eecced68afe5ae31af0e765abc66d24e1a2640e0. Tested the exported app independently
+of unfinished local spend changes: 1204 backend unit passes, 3 corpus-dependent
+skips, no failures/errors. Four synthetic benchmark reservation checks pass.
+The additional synthetic sibling-preservation reproduction demonstrates a defect,
+not an acceptance pass. Grouping remains off.
+
+Selected stored valve package 2bc8f917: wrapper and all four attachment hashes
+match; frozen package collection excluded. Bounded attempt used 20 calls/80000
+tokens as limits: 78.067 seconds, 27118 input/9277 output tokens, estimated
+INR 3.13279, five retries. It stopped before call21. The approved resume used
+current limits 600 calls/1500000 tokens with the same app/configuration: 374
+calls, 590.245 seconds, 407640 input/33723 output tokens, two retries. Combined
+394 calls/477758 tokens, 668.311 seconds, estimated INR 23.79274. No provider429;
+the benchmark stopped before another maximum-cost reservation would exceed its
+combined INR25 allowance. Production monthly enforcement is not established.
+Successful calls are recorded in llm_spend; older monthly spend remains unknown.
+
+HTTP attempts consumed580.057 seconds, p50 1.453s/p95 2.086s. Combined final
+requirement persistence took1.565s; source reading14.003s; local extraction
+including context/cache/validation35.692s. Removing storage is not the measured
+performance fix. All60 pages are parsed (17 wrapper/43 attachment), but semantic
+completion fails. Current1013 rows include37 fragments,516 other context rows
+and460 potentially unresolved candidates; some candidates remain unread at the
+spend stop. No manufacturer assessments or whole-tender accuracy grade.
+
+Priority defect: _extract_all deduplicates shared source identities before
+context handling. On resume a context child can suppress technical siblings.
+Live BOQ technical candidates fell18 to3; an offline synthetic two-child source
+returns only its context child with zero calls. All988 previous-revision rows
+remain stored; total1009 superseded rows are preserved. Do not interpret fewer
+candidates as quality improvement. Fix this before more paid reruns.
+
+Saved-response replay also isolates ambiguous serial-number quote1 (five
+occurrences) rejecting a five-field response, including its repair. The verifier
+was not relaxed. An integrity-pact form is labelled primary spec;199 of226
+classification calls contain one clause, and201 of273 proposed labels are
+nontechnical. Source roles/assembly and effective batching need correction.
+Reported resume cache hits0 coexist with50 extraction/273 classification cache
+entries; a read-only probe finds classifier answers for83 of283 remaining
+unassigned unknown rows. Partial classifier availability is not a whole-source
+extraction cache hit; do not claim the cache is empty or fully effective.
+
+No application source changes, migration, reset, corpus edits or matching in
+this measurement. Historical readings and current limits are stored separately.
+Sanitized audit, original driver and offline reproductions are under
+eval/audit/phase3-valve-2026-11-13. Next phase must preserve atomic siblings,
+correct source-role/section binding and unique quote diagnostics, then remeasure
+on a newly frozen RC. The confirmed six compound manufacturer labels do not
+constitute whole-tender extraction gold; false-confident matching remains ungraded.
