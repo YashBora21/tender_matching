@@ -280,6 +280,7 @@ def atomize_records(records):
                     source_row_id=record.source_row_id,
                     source_role=record.source_role,
                     context_only=record.context_only,
+                    fragment_reason=record.fragment_reason,
                     candidate_type=record.candidate_type,
                     source_neighbors=record.source_neighbors,
                 )

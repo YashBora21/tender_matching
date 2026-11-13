@@ -498,3 +498,17 @@ def test_context_is_visible_separately_and_does_not_inflate_requirement_flags():
     body = _requirements_payload(repo, {'id': 'synthetic-context', 'status': 'done'})
     assert body['requirements'] == [] and body['counts']['flagged'] == 0
     assert body['context_clauses'][0]['source_role'] == 'cover'
+
+
+def test_fragments_remain_visible_but_do_not_count_as_requirements():
+    from app.api.tenders import _requirements_payload
+    repo = FakeRepo(None)
+    FakeRepo.items['synthetic-fragment'] = []
+    FakeRepo.requirements['synthetic-fragment'] = [{'id':'fragment-row', 'text':'Loose scrap',
+        'source_text':'Loose scrap','type':'unknown','review_required':True,
+        'normalization':{'source_context':{'source_role':'cover','context_only':True,
+            'fragment_reason':'fragment (below prose floor, no signal)'}}}]
+    body = _requirements_payload(repo, {'id':'synthetic-fragment','status':'incomplete'})
+    assert body['counts']['requirements'] == body['counts']['flagged'] == 0
+    assert body['context_clauses'][0]['fragment_reason']
+    assert body['context_clauses'][0]['source_text'] == 'Loose scrap'

@@ -291,6 +291,7 @@ def stage_keys(
     changes everything downstream and a change to one stage changes only
     what comes after it.
     """
+    alias_fingerprint = alias_fingerprint or content_hash([])
     # The attachments: their content hashes and the roles they play.
     attachment_parts = sorted(
         (record.get("kind") or "", record.get("sha256") or "", record.get("status") or "")
@@ -330,6 +331,7 @@ def stage_keys(
         wrapper_fingerprint,
         classification_policy_fingerprint(),
         source_policy_fingerprint(),
+        alias_fingerprint,
     )
 
     # The extraction: the requirements, and what read them.
@@ -452,7 +454,9 @@ def run_pipeline(
         vocabulary_hash=_vocabulary_hash(),
         fetch_config=settings.fetch_allowed_domains,
         wrapper_fingerprint=wrapper_fingerprint,
-        alias_fingerprint=content_hash(sorted(aliases, key=lambda row: row['alias'])),
+        alias_fingerprint=content_hash(sorted(
+            ({field: row.get(field) for field in ('alias', 'canonical_term', 'confidence', 'approved')}
+             for row in aliases), key=lambda row: (row['alias'], row['canonical_term']))),
     )
     previous = repo.stage_keys(tender_id) if repo is not None else {}
     previous_status = (
@@ -551,7 +555,7 @@ def run_pipeline(
         return result
     backfill = False
     if changed(STAGE_REQUIREMENTS):
-        read = _read_package(tender_id, tender_dir, attachments, spec, repo)
+        read = _read_package(tender_id, tender_dir, attachments, spec, repo, aliases=aliases)
         if read.error:
             if repo is not None:
                 repo.replace_pages(tender_id, _page_rows(read.pages, _attachment_id(repo, tender_id, spec)))
@@ -581,6 +585,7 @@ def run_pipeline(
                     source_neighbors=row.get('source_neighbors'),
                     source_role=row.get('source_role'),
                     context_only=bool(row.get('context_only')),
+                    fragment_reason=row.get('fragment_reason'),
                     candidate_type=row.get('candidate_type'),
                     table_context=({"headers": row["source_headers"], "cells": row["source_cells"]}
                                    if row.get("source_headers") and row.get("source_cells") else None),
@@ -591,9 +596,10 @@ def run_pipeline(
                     source_section=row.get("title"),
                     extraction_method=row.get("extraction_method") or "table",
                     page_tag=tag or None,
-                    review_required=not bool(row.get("context_only")),
+                    review_required=bool(row.get('review_required')) or not bool(row.get("context_only")),
                     review_reason=(
-                        "Context retained: " + row["source_policy_reason"] if row.get("context_only") else
+                        '; '.join(filter(None, [row.get('review_reason'),
+                            "Context retained: " + row["source_policy_reason"]])) if row.get("context_only") else
                         f"{NON_TECHNICAL_REASON} {tag}"
                         if classified
                         else "the specification row names no item in the bill of quantities"
@@ -667,7 +673,7 @@ def run_pipeline(
         # call, and every page ends in a state (FR-T2).
         backfill = repo is not None and _ledger_is_empty(repo, tender_id)
         if backfill:
-            result.pages = _read_package(tender_id, tender_dir, attachments, spec, repo).pages
+            result.pages = _read_package(tender_id, tender_dir, attachments, spec, repo, aliases=aliases).pages
     requirements_state.rows = len(result.requirements)
     result.stages[STAGE_REQUIREMENTS] = requirements_state
     if result.pages and repo is not None and (
@@ -960,7 +966,7 @@ def _read_specification(attachment: dict, tender_dir: Path) -> SpecificationRead
     return read_specification(path, wrapper=True, item_titles=tuple(attachment.get("item_titles") or ())) if attachment.get("source_key") == "wrapper" else read_specification(path)
 
 
-def _read_package(tender_id, directory, attachments, specification, repo):
+def _read_package(tender_id, directory, attachments, specification, repo, *, aliases=()):
     """Inspect each distinct source PDF locally; wrapper terms are not silently omitted."""
     from app.services.tender.collect import read_manifest
     from app.services.tender.upload import _wrapper
@@ -1000,10 +1006,13 @@ def _read_package(tender_id, directory, attachments, specification, repo):
             page_rows = [row for row in read.rows if row['page'] == page.page]
             for row in page_rows:
                 decision = triage(row.get('row_text') or row['description'], role,
-                                  page_tag=row.get('page_tag'), section=row.get('title'))
+                                  page_tag=row.get('page_tag'), section=row.get('title'),
+                                  table=(row.get('extraction_method') in {'table', 'item'} or
+                                         bool(row.get('source_cells'))),
+                                  aliases=aliases)
                 row.update(source_role=role, context_only=decision.context_only,
                            candidate_type=decision.candidate_type, clause_type=decision.clause_type,
-                           source_policy_reason=decision.reason)
+                           source_policy_reason=decision.reason, fragment_reason=decision.fragment_reason)
             for row in page_rows:
                 row['source_neighbors'] = [candidate.get('row_text') or candidate['description']
                     for candidate in page_rows
@@ -1396,6 +1405,7 @@ def _as_dict(item: RequirementRecord) -> dict:
         "source_neighbors": item.source_neighbors,
         "source_role": item.source_role,
         "context_only": item.context_only,
+        "fragment_reason": item.fragment_reason,
         "candidate_type": item.candidate_type,
         "span": list(item.source_span) if item.source_span else None,
         "type": item.requirement_type.value,
@@ -1431,6 +1441,7 @@ def _as_record(item) -> RequirementRecord:
         source_neighbors=item.get('source_neighbors'),
         source_role=item.get("source_role"),
         context_only=bool(item.get("context_only")),
+        fragment_reason=item.get("fragment_reason"),
         candidate_type=item.get("candidate_type"),
         item_id="",
         requirement_type=_type_of(item.get("type", "unknown")),
@@ -1495,6 +1506,7 @@ def _stored_records(repo, tender_id: str) -> list[RequirementRecord]:
                 source_neighbors=normalization.get('source_context', {}).get('nearby_source_clauses'),
                 source_role=normalization.get('source_context', {}).get('source_role'),
                 context_only=bool(normalization.get('source_context', {}).get('context_only')),
+                fragment_reason=normalization.get('source_context', {}).get('fragment_reason'),
                 candidate_type=normalization.get('source_context', {}).get('candidate_type'),
                 confidence=row.get("confidence"),
                 review_required=bool(row.get("review_required")),
@@ -1558,5 +1570,6 @@ def to_stored(
                            source_context={"page_tag": requirement.page_tag, "table": requirement.table_context,
                                            "nearby_source_clauses": requirement.source_neighbors,
                                            **({"source_role": requirement.source_role, "context_only": requirement.context_only,
-                                               "candidate_type": requirement.candidate_type} if requirement.source_role else {})}),
+                                               "candidate_type": requirement.candidate_type,
+                                               **({"fragment_reason": requirement.fragment_reason} if requirement.fragment_reason else {})} if requirement.source_role else {})}),
     )

@@ -130,6 +130,7 @@ class RequirementRecord:
     source_neighbors: Optional[list[str]] = None
     source_role: Optional[str] = None
     context_only: bool = False
+    fragment_reason: Optional[str] = None
     candidate_type: Optional[str] = None
     normalization: Optional[dict] = None
 
@@ -1223,6 +1224,7 @@ def assign_to_items(
                 source_neighbors=row.get('source_neighbors'),
                 source_role=row.get("source_role"),
                 context_only=bool(row.get("context_only")),
+                fragment_reason=row.get("fragment_reason"),
                 candidate_type=row.get("candidate_type"),
                 table_context=({"headers": row["source_headers"], "cells": row["source_cells"]}
                                if row.get("source_headers") and row.get("source_cells") else None),

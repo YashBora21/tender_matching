@@ -443,7 +443,8 @@ class TenderRepo:
         return self.session.execute(
             select(func.count())
             .select_from(requirement)
-            .where(requirement.c.tender_id == tender_id, requirement.c.superseded_at.is_(None))
+            .where(requirement.c.tender_id == tender_id, requirement.c.superseded_at.is_(None),
+                   requirement.c.normalization['source_context']['fragment_reason'].astext.is_(None))
         ).scalar_one()
 
     def list_requirements(self, tender_id: str, *, requirement_ids: Optional[list] = None) -> list[dict]:

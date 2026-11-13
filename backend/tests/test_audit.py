@@ -108,3 +108,18 @@ def test_a_failed_pipeline_leaves_the_session_able_to_record_the_failure(
 
     assert "RuntimeError" in (tender.failure or "")
     assert repo.session.rolled_back == 1
+
+
+def test_retained_fragments_do_not_inflate_audit_requirement_count(tmp_path, monkeypatch):
+    from app.services.tender.ingest import RequirementRecord
+    from app.schemas.enums import RequirementType
+    records = [RequirementRecord(text='Synthetic primary criterion', item_id='1'),
+        RequirementRecord(text='Loose scrap', item_id='', source_role='cover',
+            requirement_type=RequirementType.UNKNOWN, context_only=True,
+            fragment_reason='fragment (below prose floor, no signal)')]
+    result = SimpleNamespace(items=[], requirements=records, pages=[], failure=None,
+        failure_code=None,llm_calls=0,llm_cache_hits=0,prompt_tokens=0,completion_tokens=0,
+        llm_retries=0,rate_limited=True,rate_limited_detail='synthetic stop',stages={})
+    monkeypatch.setattr(audit, 'run_pipeline', lambda *args, **kwargs: result)
+    monkeypatch.setattr(audit, 'resolve_roles', lambda rows: SimpleNamespace(specification=1,boq=1))
+    assert audit.audit_tender(_tender_dir(tmp_path), repo=FakeRepo()).requirements == 1

@@ -1,5 +1,6 @@
 {
-  "version": "source-roles-1",
+  "version": "source-roles-2",
+  "fragment_prose_roles": ["cover", "atc", "sla", "supporting"],
   "primary_roles": ["specification", "boq"],
   "restricted_roles": ["cover", "atc", "sla", "supporting", "unknown"],
   "nontechnical_types": ["commercial", "eligibility", "informational"],

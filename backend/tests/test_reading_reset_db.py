@@ -34,6 +34,13 @@ def test_reading_cache_sharing_and_scoped_deletion(test_database_url):
             session.execute(insert(db.requirement).values(id=uuid.uuid4(), tender_id=first,
                 source_page=1, source_text='Synthetic capacity', extraction_method='text',
                 type='technical', extraction_version='synthetic', schema_version='synthetic'))
+            session.execute(insert(db.requirement).values(id=uuid.uuid4(), tender_id=first,
+                source_page=1, source_text='Loose scrap', extraction_method='text',
+                type='unknown', extraction_version='synthetic', schema_version='synthetic',
+                normalization={'source_context':{'source_role':'cover','context_only':True,
+                    'fragment_reason':'fragment (below prose floor, no signal)'}}))
+            assert repo.count_requirements(str(first)) == 1
+            assert len(repo.list_requirements(str(first))) == 2
             session.execute(insert(db.run).values(id=run_id, tender_id=first, status='done'))
             session.execute(insert(db.llm_spend).values(id=uuid.uuid4(), run_id=run_id,
                 model='synthetic', cost_inr=1))

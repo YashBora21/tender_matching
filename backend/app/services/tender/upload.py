@@ -75,6 +75,8 @@ def effective_limits() -> dict:
         "token_budget": settings.llm_token_budget,
         "max_output_tokens": settings.llm_max_tokens,
         "max_retries": settings.llm_max_retries,
+        "req_min_chars": settings.req_min_chars,
+        "req_min_words": settings.req_min_words,
         "spend_caps_enabled": getattr(settings, 'llm_spend_caps_enabled', False),
         "schema_version": settings.schema_version,
         "app_version": settings.app_version,

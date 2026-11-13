@@ -1307,3 +1307,24 @@ def test_no_specification_uses_cover_only_for_deterministic_candidates(tmp_path)
     assert result.requirements and all(row.source_role=='cover' for row in result.requirements)
     assert all(row.context_only for row in result.requirements)
     assert [page.source_key for page in result.pages]==['wrapper']
+
+
+def test_fragment_metadata_survives_full_source_pipeline_without_an_extra_call(tmp_path, monkeypatch):
+    attachments, directory = _attachments(tmp_path)
+    support = directory / 'raw' / 'synthetic-sla.pdf'
+    _spec_pdf(support)
+    attachments.append({'path':'raw/synthetic-sla.pdf','kind':'scanned',
+        'sha256':hashlib.sha256(support.read_bytes()).hexdigest(),'pages':1})
+    def read(source, folder):
+        if source['path'].endswith('synthetic-sla.pdf'):
+            return SpecificationRead(rows=[{'page':1,'description':'Loose scrap',
+                'row_text':'Loose scrap','extraction_method':'text'}],
+                pages=[PageRead(page=1,tag='mixed',status='parsed')])
+        return _spec_rows()
+    monkeypatch.setattr(pipeline, '_read_specification', read)
+    client = CountingClient()
+    result = run_pipeline('T1', directory, attachments, client=client)
+    fragments = [row for row in result.requirements if row.fragment_reason]
+    assert len(fragments) == 1 and fragments[0].context_only
+    assert fragments[0].source_text == 'Loose scrap' and fragments[0].page == 1
+    assert client.calls == 2
