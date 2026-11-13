@@ -4058,3 +4058,39 @@ cache-key changes. Final exported code tests and release hash are in the runtime
 config audit. Collector socket fixtures failed under the sandbox, then passed
 outside it. No full-tender rerun after the key correction; the second agent can
 retry using the now-correct backend. Historical results remain preserved.
+
+
+## 2026-11-13 - Phase 2: retain short prose as source context
+
+User approved Phase 2 after the other agent delivered Phase 1 diagnostics.
+Committed f5c3299 adds environment floors REQ_MIN_CHARS=20/REQ_MIN_WORDS=4,
+restricted-source prose triage and retained fragment metadata; ceaa298 adds
+separate collapsed fragment/source-context views in React and HTML reports.
+Use the agreed unknown/context_only fallback, without a new database enum or
+migration. Preserve raw text, source identity, page and independent review notes.
+Primary specification/BOQ sources and actual table rows remain floor-exempt.
+Quantities, standards, approved labels, ambiguous/unapproved known aliases,
+obligations and technical parent/page context remain interpretation candidates.
+No-signal short prose produces no model call, completion blocker, assessment or
+requirement-count inflation. Failed source pages remain independent blockers.
+
+Affected checkpoint identities now include floors, vocabulary data and semantic
+alias mappings; the default empty-alias identity is canonical so unchanged
+readings do not repeat work. No prompt or verifier relaxation. Numeric preflight
+and reading-attempt snapshots include the two floors. Existing rows/history
+are preserved; stored readings were not rerun or rewritten in this phase.
+
+Exported committed snapshot ceaa298: backend 1191 unit passes/3 corpus-dependent
+skips; collector/evaluation 73 passes/3 missing-artifact skips; no failures or
+errors. Eight migration/history/cache/reset/count checks passed in a new
+disposable PostgreSQL database, then that database was removed. All four
+no-hardcoding checks passed separately against the local corpus. Frontend 40
+tests, lint and production build passed. Final focused source/report suite also
+passed 102 tests. Sanitized audit records exact hashes and test totals.
+
+No paid model calls, application migration/reset, grouping enablement or live
+tender accuracy/speed claim. Keep Phase 1 diagnostic edits and older spend
+runtime/configuration work separate; they are not included in the Phase 2
+commits or isolated checks. Before Phase 3, review/integrate that work, freeze an
+RC and obtain the agreed measured-read approval. Audit:
+eval/audit/phase2-fragments-2026-11-13/results.json.

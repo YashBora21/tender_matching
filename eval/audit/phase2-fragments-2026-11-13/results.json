@@ -1,0 +1,126 @@
+{
+  "date": "2026-11-13",
+  "phase": 2,
+  "code_commit": "ceaa298fd3c69ed8e4d569ddd3dd5b4066efa37f",
+  "code_commits": [
+    "f5c3299",
+    "ceaa298"
+  ],
+  "tested_from_exported_committed_snapshot": true,
+  "default_floors": {
+    "REQ_MIN_CHARS": 20,
+    "REQ_MIN_WORDS": 4
+  },
+  "below_floor": "Whitespace-normalized prose fails either character or word floor; original source is unchanged",
+  "scope": [
+    "cover",
+    "atc",
+    "sla",
+    "supporting"
+  ],
+  "exemptions": [
+    "primary specification/BOQ",
+    "actual table rows, including OCR grids"
+  ],
+  "retained_signals": [
+    "quantity/unit",
+    "standard/certification",
+    "approved attribute label",
+    "ambiguous/unapproved known alias",
+    "obligation",
+    "technical parent/page"
+  ],
+  "storage": {
+    "type": "unknown",
+    "context_only": true,
+    "reason_path": "normalization.source_context.fragment_reason",
+    "original_source_and_independent_review_preserved": true
+  },
+  "fragment_effect": {
+    "model_calls": 0,
+    "completion_blockers": 0,
+    "capability_assessments": 0,
+    "requirement_count": 0
+  },
+  "failed_page_completion_gate_unchanged": true,
+  "cache_identity_changes": [
+    "source policy version",
+    "numeric floors",
+    "vocabulary data",
+    "semantic alias snapshot (alias, canonical_term, confidence, approved)",
+    "canonical empty alias fingerprint"
+  ],
+  "prompt_changed": false,
+  "verifier_relaxed": false,
+  "database_enum_added": false,
+  "paid_model_calls": 0,
+  "application_data_mutated": false,
+  "application_migration_or_reset_performed": false,
+  "test_database": "New disposable database; removed after eight passing checks",
+  "grouping_enabled": false,
+  "verification": {
+    "backend_unit": {
+      "tests": 1194,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 3,
+      "passed": 1191,
+      "seconds": 87.126,
+      "junit_sha256": "487a7b9946f6e202d9f43a5c45dc6a72e1dccb5c49ba53db4b88f4c4effa015a"
+    },
+    "collector_eval_unit": {
+      "tests": 76,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 3,
+      "passed": 73,
+      "seconds": 18.134,
+      "junit_sha256": "3ea2933871e527046c0b161d6c991aa40e05f2c1088f8f19a638dedf1355849a"
+    },
+    "disposable_database": {
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 8,
+      "seconds": 11.661,
+      "junit_sha256": "c3dcb06f2bc4209f2748910c02dc341520764635879a68bb256a4483ca5fe5c8"
+    },
+    "focused_regressions": {
+      "tests": 102,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 102,
+      "seconds": 19.924,
+      "junit_sha256": "b58e69cd1c804fab5a3fff4bcf9ecf8b5037468bad5b8ea206f4b953f791bd47"
+    },
+    "local_corpus_no_hardcoding": {
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 4,
+      "seconds": 1.094,
+      "junit_sha256": "373558be2c0783701195f9b1138ef6aec4502d9bc0a24cc7b13db82db64b9f56"
+    },
+    "frontend": {
+      "passed": 40,
+      "failures": 0,
+      "lint": "passed",
+      "production_build": "passed",
+      "source_matches_committed_snapshot": true
+    }
+  },
+  "skip_reasons": [
+    "Three exported-corpus checks lack local corpus manifests; all four pass in the actual local corpus check",
+    "One exact gold-quote check lacks catalogue PDFs in export",
+    "Two offline replay checks lack frozen local replay inputs"
+  ],
+  "remaining": [
+    "Review/integrate separate Phase 1 diagnostics before next RC",
+    "Spend runtime/configuration remains separate uncommitted work",
+    "Phase 3 requires approval and a frozen release candidate",
+    "Full-tender correctness, false-confident claims, time and verified cost remain unmeasured"
+  ]
+}
