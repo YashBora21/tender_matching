@@ -65,3 +65,15 @@ def test_stored_form_candidate_is_retriaged_before_the_cohort_builder():
         def complete_json(self,*args,**kwargs):raise AssertionError('Stale form candidate must not be billed')
     output,calls,_,_,_=pipeline._extract_all([row],client=Forbidden())
     assert not calls and output[0].context_only
+
+
+@pytest.mark.parametrize('text',['2.0 In any administrative circumstance a signature is needed.',
+                               '11.4 In the event of a disagreement the contract prevails.'])
+def test_numbered_form_clause_is_not_an_inch_measurement(text):
+    assert triage(text,'supporting',form_context=True).context_only
+
+
+@pytest.mark.parametrize('text,section',[('2.5 inches',None),('2.5 In',None),
+                                        ('Size 2.5 in',None),('2.5 In overall length','nominal_size')])
+def test_real_size_measurements_survive_form_number_disambiguation(text,section):
+    assert not triage(text,'supporting',form_context=True,section=section).context_only

@@ -4917,3 +4917,8 @@ Recognize explicit opening form headings using editable source-policy patterns, 
 ## Accept the requested matching-batch environment name without changing its business default - 2026-11-13
 
 LLM_MATCH_EXTRACTION_BATCH_SIZE is the preferred configuration alias; retain legacy MATCH_EXTRACTION_BATCH_SIZE and Python constructor field compatibility. Set only the private/example deployment value to8. Keep the code default1 and existing passage_id schema, character bound, independent passage verification and deterministic comparison unchanged. The preferred alias wins if both variables exist. This is matching passage batching, distinct from clause-classification batching; an extraction-only read does not claim to exercise manufacturer matching. No prompt or cache-key change.
+
+
+## Disambiguate numbered form prose before interpreting measurement units - 2026-11-13
+
+Known form sections can begin with a decimal clause identifier followed by an introductory prose word. Interpret that structural prefix using editable policy data before scanning physical quantities, retaining the original source text unchanged. This prevents clause2.0 followed by the English preposition In from masquerading as inches. Bare inch values, explicit size labels and a known measurement-section subject remain candidates. This is source-position/unit disambiguation across forms, not a tender phrase exclusion. It changes only form selector data, so source checkpoints change while exact classifier input cache identities remain compatible. No quote/value verifier or model prompt change.

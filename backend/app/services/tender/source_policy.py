@@ -118,13 +118,20 @@ def triage(text, role, *, page_tag=None, section=None, table=False, aliases=(), 
         markers = '|'.join(re.escape(word) for word in clause_markers())
         subject = re.split(r'\b(?:' + markers + r')\b', prose, maxsplit=1, flags=re.I)[0] if markers else prose
         canonical, alias_error = resolve_name(subject, aliases)
+        measurement_text = prose
+        prefix = re.match(policy()['form_clause_prefix_pattern'], prose)
+        if prefix and not (_attribute(section or '') or resolve_name(section or '', aliases)[0]):
+            tail = prose[prefix.end():]
+            words = tail.split()
+            if len(words) > 1 and words[0].casefold() in policy()['form_clause_intro_words']:
+                measurement_text = tail
         product_subject = bool(product_obligation and (
             _attribute(subject) or canonical or alias_error in {'ambiguous attribute mapping','unapproved attribute mapping'} or
             re.search(policy()['form_product_subject_pattern'], subject, re.I) or
             (re.search(policy()['form_physical_action_pattern'], prose, re.I) and
              not re.search(policy()['form_actor_subject_pattern'], subject, re.I))))
         material = material_pattern()
-        product_clause = physical_quantity(prose) or bool(material and material.search(prose) and
+        product_clause = physical_quantity(measurement_text) or bool(material and material.search(prose) and
             (properties or _attribute(section or ''))) or product_subject
     if product_clause:
         return SourceDecision(role, False, 'technical', 'technical',
@@ -133,9 +140,6 @@ def triage(text, role, *, page_tag=None, section=None, table=False, aliases=(), 
         return SourceDecision(role, True, None, 'commercial',
                               'Source states an administrative or legal obligation')
     if form_context:
-        if physical_quantity(prose):
-            return SourceDecision(role, False, 'technical', 'unknown',
-                                  'Form context retains a physical quantity for interpretation')
         return SourceDecision(role, True, None,
                               policy()['form_page_types'].get(page_tag, policy()['form_default_type']),
                               'Deterministic form context has no product or certification signal')
