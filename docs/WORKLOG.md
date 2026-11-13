@@ -4188,3 +4188,21 @@ Private configuration now enables the prospective INR1000/month recorded-spend
 cap with verified tariff prices expressed in INR at a conservative100 INR/USD
 budget rate. No credential/model/endpoint changed. Existing backend processes
 need restart to load it; historical pre-ledger monthly spend remains unknown.
+
+
+## 2026-11-13 - User-reviewed six-tender reset, corpus and evaluation history preserved
+
+New user direction requested fresh tender processing focused on specs/BOQ.
+Produced both default/all-protected dry runs:15 tenders total,6 unprotected and9
+protected. User explicitly chose resetting6 only. Created a60929250-byte full
+PostgreSQL custom-format backup and verified its archive listing before deletion.
+Executed exactly the six reviewed IDs with --yes and no --include-protected.
+Verified selected remaining0/protected remaining9; corpus and541 spend rows
+unchanged. Six-tender scope included1848 requirement rows,21 attachments,45 items,
+25 extraction batches,64 ledger pages,59 source tables,4 runs and73 results.
+Uploaded files and shared/unattributed cache history were not erased.
+
+The stricter specs/BOQ-only requirement policy is proposed for the next phase;
+this reset does not claim to implement it or fix item assignment. Current
+measured extraction remains incomplete, and another paid run stays blocked by
+our agreed extraction-batching prerequisite. Details:docs/RESET_2026-11-13.md.
