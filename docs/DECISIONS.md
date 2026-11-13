@@ -4937,3 +4937,8 @@ Validate every proposed field with the unchanged unique-quote, complete value/ra
 ## Give prose source rows stable identities before atomization - 2026-11-13
 
 The capped RC4 read exposed specification siblings with page-table identities but null source_row_id: one 302-character source accumulated104 children. Assign each previously unidentified page row a stable prose ordinal before triage/atomization; keep existing table/OCR row identifiers and distinguish repeated identical paragraphs by position. Reader18 invalidates source checkpoints so the next reading reconstructs identities while old revisions remain preserved. Model prompts, per-clause cache keys and evidence checks are unchanged. The measured RC4 failure is not presented as a validation of this later fix; targeted offline tests cover stable distinct IDs and one extraction per incomplete prose source.
+
+
+## Enable the prospective recorded-spend cap in private deployment configuration - 2026-11-13
+
+Set only ignored local spend-enable, monthly INR1000 cap and INR input/output tariff settings, using the verified configured-target tariff and an explicitly conservative100 INR/USD budgeting assumption. Leave credentials, model, endpoint and daily-cap settings unchanged. New processes enforce recorded monthly totals; existing server processes require restart. Earlier unrecorded billing is unknown, so this cannot promise a complete current-month invoice cap. Keep incomplete reservations counted and preserve spend history through the approved tender-only reset.

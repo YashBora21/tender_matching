@@ -4150,3 +4150,41 @@ eval/audit/phase3-valve-2026-11-13. Next phase must preserve atomic siblings,
 correct source-role/section binding and unique quote diagnostics, then remeasure
 on a newly frozen RC. The confirmed six compound manufacturer labels do not
 constitute whole-tender extraction gold; false-confident matching remains ungraded.
+
+
+## 2026-11-13 - Six-fix integration, capped RC4 read fails acceptance
+
+Committed atomic sibling preservation, bounded10-clause classification, zero-call
+form routing, explicit extraction/classification/matching/repair spend purposes,
+matching batch env alias8 and per-field evidence retention. RC4 c306e3c passed
+1242 backend unit tests with3 corpus-dependent skips;10 disposable PostgreSQL
+checks passed. Saved273-clause replay schedules31 requests with0 changed saved
+labels, and real five-field replay retains4 verified fields/1 rejection after1
+bounded repair. These are offline proofs, not a whole-tender accuracy grade.
+
+The single capped benchmark required instrumentation repair attempts, all retained.
+147 HTTP attempts/146 answers:192554 input/67491 output tokens, estimated recorded
+bound INR23.8861 including one120.148s timeout reservation ofINR1.2301. The next
+maximum-cost reservation would exceed INR25. Per-purpose totals:extraction129
+calls/INR20.4456;classification3/INR0.4431;repair15/INR2.9974;matching0. Paid-attempt
+wall time510.029s; including two offline instrumentation passes590.081s. Saved
+answers were replayed without charge after a source-text collision in the guard.
+Native ledger/journal counters are authoritative when fatal audit metrics are0.
+
+Acceptance fails:460 ->892 unresolved child rows (186 role/page/text groups),
+825 specification children without an item;944 review flags. BOQ technical
+candidates are preserved at21 versus broken stored3.269 form context rows cost0
+calls.60 pages parsed;3000 superseded rows retained; no manufacturer matching,
+false-confident grade or completed-tender time/cost claim. Grouping remains off.
+
+Read-only diagnosis found null source_row_id on prose siblings; one302-character
+source accumulated104 children. Follow-up30b627c assigns stable page-local prose
+IDs before atomization and bumps Reader18.78 targeted tests pass; it is not paid
+retested. No reset is used to claim performance improvement. Next:the user's
+stricter specs/BOQ-only requirement policy, safe specification-to-item binding,
+and extraction batching before another paid run. Full audit:eval/audit/phase4-valve-2026-11-13.
+
+Private configuration now enables the prospective INR1000/month recorded-spend
+cap with verified tariff prices expressed in INR at a conservative100 INR/USD
+budget rate. No credential/model/endpoint changed. Existing backend processes
+need restart to load it; historical pre-ledger monthly spend remains unknown.

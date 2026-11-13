@@ -1,0 +1,1726 @@
+{
+  "outcome": "FAIL: incomplete at benchmark reservation cap; unresolved children increased",
+  "tender_id": "2bc8f917-262d-4ea8-a1c9-b2997ef1f256",
+  "wrapper_sha256": "9752351d63e446f8aa7c0ac719b85cd82fdebd1b3062aa243fa4f040fe408b6f",
+  "release_candidate": "rc-2026-11-13.4",
+  "measured_commit": "c306e3c9bbaa021fd3d79ad21c7e836eaf5809c8",
+  "later_prose_identity_fix": {
+    "commit": "30b627c34a8e792cb5ad1315c4a43ec4d10ebae7",
+    "paid_retest": false,
+    "targeted_tests": {
+      "tests": "78",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0",
+      "time": "25.512"
+    }
+  },
+  "unit_suite_at_measured_commit": {
+    "tests": "1245",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "3",
+    "time": "181.129"
+  },
+  "disposable_database_checks": {
+    "tests": "10",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "94.417"
+  },
+  "paid_attempts": 147,
+  "successful_responses": 146,
+  "input_tokens": 192554,
+  "output_tokens": 67491,
+  "estimated_inr_including_unsettled_reservation": 23.8861,
+  "price_source": {
+    "configured_model_tariff_found": true,
+    "usd_input_per_million": 0.3,
+    "usd_output_per_million": 2.5,
+    "price_source": "https://aistudio.google.com/docs/pricing",
+    "retrieved": "2026-11-13",
+    "tier": "standard text",
+    "usd_inr_budgeting_rate": 100,
+    "conversion_note": "Conservative budgeting assumption, not a current market quote",
+    "prior_monthly_spend": "unknown; ledger has no historical coverage"
+  },
+  "benchmark_cap_inr": 25,
+  "by_purpose": {
+    "extraction": {
+      "calls": 129,
+      "input_tokens": 164530,
+      "output_tokens": 57095,
+      "cost_inr": 20.4456
+    },
+    "repair": {
+      "calls": 15,
+      "input_tokens": 19828,
+      "output_tokens": 9608,
+      "cost_inr": 2.9974
+    },
+    "classification": {
+      "calls": 3,
+      "input_tokens": 8196,
+      "output_tokens": 788,
+      "cost_inr": 0.4431
+    }
+  },
+  "client_attempt_latency_seconds": {
+    "p50": 1.9531546999933198,
+    "p95": 2.9526440000045113,
+    "includes_native_ledger": true
+  },
+  "provider_timeouts": [
+    {
+      "seconds": 120.14801720000105,
+      "reserved_inr": 1.2301
+    }
+  ],
+  "wall_seconds_paid_attempts": 510.0293113000225,
+  "wall_seconds_including_offline_instrumentation_checks": 590.0810930999578,
+  "attempts": [
+    {
+      "mode": "reread",
+      "attempt_id": "3c745574-02cb-44f1-8cda-f93840218389",
+      "status": "failed",
+      "stop_reason": "AssertionError: Form-only content reached the model boundary",
+      "metrics": {
+        "llm_calls": 0,
+        "llm_cache_hits": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "llm_retries": 0,
+        "requirements": 0,
+        "pages_read": 0,
+        "items": 0,
+        "validation_attempts": [],
+        "wall_seconds": 264.38469310000073,
+        "stage_seconds": {
+          "_read_items": 0.74246060004225,
+          "_read_package": 20.715049399994314,
+          "_extract_all": 216.90869899996324
+        },
+        "combined_estimated_inr": 6.7787,
+        "rc_commit": "rc4-c306e3c"
+      }
+    },
+    {
+      "mode": "resume",
+      "attempt_id": "5ef10269-d01e-4618-877d-3a12b8650805",
+      "status": "failed",
+      "stop_reason": "AssertionError: Noncandidate source reached batch classification",
+      "metrics": {
+        "llm_calls": 0,
+        "llm_cache_hits": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "llm_retries": 3,
+        "requirements": 0,
+        "pages_read": 0,
+        "items": 0,
+        "validation_attempts": [],
+        "wall_seconds": 39.77168339997297,
+        "stage_seconds": {
+          "_read_items": 0.5364217000314966,
+          "_read_package": 19.794427899993025,
+          "_extract_all": 1.441848700051196
+        },
+        "combined_estimated_inr": 6.7787,
+        "rc_commit": "rc4-c306e3c",
+        "saved_answers_replayed": 41
+      }
+    },
+    {
+      "mode": "guard-replay",
+      "attempt_id": "d52d875f-a2c0-44e8-92c1-a5d7fcf94c61",
+      "status": "rate_limited",
+      "stop_reason": "Offline replay exhausted saved answers; no HTTP call made",
+      "metrics": {
+        "llm_calls": 0,
+        "llm_cache_hits": 52,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "llm_retries": 3,
+        "requirements": 958,
+        "pages_read": 60,
+        "items": 11,
+        "validation_attempts": [
+          {
+            "request_id": 1,
+            "source_hash": "c91e9873d9fdc5030d5e7dc119b5f61053966a1914196deea73cfecf4e155c79",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "validation_failed",
+            "error": "source_quote_or_value_validation_failed"
+          },
+          {
+            "request_id": 1,
+            "source_hash": "c91e9873d9fdc5030d5e7dc119b5f61053966a1914196deea73cfecf4e155c79",
+            "attempt": 2,
+            "call": 0,
+            "outcome": "validation_failed",
+            "error": "source_quote_or_value_validation_failed"
+          },
+          {
+            "request_id": 2,
+            "source_hash": "ae544cffe555bc42b78408f44e97f553df3cc58794a62f48d101ed3c1b24be42",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 3,
+            "source_hash": "ae544cffe555bc42b78408f44e97f553df3cc58794a62f48d101ed3c1b24be42",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 4,
+            "source_hash": "06071e52a7fabfd3b6f1f6afe50b4a2edfcf7d6eab8b4905212c8cf90b0de15e",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 5,
+            "source_hash": "5b16f0a7231df47d9b361e506ec94a9848451d0499fc0f6fb3dc386ae29e4208",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 6,
+            "source_hash": "4d640dfb80d714dbf82907d4246b65cb3a5c07d7a9c78d31eee76baf94c8196f",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 7,
+            "source_hash": "ae544cffe555bc42b78408f44e97f553df3cc58794a62f48d101ed3c1b24be42",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 8,
+            "source_hash": "bb9136be4f919436ba2baec9a082eee3150d5d49cc9fb4d4b9fe473ae84b640f",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 9,
+            "source_hash": "ae544cffe555bc42b78408f44e97f553df3cc58794a62f48d101ed3c1b24be42",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 10,
+            "source_hash": "1950d118c5f1f8c21815353524a4b4a7aba79ac60e3af2754bc4b1b00af8e388",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 11,
+            "source_hash": "5b16f0a7231df47d9b361e506ec94a9848451d0499fc0f6fb3dc386ae29e4208",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 12,
+            "source_hash": "210985366573155b15bcc4b13672de4a78ea6971af35f2500a24fb7cb7e49918",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 13,
+            "source_hash": "675729bdf51323eb4e4c1583a5458bcc3decd798853a20bfbf1476a4fa01db38",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 14,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 14,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 2,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 15,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 16,
+            "source_hash": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 16,
+            "source_hash": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+            "attempt": 2,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 17,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 18,
+            "source_hash": "4e1f8092c95bd5221b81efe4832a9d37bea3daf06409a2d95f2851472c438d31",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 19,
+            "source_hash": "74aa65327310376e442f23881b8a10179c0eb00b73d542f301b7fad5d1a119de",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 20,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 21,
+            "source_hash": "b755129450c1d38078aa2f10d16db4f2e218a34406b0adc7eb6cc6db041edf98",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 22,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 23,
+            "source_hash": "02ebc87ea886221b5bd86c8b2b926522358175a4db368d6f5057d54f74f80e64",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 24,
+            "source_hash": "56f973c5b5ee8e97bfa85a60999e12f88e740dfe87ed58c96ac44829b52c8aa1",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 25,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 26,
+            "source_hash": "5899d1cae2dc65755f8cd6d77b981f7214e1577c62d56c7e58e14dc45dfc5a1e",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 27,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 28,
+            "source_hash": "98b441dd464a3bcb0faa4256263b68e07addd8d1628615285908a1c90a87c8d8",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 29,
+            "source_hash": "ae7143c6bcd212998b59d9cec6e81b06d41d2c5b29603e2929c6fef85f2d3baa",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 30,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 31,
+            "source_hash": "ada4a1000ca7f0f727ea6f92969907235cf5625a013272c95a7e4409f03e22ae",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 32,
+            "source_hash": "f0c0df37cd30e3858a34423ad97fe4848725448927a4f8ea07b50e51b757075d",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 33,
+            "source_hash": "2fb2a2c1c112cabe9085e550bee3a1bba8243d4d74cf2efd1ba76a235321d773",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 34,
+            "source_hash": "341d2872159528c245003f85e1e69d01edb46eeecc1751052e37026eb064fce5",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 35,
+            "source_hash": "c19fddd41da543b25fe6ff372560e68d351e1b454f4d3aefc60b4fe5c91a42b4",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 36,
+            "source_hash": "02ff39f40b87c8f7a5cefd4249f09dc82c58c2fd003ce8a1b5486b9910bc0a11",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 37,
+            "source_hash": "6135f8a250da20596bc67b84db78716fab65982b8327d116c6bc6aef21a05362",
+            "attempt": 1,
+            "call": 0,
+            "outcome": "passed",
+            "error": null
+          }
+        ],
+        "wall_seconds": 40.2800983999623,
+        "stage_seconds": {
+          "_read_items": 0.6037309000384994,
+          "_read_package": 18.228973000019323,
+          "_extract_all": 1.3639898999826983,
+          "_persist": 0.7180617999983951
+        },
+        "combined_estimated_inr": 6.7787,
+        "rc_commit": "rc4-c306e3c",
+        "saved_answers_replayed": 40
+      }
+    },
+    {
+      "mode": "final-resume",
+      "attempt_id": "67912890-4863-481f-9898-4bff24d84ba5",
+      "status": "rate_limited",
+      "stop_reason": "the phase 4 estimated INR reservation cap would be exceeded",
+      "metrics": {
+        "llm_calls": 97,
+        "llm_cache_hits": 5,
+        "prompt_tokens": 125867,
+        "completion_tokens": 53308,
+        "llm_retries": 14,
+        "requirements": 1544,
+        "pages_read": 60,
+        "items": 11,
+        "validation_attempts": [
+          {
+            "request_id": 1,
+            "source_hash": "4c86bb567ee7c93e1a66baa0e79190474c9d8b59d5cd077324fd296353717ca4",
+            "attempt": 1,
+            "call": 1,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 2,
+            "source_hash": "f2eecb25ff5f9c377b133d7d49a93762f3bb746b44acd9fc5a9788b05d46c31a",
+            "attempt": 1,
+            "call": 2,
+            "outcome": "validation_failed",
+            "error": "source_quote_or_value_validation_failed"
+          },
+          {
+            "request_id": 2,
+            "source_hash": "f2eecb25ff5f9c377b133d7d49a93762f3bb746b44acd9fc5a9788b05d46c31a",
+            "attempt": 2,
+            "call": 3,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 3,
+            "source_hash": "ef58d09b8dc94791056385dad0118cb9bcb093200c5cd338b2e343866a91e069",
+            "attempt": 1,
+            "call": 4,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 4,
+            "source_hash": "65af5a9f705e9d8ad95eb4e6da6972a680d88c4fe7f1b9ae1a15d4e4219aeae9",
+            "attempt": 1,
+            "call": 5,
+            "outcome": "validation_failed",
+            "error": "source_quote_or_value_validation_failed"
+          },
+          {
+            "request_id": 4,
+            "source_hash": "65af5a9f705e9d8ad95eb4e6da6972a680d88c4fe7f1b9ae1a15d4e4219aeae9",
+            "attempt": 2,
+            "call": 6,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 5,
+            "source_hash": "06071e52a7fabfd3b6f1f6afe50b4a2edfcf7d6eab8b4905212c8cf90b0de15e",
+            "attempt": 1,
+            "call": 6,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 6,
+            "source_hash": "06071e52a7fabfd3b6f1f6afe50b4a2edfcf7d6eab8b4905212c8cf90b0de15e",
+            "attempt": 1,
+            "call": 7,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 7,
+            "source_hash": "5b16f0a7231df47d9b361e506ec94a9848451d0499fc0f6fb3dc386ae29e4208",
+            "attempt": 1,
+            "call": 7,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 8,
+            "source_hash": "4d640dfb80d714dbf82907d4246b65cb3a5c07d7a9c78d31eee76baf94c8196f",
+            "attempt": 1,
+            "call": 7,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 9,
+            "source_hash": "bb9136be4f919436ba2baec9a082eee3150d5d49cc9fb4d4b9fe473ae84b640f",
+            "attempt": 1,
+            "call": 7,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 10,
+            "source_hash": "1950d118c5f1f8c21815353524a4b4a7aba79ac60e3af2754bc4b1b00af8e388",
+            "attempt": 1,
+            "call": 7,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 11,
+            "source_hash": "1950d118c5f1f8c21815353524a4b4a7aba79ac60e3af2754bc4b1b00af8e388",
+            "attempt": 1,
+            "call": 8,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 12,
+            "source_hash": "5b16f0a7231df47d9b361e506ec94a9848451d0499fc0f6fb3dc386ae29e4208",
+            "attempt": 1,
+            "call": 8,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 13,
+            "source_hash": "210985366573155b15bcc4b13672de4a78ea6971af35f2500a24fb7cb7e49918",
+            "attempt": 1,
+            "call": 8,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 14,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 1,
+            "call": 8,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 14,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 2,
+            "call": 8,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 15,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 1,
+            "call": 9,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 16,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 1,
+            "call": 10,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 17,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 1,
+            "call": 11,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 18,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 1,
+            "call": 12,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 18,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 2,
+            "call": 13,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 19,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 1,
+            "call": 14,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 19,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 2,
+            "call": 15,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 20,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 1,
+            "call": 16,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 20,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 2,
+            "call": 17,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 20,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 3,
+            "call": 18,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 21,
+            "source_hash": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+            "attempt": 1,
+            "call": 19,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 22,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 19,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 23,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 19,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 24,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 19,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 25,
+            "source_hash": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+            "attempt": 1,
+            "call": 19,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 25,
+            "source_hash": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+            "attempt": 2,
+            "call": 19,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 26,
+            "source_hash": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+            "attempt": 1,
+            "call": 20,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 27,
+            "source_hash": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+            "attempt": 1,
+            "call": 21,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 28,
+            "source_hash": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+            "attempt": 1,
+            "call": 22,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 29,
+            "source_hash": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+            "attempt": 1,
+            "call": 23,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 30,
+            "source_hash": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+            "attempt": 1,
+            "call": 24,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 31,
+            "source_hash": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+            "attempt": 1,
+            "call": 25,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 32,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 25,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 33,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 25,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 34,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 26,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 35,
+            "source_hash": "4e1f8092c95bd5221b81efe4832a9d37bea3daf06409a2d95f2851472c438d31",
+            "attempt": 1,
+            "call": 26,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 36,
+            "source_hash": "4e1f8092c95bd5221b81efe4832a9d37bea3daf06409a2d95f2851472c438d31",
+            "attempt": 1,
+            "call": 27,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 37,
+            "source_hash": "4e1f8092c95bd5221b81efe4832a9d37bea3daf06409a2d95f2851472c438d31",
+            "attempt": 1,
+            "call": 28,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 38,
+            "source_hash": "4e1f8092c95bd5221b81efe4832a9d37bea3daf06409a2d95f2851472c438d31",
+            "attempt": 1,
+            "call": 29,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 39,
+            "source_hash": "4e1f8092c95bd5221b81efe4832a9d37bea3daf06409a2d95f2851472c438d31",
+            "attempt": 1,
+            "call": 30,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 40,
+            "source_hash": "4e1f8092c95bd5221b81efe4832a9d37bea3daf06409a2d95f2851472c438d31",
+            "attempt": 1,
+            "call": 31,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 41,
+            "source_hash": "74aa65327310376e442f23881b8a10179c0eb00b73d542f301b7fad5d1a119de",
+            "attempt": 1,
+            "call": 31,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 42,
+            "source_hash": "74aa65327310376e442f23881b8a10179c0eb00b73d542f301b7fad5d1a119de",
+            "attempt": 1,
+            "call": 32,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 43,
+            "source_hash": "74aa65327310376e442f23881b8a10179c0eb00b73d542f301b7fad5d1a119de",
+            "attempt": 1,
+            "call": 33,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 44,
+            "source_hash": "74aa65327310376e442f23881b8a10179c0eb00b73d542f301b7fad5d1a119de",
+            "attempt": 1,
+            "call": 34,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 45,
+            "source_hash": "74aa65327310376e442f23881b8a10179c0eb00b73d542f301b7fad5d1a119de",
+            "attempt": 1,
+            "call": 35,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 46,
+            "source_hash": "74aa65327310376e442f23881b8a10179c0eb00b73d542f301b7fad5d1a119de",
+            "attempt": 1,
+            "call": 36,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 47,
+            "source_hash": "74aa65327310376e442f23881b8a10179c0eb00b73d542f301b7fad5d1a119de",
+            "attempt": 1,
+            "call": 37,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 48,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 38,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 49,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 39,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 50,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 40,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 51,
+            "source_hash": "b755129450c1d38078aa2f10d16db4f2e218a34406b0adc7eb6cc6db041edf98",
+            "attempt": 1,
+            "call": 40,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 52,
+            "source_hash": "b755129450c1d38078aa2f10d16db4f2e218a34406b0adc7eb6cc6db041edf98",
+            "attempt": 1,
+            "call": 41,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 53,
+            "source_hash": "b755129450c1d38078aa2f10d16db4f2e218a34406b0adc7eb6cc6db041edf98",
+            "attempt": 1,
+            "call": 42,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 54,
+            "source_hash": "b755129450c1d38078aa2f10d16db4f2e218a34406b0adc7eb6cc6db041edf98",
+            "attempt": 1,
+            "call": 43,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 55,
+            "source_hash": "b755129450c1d38078aa2f10d16db4f2e218a34406b0adc7eb6cc6db041edf98",
+            "attempt": 1,
+            "call": 44,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 56,
+            "source_hash": "b755129450c1d38078aa2f10d16db4f2e218a34406b0adc7eb6cc6db041edf98",
+            "attempt": 1,
+            "call": 45,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 57,
+            "source_hash": "b755129450c1d38078aa2f10d16db4f2e218a34406b0adc7eb6cc6db041edf98",
+            "attempt": 1,
+            "call": 46,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 58,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 47,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 59,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 48,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 60,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 49,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 61,
+            "source_hash": "02ebc87ea886221b5bd86c8b2b926522358175a4db368d6f5057d54f74f80e64",
+            "attempt": 1,
+            "call": 49,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 62,
+            "source_hash": "02ebc87ea886221b5bd86c8b2b926522358175a4db368d6f5057d54f74f80e64",
+            "attempt": 1,
+            "call": 50,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 63,
+            "source_hash": "56f973c5b5ee8e97bfa85a60999e12f88e740dfe87ed58c96ac44829b52c8aa1",
+            "attempt": 1,
+            "call": 50,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 64,
+            "source_hash": "56f973c5b5ee8e97bfa85a60999e12f88e740dfe87ed58c96ac44829b52c8aa1",
+            "attempt": 1,
+            "call": 51,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 65,
+            "source_hash": "56f973c5b5ee8e97bfa85a60999e12f88e740dfe87ed58c96ac44829b52c8aa1",
+            "attempt": 1,
+            "call": 52,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 66,
+            "source_hash": "56f973c5b5ee8e97bfa85a60999e12f88e740dfe87ed58c96ac44829b52c8aa1",
+            "attempt": 1,
+            "call": 53,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 67,
+            "source_hash": "56f973c5b5ee8e97bfa85a60999e12f88e740dfe87ed58c96ac44829b52c8aa1",
+            "attempt": 1,
+            "call": 54,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 68,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 54,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 69,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 55,
+            "outcome": "validation_failed",
+            "error": "extraction_schema_validation_failed"
+          },
+          {
+            "request_id": 69,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 2,
+            "call": 56,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 70,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 57,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 71,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 58,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 72,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 59,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 73,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 60,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 74,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 61,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 74,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 2,
+            "call": 62,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 75,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 63,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 76,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 64,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 77,
+            "source_hash": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+            "attempt": 1,
+            "call": 65,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 78,
+            "source_hash": "5899d1cae2dc65755f8cd6d77b981f7214e1577c62d56c7e58e14dc45dfc5a1e",
+            "attempt": 1,
+            "call": 65,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 79,
+            "source_hash": "5899d1cae2dc65755f8cd6d77b981f7214e1577c62d56c7e58e14dc45dfc5a1e",
+            "attempt": 1,
+            "call": 66,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 80,
+            "source_hash": "5899d1cae2dc65755f8cd6d77b981f7214e1577c62d56c7e58e14dc45dfc5a1e",
+            "attempt": 1,
+            "call": 67,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 81,
+            "source_hash": "5899d1cae2dc65755f8cd6d77b981f7214e1577c62d56c7e58e14dc45dfc5a1e",
+            "attempt": 1,
+            "call": 68,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 82,
+            "source_hash": "5899d1cae2dc65755f8cd6d77b981f7214e1577c62d56c7e58e14dc45dfc5a1e",
+            "attempt": 1,
+            "call": 69,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 83,
+            "source_hash": "5899d1cae2dc65755f8cd6d77b981f7214e1577c62d56c7e58e14dc45dfc5a1e",
+            "attempt": 1,
+            "call": 70,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 84,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 71,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 85,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 72,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 86,
+            "source_hash": "5242fd52fdc822f59bd31a3d5a0a5368ca5cb8e7c71b568ed02adde517a555b3",
+            "attempt": 1,
+            "call": 73,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 87,
+            "source_hash": "98b441dd464a3bcb0faa4256263b68e07addd8d1628615285908a1c90a87c8d8",
+            "attempt": 1,
+            "call": 73,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 88,
+            "source_hash": "98b441dd464a3bcb0faa4256263b68e07addd8d1628615285908a1c90a87c8d8",
+            "attempt": 1,
+            "call": 74,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 89,
+            "source_hash": "98b441dd464a3bcb0faa4256263b68e07addd8d1628615285908a1c90a87c8d8",
+            "attempt": 1,
+            "call": 75,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 90,
+            "source_hash": "98b441dd464a3bcb0faa4256263b68e07addd8d1628615285908a1c90a87c8d8",
+            "attempt": 1,
+            "call": 76,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 91,
+            "source_hash": "98b441dd464a3bcb0faa4256263b68e07addd8d1628615285908a1c90a87c8d8",
+            "attempt": 1,
+            "call": 77,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 92,
+            "source_hash": "98b441dd464a3bcb0faa4256263b68e07addd8d1628615285908a1c90a87c8d8",
+            "attempt": 1,
+            "call": 78,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 93,
+            "source_hash": "98b441dd464a3bcb0faa4256263b68e07addd8d1628615285908a1c90a87c8d8",
+            "attempt": 1,
+            "call": 79,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 94,
+            "source_hash": "ae7143c6bcd212998b59d9cec6e81b06d41d2c5b29603e2929c6fef85f2d3baa",
+            "attempt": 1,
+            "call": 79,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 95,
+            "source_hash": "ae7143c6bcd212998b59d9cec6e81b06d41d2c5b29603e2929c6fef85f2d3baa",
+            "attempt": 1,
+            "call": 80,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 96,
+            "source_hash": "ae7143c6bcd212998b59d9cec6e81b06d41d2c5b29603e2929c6fef85f2d3baa",
+            "attempt": 1,
+            "call": 81,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 97,
+            "source_hash": "ae7143c6bcd212998b59d9cec6e81b06d41d2c5b29603e2929c6fef85f2d3baa",
+            "attempt": 1,
+            "call": 82,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 98,
+            "source_hash": "ae7143c6bcd212998b59d9cec6e81b06d41d2c5b29603e2929c6fef85f2d3baa",
+            "attempt": 1,
+            "call": 83,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 99,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 83,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 100,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 84,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 101,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 85,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 102,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 86,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 102,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 2,
+            "call": 87,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 103,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 88,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 103,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 2,
+            "call": 89,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 104,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 90,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 104,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 2,
+            "call": 91,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 105,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 92,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 106,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 93,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 107,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 94,
+            "outcome": "invalid_json",
+            "error": "invalid_json"
+          },
+          {
+            "request_id": 107,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 2,
+            "call": 95,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 108,
+            "source_hash": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+            "attempt": 1,
+            "call": 96,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 109,
+            "source_hash": "ada4a1000ca7f0f727ea6f92969907235cf5625a013272c95a7e4409f03e22ae",
+            "attempt": 1,
+            "call": 96,
+            "outcome": "passed",
+            "error": null
+          },
+          {
+            "request_id": 110,
+            "source_hash": "ada4a1000ca7f0f727ea6f92969907235cf5625a013272c95a7e4409f03e22ae",
+            "attempt": 1,
+            "call": 97,
+            "outcome": "passed",
+            "error": null
+          }
+        ],
+        "wall_seconds": 245.6446182000218,
+        "stage_seconds": {
+          "_read_items": 0.6161891999654472,
+          "_extract_all": 223.30059539998183,
+          "_persist": 0.574055099976249
+        },
+        "combined_estimated_inr": 23.8861,
+        "rc_commit": "rc4-c306e3c",
+        "saved_answers_replayed": 27
+      }
+    }
+  ],
+  "page_states": {
+    "parsed": 60
+  },
+  "wrapper_pages": 17,
+  "source_counts": [
+    {
+      "role": "boq",
+      "type": "commercial",
+      "classification": "context",
+      "count": 22
+    },
+    {
+      "role": "boq",
+      "type": "informational",
+      "classification": "context",
+      "count": 13
+    },
+    {
+      "role": "boq",
+      "type": "technical",
+      "classification": "candidate",
+      "count": 21
+    },
+    {
+      "role": "cover",
+      "type": "certification",
+      "classification": "candidate",
+      "count": 5
+    },
+    {
+      "role": "cover",
+      "type": "commercial",
+      "classification": "context",
+      "count": 92
+    },
+    {
+      "role": "cover",
+      "type": "eligibility",
+      "classification": "context",
+      "count": 15
+    },
+    {
+      "role": "cover",
+      "type": "informational",
+      "classification": "context",
+      "count": 1
+    },
+    {
+      "role": "cover",
+      "type": "technical",
+      "classification": "candidate",
+      "count": 49
+    },
+    {
+      "role": "cover",
+      "type": "unknown",
+      "classification": "candidate",
+      "count": 11
+    },
+    {
+      "role": "cover",
+      "type": "unknown",
+      "classification": "context",
+      "count": 99
+    },
+    {
+      "role": "cover",
+      "type": "unknown",
+      "classification": "fragment",
+      "count": 20
+    },
+    {
+      "role": "specification",
+      "type": "certification",
+      "classification": "candidate",
+      "count": 1
+    },
+    {
+      "role": "specification",
+      "type": "commercial",
+      "classification": "context",
+      "count": 108
+    },
+    {
+      "role": "specification",
+      "type": "informational",
+      "classification": "context",
+      "count": 14
+    },
+    {
+      "role": "specification",
+      "type": "technical",
+      "classification": "candidate",
+      "count": 718
+    },
+    {
+      "role": "specification",
+      "type": "unknown",
+      "classification": "candidate",
+      "count": 106
+    },
+    {
+      "role": "supporting",
+      "type": "commercial",
+      "classification": "context",
+      "count": 191
+    },
+    {
+      "role": "supporting",
+      "type": "informational",
+      "classification": "context",
+      "count": 78
+    }
+  ],
+  "boq_technical_candidates": 21,
+  "unresolved_child_rows": 892,
+  "unresolved_page_text_groups": 186,
+  "review_flagged": 944,
+  "blocker_causes_nonexclusive": [
+    {
+      "role": "boq",
+      "reason": "source_content_unrepresented",
+      "count": 3
+    },
+    {
+      "role": "cover",
+      "reason": "clause_type_unknown",
+      "count": 11
+    },
+    {
+      "role": "cover",
+      "reason": "item_unassigned",
+      "count": 50
+    },
+    {
+      "role": "cover",
+      "reason": "source_content_unrepresented",
+      "count": 15
+    },
+    {
+      "role": "cover",
+      "reason": "technical_attribute_unparsed",
+      "count": 36
+    },
+    {
+      "role": "specification",
+      "reason": "clause_type_unknown",
+      "count": 106
+    },
+    {
+      "role": "specification",
+      "reason": "item_unassigned",
+      "count": 825
+    },
+    {
+      "role": "specification",
+      "reason": "source_content_unrepresented",
+      "count": 685
+    },
+    {
+      "role": "specification",
+      "reason": "technical_attribute_unparsed",
+      "count": 8
+    }
+  ],
+  "repeated_source_windows": [
+    {
+      "role": "specification",
+      "page": 4,
+      "source_sha256": "e0b6368e434fd286117581dc3d3298359c11991949506f9ac4a133e0c1316151",
+      "children": 104,
+      "distinct_source_rows": 1,
+      "table_identity_missing": false,
+      "row_identity_missing": true
+    },
+    {
+      "role": "specification",
+      "page": 3,
+      "source_sha256": "2e5c8cdf0db87684dec039f9b38521f347b23d4a3c357b17bc62083c6d6d0a40",
+      "children": 102,
+      "distinct_source_rows": 1,
+      "table_identity_missing": false,
+      "row_identity_missing": true
+    },
+    {
+      "role": "specification",
+      "page": 1,
+      "source_sha256": "f184e323f538673845cc502a831ff86775409e71e416bc72a5c5421a99d5e7d1",
+      "children": 62,
+      "distinct_source_rows": 1,
+      "table_identity_missing": false,
+      "row_identity_missing": true
+    },
+    {
+      "role": "specification",
+      "page": 1,
+      "source_sha256": "f6c7c3f18738e1949be73a1617b327d239abbb5de21bb8a3c28b1075ff6e0668",
+      "children": 54,
+      "distinct_source_rows": 1,
+      "table_identity_missing": false,
+      "row_identity_missing": true
+    },
+    {
+      "role": "specification",
+      "page": 4,
+      "source_sha256": "98b441dd464a3bcb0faa4256263b68e07addd8d1628615285908a1c90a87c8d8",
+      "children": 53,
+      "distinct_source_rows": 1,
+      "table_identity_missing": false,
+      "row_identity_missing": true
+    }
+  ],
+  "history_preserved": true,
+  "superseded_rows": 3000,
+  "form_only_calls": 0,
+  "form_context_rows": 269,
+  "form_guard_correction": "The first text-only guard confused the same text (2.) across different sources. A second raw-row lookup also failed after text transformation. Corrected instrumentation binds the originating requirement/context; saved answers were replayed offline before continuation. Both failures and zero-call repair attempts are preserved. Fatal audit results returned zero call counters; journal and native spend rows are authoritative.",
+  "accuracy": "Ungraded: no whole-tender extraction gold; no manufacturer comparisons performed",
+  "false_confident_claims": null,
+  "grouping_enabled": false,
+  "matching_batch_setting": 8,
+  "matching_exercised": false,
+  "next_paid_benchmark_allowed": false,
+  "next_work": "Strict specification/BOQ-only routing per latest user direction; preserve prose row identity; fix specification-to-BOQ binding and batch extraction before another paid read."
+}
