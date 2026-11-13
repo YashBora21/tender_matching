@@ -4729,6 +4729,77 @@ Preserve the legacy LLM_API_KEY credential and allow LLM_TEXT_API_KEY to select 
 Remove only source with no callers after checking imports, tests, CLI/dynamic entry points and documentation: four obsolete private helpers, their fake override, eleven imports and two constants. Preserve package re-exports, migrations, active tests, dynamic OCR worker and audit/gold history. Delete only regenerated pytest temporary directories; ignore local experiments, generated audit outputs and unseen user inputs by default. New reviewed audit artifacts require explicit forced staging; already tracked artifacts remain versioned. Remove unused vision environment forwarding from Compose because production OCR uses Tesseract/Paddle; independent vision experiments remain configured locally.
 
 
+## D-164 - A spend cap that lives only in memory is not a cap
+
+`LLM_CALL_BUDGET` and `LLM_TOKEN_BUDGET` are the client's own counters. They bound
+one process, and a process that restarts - or a series of separate runs - starts
+again at zero, so neither can enforce the INR 1,000 per month the readiness gate
+asks for. A counter that resets is a suggestion.
+
+Every billable call is now written to a new `llm_spend` row (model, purpose,
+prompt and completion tokens, cost in INR, optional run id), and the client asks
+the ledger before each call. Two caps apply: `LLM_DAILY_CAP_INR` and
+`LLM_MONTHLY_CAP_INR`. The price is configuration
+(`LLM_COST_INPUT_PER_MTOK_INR`, `LLM_COST_OUTPUT_PER_MTOK_INR`), not a constant:
+the tariff and the currency are deployment facts. Cost is stored with the row so
+a later price change cannot rewrite what was already spent.
+
+Three behaviours are deliberate. It is off by default (`LLM_SPEND_CAPS_ENABLED`)
+so unit tests and a machine without a database behave exactly as before. It fails
+closed: caps enabled with no price, or a ledger that cannot be read or written,
+stops the run rather than allowing unmetered spend - a cap that silently stops
+working is worse than no cap, because the report still claims a budget. And the
+check happens before the request while the row is written after the answer, so a
+crash between the two loses one call's cost; reserving before a call that may
+never happen would invent spend that was never incurred.
+
+*Verified:* `tests/test_spend.py` (9 tests: configured price arithmetic, an
+unpriced call has no cost, the disabled ledger never opens a session, enabled
+caps without a price or a limit refuse, a spent day and a spent month refuse
+before any work, a cap becomes `LLMBudgetExceeded`, and an unenforceable ledger
+stops the client), plus migration `0022_llm_spend` applied to the local database
+and the full offline unit suite.
+
+What is not verified is a paid call: no provider was called in this phase, so the
+ledger has recorded only synthetic rows. The caps are exercised against the
+stored-sum query, not against a real month of traffic.
+
+
+## D-165 - Gate 2 is measured before anything is corrected
+
+The gate asks for vendor-evidence and alias corrections driven by frozen results.
+Corrections argued from a guess are how a wrong attribute becomes a confirmed
+match, so `eval/gate2_gaps.py` classifies each abstention in a stored run instead:
+`requirement_unparsed` (no attribute asked), `alias_gap` (the wording resolves to
+no canonical term), `evidence_exists_uncited` (the manufacturer holds a fact on
+that attribute but the run did not cite it), and `no_extracted_fact` (coverage).
+Silence stays coverage; it is never converted into a failed capability.
+
+On the valve run `4e7ebbc1` the 63 stored results split 7 answered, 24
+`requirement_unparsed`, 13 `alias_gap`, 2 `evidence_exists_uncited` and 17
+`no_extracted_fact`. The largest group is ours, not the vendors': eight
+requirements carried no attribute, which is also why none of the six confirmed
+gold rows could agree - the run never compared them. The unresolved wordings name
+attributes the vocabulary does not define (`face to face distance`, `valve type`,
+`pressure rating`) or a plain synonym gap (`nominal diameter`); adding a synonym
+is a change to comparison behaviour and is not made on this evidence alone.
+
+No fact attribute is backfilled. Only two facts carry a name that resolves to a
+canonical term, and both are under a recorded human review that says they have no
+canonical attribute; a newer synonym table does not overrule that review. The
+pump tender has no completed run and all 61 of its "requirements" are type
+`unknown`, item-less and unparsed - the first rows are bid-cover metadata - so it
+is reported as not evaluated rather than scored.
+
+*Verified:* `eval/gate2_gaps.py` output `eval/audit/acceptance-2026-11-11/`
+(`gate2-gaps.json`, `GATE2_VENDOR_EVIDENCE.md`), read-only against the stored
+database, plus a cache guard test: `cached_fact` asks for `verified` only, so a
+fact waiting for review can never be republished as a confirmed match.
+
+What is not verified is whether rerunning the valve tender would now answer more
+rows: that needs a paid run and an approved spend, so no fix is claimed.
+
+
 ## D-166 - Compose derives its database URL from the database's own credentials
 
 The compose backend took `DATABASE_URL_DOCKER`, while the database service took
@@ -4776,6 +4847,7 @@ Source coverage v2 may count an open-vocabulary value only when its source span 
 ## Incomplete-report admission — 2026-11-12
 
 Supersede the earlier D8/D75 allowance for starting a new manufacturer comparison from rate-limited ingestion: finish extraction first. Historical incomplete reports remain readable but do not display normal manufacturer rankings in React/HTML.
+
 
 ## Bounded malformed JSON retries and source-scope repair — 2026-11-12
 
