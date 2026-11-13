@@ -105,7 +105,7 @@ def clause_key(text, context, model, version):
     prompt_signature = signature() if version == PROMPT_VERSION else sha256(
         (BATCH_SYSTEM_PROMPT + STRUCTURED_VALIDATION_VERSION).encode()).hexdigest()
     return sha256(json.dumps([text, cache_context(text, context), model, version,
-        prompt_signature, get_settings().schema_version, fingerprint()], sort_keys=True).encode()).hexdigest()
+        prompt_signature, get_settings().schema_version, fingerprint(for_classification=True)], sort_keys=True).encode()).hexdigest()
 
 
 def cached_type(text, context, model, cache):

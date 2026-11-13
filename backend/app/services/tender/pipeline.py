@@ -994,9 +994,12 @@ def _read_package(tender_id, directory, attachments, specification, repo, *, ali
         attachment_id = (_attachment_id(repo, tender_id, source)
                          if repo is not None and source.get('source_key') != 'wrapper' else None)
         source_key = source.get('source_key') or attachment_id or source.get('sha256') or 'legacy'
-        from app.services.tender.source_policy import source_role, triage
+        from app.services.tender.source_policy import source_role, triage, form_heading, policy as source_policy
         role = source_role(source, specification=source is specification)
         read = _read_specification(source, directory)
+        heading = form_heading(read.rows)
+        if heading:
+            role = source_policy()['form_source_role']
         if read.error:
             combined.error = read.error
             for number in range(1, (source.get('pages') or 0) + 1):
@@ -1010,7 +1013,7 @@ def _read_package(tender_id, directory, attachments, specification, repo, *, ali
                                   page_tag=row.get('page_tag'), section=row.get('title'),
                                   table=(row.get('extraction_method') in {'table', 'item'} or
                                          bool(row.get('source_cells'))),
-                                  aliases=aliases)
+                                  aliases=aliases, form_context=bool(heading))
                 row.update(source_role=role, context_only=decision.context_only,
                            candidate_type=decision.candidate_type, clause_type=decision.clause_type,
                            source_policy_reason=decision.reason, fragment_reason=decision.fragment_reason)
@@ -1194,6 +1197,16 @@ def _extract_all(
         groups[source_indices[key]].append(row)
     # A source owns all its children; a context child cannot stand in for them.
     requirements = [next((row for row in group if not row.context_only), group[0]) for group in groups]
+    from app.services.tender.source_policy import triage, policy as source_policy
+    for requirement in requirements:
+        if not requirement.context_only and requirement.source_role and requirement.page_tag in source_policy()['form_page_types']:
+            decision = triage(requirement.source_text or requirement.text, requirement.source_role,
+                              page_tag=requirement.page_tag, section=requirement.source_section,
+                              table=bool(requirement.table_context))
+            if decision.context_only:
+                requirement.context_only = True
+                requirement.candidate_type = None
+                requirement.requirement_type = RequirementType(decision.clause_type)
     for index, requirement in enumerate(requirements):
         siblings = groups[index]
         added: list[RequirementRecord] = []

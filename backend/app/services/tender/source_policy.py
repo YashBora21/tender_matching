@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 import re
 
-from app.comparison.attributes import certification_pattern, clause_markers
+from app.comparison.attributes import certification_pattern, clause_markers, material_pattern
 from app.core.config import get_settings
 from app.services.tender.classify import (
     classify_clause, clause_policy, classification_policy_fingerprint,
@@ -19,14 +19,43 @@ def policy():
     return json.loads(Path(__file__).with_name('source_policy.json').read_text(encoding='utf-8'))
 
 
-def fingerprint():
+def fingerprint(*, for_classification=False):
     from app.services.tender.templates import reviewed_data
     from app.comparison.vocabulary import vocabulary_path
     settings = get_settings()
-    return sha256(json.dumps([policy(), classification_policy_fingerprint(),
+    data = {k:v for k,v in policy().items() if not (for_classification and k.startswith('form_'))}
+    inputs = [data, classification_policy_fingerprint(),
                               certification_pattern().pattern, reviewed_data(),
                               settings.req_min_chars, settings.req_min_words,
-                              Path(vocabulary_path()).read_text(encoding='utf-8')], sort_keys=True).encode()).hexdigest()
+                              Path(vocabulary_path()).read_text(encoding='utf-8')]
+    if not for_classification:
+        inputs.append(settings.source_form_heading_chars)
+    return sha256(json.dumps(inputs, sort_keys=True).encode()).hexdigest()
+
+
+def form_heading(rows):
+    """Recognize a form's opening heading from policy data, never its filename."""
+    if not rows:
+        return None
+    first = min(row['page'] for row in rows)
+    opening = ' '.join((row.get('title') or '') + ' ' + (row.get('row_text') or row['description'])
+                       for row in rows if row['page'] == first)[:get_settings().source_form_heading_chars]
+    headings = [row.get('title') or '' for row in rows if row['page'] == first]
+    for candidate in headings + [opening]:
+        for pattern in policy()['form_heading_patterns']:
+            match = re.search(pattern, candidate.strip(), re.I)
+            if match:
+                return match.group()
+    return None
+
+
+def physical_quantity(text):
+    from app.comparison.units import parse_unit, REGISTRY
+    for match in NUMBER_WITH_UNIT.finditer(text):
+        unit = parse_unit(re.sub(r'^[\d.,\s+-]+', '', match.group()))
+        if unit is None or not REGISTRY.Unit(unit).dimensionless:
+            return True
+    return False
 
 
 def source_role(source, *, specification=False):
@@ -56,22 +85,23 @@ class SourceDecision:
     fragment_reason: str | None = None
 
 
-def triage(text, role, *, page_tag=None, section=None, table=False, aliases=()):
+def triage(text, role, *, page_tag=None, section=None, table=False, aliases=(), form_context=False):
     """A candidate permits reading; it never establishes a capability match."""
     if certification_pattern().search(text):
         return SourceDecision(role, False, 'certification', 'certification',
                               'Source cites an identifiable certification or standard')
     settings = get_settings()
+    form_context = form_context or page_tag in policy()['form_page_types']
     prose = ' '.join(text.split())
     short = (role in policy()['fragment_prose_roles'] and not table and
              (len(prose) < settings.req_min_chars or len(prose.split()) < settings.req_min_words))
-    if short:
+    if short or form_context:
         from app.services.requirement.structured_values import resolve_name
         canonical, alias_error = resolve_name(prose, aliases)
         if canonical or alias_error in {'ambiguous attribute mapping', 'unapproved attribute mapping'}:
             return SourceDecision(role, False, 'technical', 'technical' if canonical else 'unknown',
                                   'Approved attribute label' if canonical else alias_error)
-    decision = classify_clause(text, page_tag=page_tag, source_section=section)
+    decision = classify_clause(text, page_tag=page_tag, source_section='atc' if form_context else section)
     if decision.kind in policy()['nontechnical_types'] and not decision.review_required:
         return SourceDecision(role, True, None, decision.kind, decision.reason)
     cues = clause_policy()
@@ -82,12 +112,33 @@ def triage(text, role, *, page_tag=None, section=None, table=False, aliases=()):
     measured_property = bool(properties and NUMBER_WITH_UNIT.search(text))
     product_subject = bool((properties or product_obligation) and not actor and not reads_as_legal_clause(text))
     product_clause = decision.kind == 'technical' or measured_property or product_subject
+    if form_context:
+        from app.services.requirement.retype import _attribute
+        from app.services.requirement.structured_values import resolve_name
+        markers = '|'.join(re.escape(word) for word in clause_markers())
+        subject = re.split(r'\b(?:' + markers + r')\b', prose, maxsplit=1, flags=re.I)[0] if markers else prose
+        canonical, alias_error = resolve_name(subject, aliases)
+        product_subject = bool(product_obligation and (
+            _attribute(subject) or canonical or alias_error in {'ambiguous attribute mapping','unapproved attribute mapping'} or
+            re.search(policy()['form_product_subject_pattern'], subject, re.I) or
+            (re.search(policy()['form_physical_action_pattern'], prose, re.I) and
+             not re.search(policy()['form_actor_subject_pattern'], subject, re.I))))
+        material = material_pattern()
+        product_clause = physical_quantity(prose) or bool(material and material.search(prose) and
+            (properties or _attribute(section or ''))) or product_subject
     if product_clause:
         return SourceDecision(role, False, 'technical', 'technical',
                               'Source subject may state a product property')
     if reads_as_legal_clause(text):
         return SourceDecision(role, True, None, 'commercial',
                               'Source states an administrative or legal obligation')
+    if form_context:
+        if physical_quantity(prose):
+            return SourceDecision(role, False, 'technical', 'unknown',
+                                  'Form context retains a physical quantity for interpretation')
+        return SourceDecision(role, True, None,
+                              policy()['form_page_types'].get(page_tag, policy()['form_default_type']),
+                              'Deterministic form context has no product or certification signal')
     from app.services.tender.templates import reviewed_template
     template = reviewed_template(text, role)
     if template:

@@ -1,5 +1,17 @@
 {
   "version": "source-roles-2",
+  "form_policy_version": "1",
+  "form_source_role": "supporting",
+  "form_default_type": "informational",
+  "form_product_subject_pattern": "^\\s*(?:the\\s+)?(?:product|equipment|component|assembly)\\b",
+  "form_actor_subject_pattern": "\\b(?:principal|employer|buyer|bidder|supplier|contractor|bank|signatory|parties|party|witness(?:es)?)\\b",
+  "form_physical_action_pattern": "\\b(?:shall|must|should)\\s+(?:withstand|operate|resist|endure)\\b",
+  "form_page_types": {"commercial_legal": "commercial", "boilerplate": "informational", "wrapper_metadata": "informational", "catalogue_discovery": "informational"},
+  "form_heading_patterns": [
+    "^(?:pre[- ]contract\\s+)?integrity\\s+pact$",
+    "\\(\\s*(?:format|form|proforma)\\s+(?:of|for)\\s+(?:integrity\\s+pact|bank\\s+guarantee|declaration|undertaking)\\s*\\)",
+    "^(?:(?:format|form|proforma)\\s+(?:of|for)\\s+)?(?:bank\\s+guarantee|affidavit|undertaking|declaration)(?:\\s+(?:of|for|by)\\b.*)?$"
+  ],
   "fragment_prose_roles": ["cover", "atc", "sla", "supporting"],
   "primary_roles": ["specification", "boq"],
   "restricted_roles": ["cover", "atc", "sla", "supporting", "unknown"],
