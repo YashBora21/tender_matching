@@ -708,7 +708,7 @@ def run_pipeline(
         if client is None:
             # One client for the whole stage: its counters are the stage's
             # cost, and a client per line would lose them.
-            client = LLMClient()
+            client = LLMClient(purpose='extraction')
         # A client can outlive a stage (a caller passes one, or a test reuses
         # one), so what the stage spent is the difference, not the total.
         before = (

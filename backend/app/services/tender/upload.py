@@ -79,6 +79,7 @@ def effective_limits() -> dict:
         "req_min_words": settings.req_min_words,
         "classification_batch_size": settings.requirement_classification_batch_size,
         "classification_batch_chars": settings.requirement_classification_batch_chars,
+        "source_form_heading_chars": settings.source_form_heading_chars,
         "spend_caps_enabled": getattr(settings, 'llm_spend_caps_enabled', False),
         "schema_version": settings.schema_version,
         "app_version": settings.app_version,
@@ -88,6 +89,9 @@ def effective_limits() -> dict:
     if limits['spend_caps_enabled']:
         limits["daily_cap_inr"] = settings.llm_daily_cap_inr
         limits["monthly_cap_inr"] = settings.llm_monthly_cap_inr
+        limits['input_price_per_million_inr'] = settings.llm_cost_input_per_mtok_inr
+        limits['output_price_per_million_inr'] = settings.llm_cost_output_per_mtok_inr
+        limits['spend_input_overhead_tokens'] = settings.llm_spend_input_overhead_tokens
     return limits
 
 

@@ -422,7 +422,7 @@ def execute_run(
             # guarded block because an unconfigured model raises here: a run
             # that cannot ask has to land `failed` with that reason, not stay
             # `queued` for a caller to poll and never hear back.
-            client = LLMClient()
+            client = LLMClient(purpose='matching')
 
         # One pass works a run at a time. The caller that arrives second is
         # told what the run already holds instead of starting a second pass

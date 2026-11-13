@@ -124,9 +124,9 @@ def extract_fact(
     if len(user) > get_settings().match_extraction_batch_chars:
         return FactResult(error="source context exceeds extraction character bound")
     try:
-        client = client or LLMClient()
+        client = client or LLMClient(purpose='matching')
         answer = client.complete_json(SYSTEM_PROMPT + '\n' + json.dumps(
-            ExtractionResponse.model_json_schema(), separators=(',', ':')), user)
+            ExtractionResponse.model_json_schema(), separators=(',', ':')), user, purpose='matching')
         parsed = ExtractionResponse(**answer)
     except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
         # A limit is an unanswered question, not a passage that states
@@ -176,14 +176,14 @@ def extract_fact_batch(requirement_text: str, passages: list[str], *, client=Non
         raise ValueError("fact extraction batch exceeds configured bounds")
     prompt = SYSTEM_PROMPT + BATCH_INSTRUCTIONS
     try:
-        client = client or LLMClient()
+        client = client or LLMClient(purpose='matching')
         answer = client.complete_json(prompt + '\n' + json.dumps(
             BatchExtractionResponse.model_json_schema(), separators=(',', ':')), json.dumps({
             "requirement": requirement_text,
             "passages": [{"passage_id": i, "text": p,
                           "source_context": source_contexts[i] if source_contexts else None}
                          for i, p in enumerate(passages)],
-        }))
+        }), purpose='matching')
         parsed = BatchExtractionResponse(**answer)
         ids = [p.passage_id for p in parsed.passages]
         if sorted(ids) != list(range(len(passages))):

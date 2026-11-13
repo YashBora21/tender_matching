@@ -217,7 +217,7 @@ def extract_requirements(
                 raise LLMError('extraction_schema_validation_failed') from None
             if any(_verified_span(readable, item, table_context) is None for item in parsed_answer.requirements):
                 raise LLMError('source_quote_or_value_validation_failed')
-        answer = client.complete_json(SYSTEM_PROMPT, payload, validate=validate)
+        answer = client.complete_json(SYSTEM_PROMPT, payload, validate=validate, purpose='extraction')
         parsed = ExtractionResponse(**answer)
     except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
         # The provider's limit is not a failed reading: the line was never

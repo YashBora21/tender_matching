@@ -99,6 +99,24 @@ class Settings(BaseSettings):
     # from the pairs it never asked about (D-110).
     llm_call_budget: int = 0
     llm_token_budget: int = 0
+    # Persistent caps (D-164). The two budgets above bound one process; these
+    # bound a day and a month across restarts, because the spend is written to
+    # the database per call. Disabled by default so tests and an unconfigured
+    # machine never touch the ledger. Enabling the caps without a price is
+    # refused at the first call rather than treated as free.
+    llm_spend_caps_enabled: bool = False
+    llm_spend_input_overhead_tokens: int = Field(default=512, ge=0)
+    llm_daily_cap_inr: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    llm_monthly_cap_inr: float = Field(default=0.0, ge=0, allow_inf_nan=False)
+    # What the provider charges, in INR, per million tokens. A deployment
+    # fact, not a constant: the tariff changes and the currency is not ours.
+    llm_cost_input_per_mtok_inr: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    llm_cost_output_per_mtok_inr: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+
+    @field_validator('llm_cost_input_per_mtok_inr','llm_cost_output_per_mtok_inr',mode='before')
+    @classmethod
+    def _blank_price_is_unconfigured(cls,value):
+        return None if value == '' else value
     # The output budget includes any provider-side reasoning tokens.
     llm_max_tokens: int = 2048
     llm_timeout_seconds: int = 120

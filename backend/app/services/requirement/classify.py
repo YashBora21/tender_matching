@@ -62,7 +62,7 @@ def classify_clause(text, *, context=None, cache=None, client=None):
         return parsed.type, False, True, None
     try:
         answer = (client or LLMClient()).complete_json(SYSTEM_PROMPT, payload,
-            validate=lambda answer: _parse_source_type(text, answer))
+            validate=lambda answer: _parse_source_type(text, answer), purpose='classification')
         parsed = _parse_source_type(text, answer)
     except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
         raise
@@ -168,7 +168,7 @@ def classify_batch(clauses, *, cache=None, client=None):
         try:
             answer = (client or LLMClient()).complete_json(BATCH_SYSTEM_PROMPT,
                 json.dumps({'clauses': entries}, ensure_ascii=False),
-                validate=lambda value: parse_batch(value, entries))
+                validate=lambda value: parse_batch(value, entries), purpose='classification')
             parsed = parse_batch(answer, entries)
         except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
             raise

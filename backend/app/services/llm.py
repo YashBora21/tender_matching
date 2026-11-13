@@ -22,6 +22,7 @@ from typing import Any, Iterable, Optional
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.services.spend import SpendCapReached, SpendLedger, SpendLedgerUnavailable
 
 logger = get_logger(__name__)
 STRUCTURED_VALIDATION_VERSION = 'one-evidence-repair-feedback-1'
@@ -411,7 +412,7 @@ class LLMClient:
     """A client for an OpenAI-compatible chat API."""
 
     def __init__(self, model: Optional[str] = None, base_url: Optional[str] = None,
-                 *, api_key: Optional[str] = None):
+                 *, api_key: Optional[str] = None, purpose: Optional[str] = None):
         settings = get_settings()
         self.model = model or settings.llm_model
         self.base_url = (base_url or settings.llm_base_url).rstrip("/")
@@ -432,6 +433,13 @@ class LLMClient:
         self.prompt_tokens = 0
         self.completion_tokens = 0
         self.retries = 0
+        # What this client's calls are for, recorded per ledger row so a
+        # stage's cost can be read from the spend history without guessing
+        # (extraction / classification / matching / text).
+        self.purpose = purpose or "text"
+        # The persistent day/month cap. Disabled by default; `check` is a no-op
+        # until `LLM_SPEND_CAPS_ENABLED` is set (D-164).
+        self.ledger = SpendLedger()
 
     @property
     def tokens(self) -> int:
@@ -532,6 +540,16 @@ class LLMClient:
                 "User-Agent": _USER_AGENT,
             },
         )
+        try:
+            self.last_spend_id = None
+            reservation = self.ledger.reserve(model=self.model or '', purpose=self.purpose,
+                input_bound=len(body) + settings.llm_spend_input_overhead_tokens,
+                output_bound=max_tokens or settings.llm_max_tokens)
+            self.last_spend_id = reservation
+        except SpendCapReached as exc:
+            raise LLMBudgetExceeded(str(exc)) from None
+        except SpendLedgerUnavailable as exc:
+            raise LLMBudgetExceeded(f'the spend cap could not be enforced: {exc}') from None
         # Every HTTP attempt is a call, including one that comes back 429: the
         # account is charged for it, so the report has to count it.
         self.calls += 1
@@ -572,6 +590,18 @@ class LLMClient:
         completion_tokens = int(usage.get("completion_tokens") or 0)
         self.prompt_tokens += prompt_tokens
         self.completion_tokens += completion_tokens
+        # The call happened and is billable, so it is written down before the
+        # answer is handed back. Recording is what makes the day/month cap
+        # survive a restart; a ledger that cannot write stops the run rather
+        # than continuing to spend unrecorded (D-164).
+        try:
+            if reservation is not None:
+                self.ledger.settle(reservation, prompt_tokens=prompt_tokens,
+                                   completion_tokens=completion_tokens)
+        except SpendLedgerUnavailable as exc:
+            raise LLMBudgetExceeded(
+                f"the call was made but its cost could not be recorded: {exc}"
+            ) from None
         return LLMResult(
             content=message.get("content") or "",
             reasoning=message.get("reasoning"),
@@ -579,7 +609,7 @@ class LLMClient:
             completion_tokens=completion_tokens,
         )
 
-    def complete_json(self, system: str, user: str, *, max_tokens: Optional[int] = None, validate=None) -> Any:
+    def complete_json(self, system: str, user: str, *, max_tokens: Optional[int] = None, validate=None, purpose=None) -> Any:
         """Parse JSON; one evidence repair shares the transport/JSON retry budget."""
         retry_start = self.retries
         repaired = False
@@ -596,7 +626,12 @@ class LLMClient:
 
         for attempt in range(get_settings().llm_max_retries + 1):
             remaining = get_settings().llm_max_retries - (self.retries - retry_start)
-            result = self.chat(system, request_user, max_tokens=max_tokens, _max_retries=remaining)
+            previous_purpose = self.purpose
+            self.purpose = 'repair' if attempt else (purpose or previous_purpose)
+            try:
+                result = self.chat(system, request_user, max_tokens=max_tokens, _max_retries=remaining)
+            finally:
+                self.purpose = previous_purpose
             try:
                 answer = result.parsed
             except LLMError:

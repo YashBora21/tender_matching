@@ -103,7 +103,6 @@ def test_the_llm_client_refuses_to_start_without_a_key(
 # Variables `.env.example` documents that no setting reads: the compose file,
 # the scripts and Tesseract itself consume these.
 NOT_A_SETTING = {
-    "DATABASE_URL_DOCKER",
     "POSTGRES_USER",
     "POSTGRES_PASSWORD",
     "POSTGRES_DB",
@@ -133,7 +132,9 @@ def test_the_example_env_file_and_the_settings_are_the_same_list() -> None:
         # commented out, with its default as the example value.
         for match in re.finditer(r"^#?\s*([A-Z][A-Z0-9_]*)=", example, re.MULTILINE)
     }
-    settings = {name.upper() for name in Settings.model_fields}
+    from pydantic import AliasChoices
+    settings = {((field.validation_alias.choices[0] if isinstance(field.validation_alias, AliasChoices)
+                  else field.validation_alias) or name.upper()) for name, field in Settings.model_fields.items()}
 
     assert sorted(settings - documented) == []
     assert sorted(documented - settings - NOT_A_SETTING) == []
