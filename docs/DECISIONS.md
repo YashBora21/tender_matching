@@ -4857,3 +4857,8 @@ Track B integration: require explicit tender scope; default dry run. Protect nes
 ## Committed-snapshot tests must not depend on private configuration - 2026-11-12
 
 Validate an exported committed tree with no private .env. Retry/embedding tests now supply explicit synthetic configuration, and pipeline shape tests supply stub clients; no provider requests are made. Move the source-context test out of the fake repository class so its existing count/status methods remain available. This corrects test isolation and the new fixture placement; no prompt, cache or business-decision changes.
+
+
+## Account for proven blank pages before OCR - 2026-11-13
+
+Reader17 records a source page as skipped with a rendered_blank_page reason only when it contains no source text and every rendered grayscale pixel is white at the configured OCR resolution. Render errors and any visible ink remain eligible for OCR and retain failed status when OCR fails. Reuse the same predicate for corpus parsing. Reader version17 invalidates page/source-stage checkpoints; LLM prompts and response-cache keys are unchanged. Real local verification on the affected frozen sources accounts for23 specification pages and3 supporting pages:24 parsed,1 OCR,1 proven blank skip,0 failed. Specification13.837s and supporting34.394s include local OCR setup/cache use;0 LLM calls,0 database writes. The robots-restricted attachment stays unresolved. This removes a false unreadable-page failure and does not establish extraction accuracy or complete tender status.

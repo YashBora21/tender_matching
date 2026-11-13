@@ -71,7 +71,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "16"
+READER_VERSION = "17"
 
 
 @dataclass
@@ -620,6 +620,12 @@ def read_specification(path: Path, *, wrapper: bool = False, item_titles: tuple[
                     # with a letterhead typed over it.
                     if scan is None:
                         scan = _open_scan(path)
+                    from app.services.tender.parse import is_blank_page
+                    if scan is not None and is_blank_page(scan[number - 1]):
+                        read.pages.append(PageRead(page=number, tag=BOILERPLATE,
+                            status=LedgerStatus.SKIPPED.value,
+                            skip_reason='rendered_blank_page: no source text and entirely white at OCR resolution'))
+                        continue
                     from app.core.config import get_settings
                     if get_settings().ocr_backend == 'paddle' and scan is not None:
                         try:

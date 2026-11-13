@@ -165,6 +165,20 @@ def tesseract_missing() -> Optional[str]:
     )
 
 
+def is_blank_page(page) -> bool:
+    """Require no source text and an entirely white render, including annotations."""
+    import pymupdf
+    try:
+        if page.get_text().strip():
+            return False
+        pixels = page.get_pixmap(dpi=get_settings().ingest_ocr_dpi,
+                                 colorspace=pymupdf.csGRAY, alpha=False).samples
+        return bool(pixels) and pixels.count(b'\xff') == len(pixels)
+    except Exception:
+        # Rendering failure cannot prove a page blank; OCR still records the failure.
+        return False
+
+
 def ocr_page_with_reason(pymupdf_page) -> tuple[str, Optional[str]]:
     """The text OCR read on a page, and why there is none.
 
@@ -238,6 +252,8 @@ def _parse_pdf(path: Path) -> ParsedDocument:
         number = index + 1
         text = page.get_text() or ""
         if len(text.strip()) < _min_chars_for_text():
+            if is_blank_page(page):
+                continue
             # No usable text layer: this page is scanned (FR-9).
             ocr_text = ocr_page(page)
             if ocr_text and ocr_text.strip():
