@@ -17,7 +17,7 @@ def test_headerless_property_groups_keep_labels_values_and_item_numbers():
     assert not unresolved and [r.item_id for r in assigned]==['t:1','t:1','t:2','t:2']
     field=rows[1]
     assert field['source_headers']==['Synthetic size'] and field['source_cells']==['10–16 inches']
-    assert field['source_grid_cells']==['', 'Synthetic size','10–16 inches']
+    assert field['source_grid_cells']==[None, 'Synthetic size','10–16 inches']
     assert field['row_text']=='Synthetic size 10–16 inches'
     assert assigned[1].table_context['layout']=='item_label_value'
     assert assigned[1].table_context['original_cells']==field['source_grid_cells']

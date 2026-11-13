@@ -1,0 +1,57 @@
+{
+  "tender_id": "2bc8f917-262d-4ea8-a1c9-b2997ef1f256",
+  "wrapper_sha256": "9752351d63e446f8aa7c0ac719b85cd82fdebd1b3062aa243fa4f040fe408b6f",
+  "reader_version": "19",
+  "baseline": {
+    "assigned_rows": 48,
+    "unassigned_candidates": 92,
+    "note": "Before the headerless-grid fix; prose paragraphs and later field rows have different granularity"
+  },
+  "after": {
+    "pages": 60,
+    "assigned_rows": 147,
+    "assigned_by_role": {
+      "boq": 48,
+      "specification": 99
+    },
+    "unassigned_candidates": 119,
+    "unassigned_property_scope": 39,
+    "bound_specification_rows_by_item": {
+      "1": 13,
+      "2": 13,
+      "3": 13,
+      "4": 6,
+      "5": 6,
+      "6": 3,
+      "7": 5,
+      "8": 12,
+      "9": 6,
+      "10": 11,
+      "11": 11
+    }
+  },
+  "backend_unit": {
+    "tests": "1280",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "3",
+    "time": "197.042"
+  },
+  "collector_eval": {
+    "tests": "76",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "3",
+    "time": "8.293"
+  },
+  "resume_regression": "Five complete storage/resume cycles preserve18 technical and9 context children,0 model calls. Three incomplete cycles keep3 children and make1 replay request per source per cycle.",
+  "paid_calls": 0,
+  "database_mutations": false,
+  "source_quotes_or_ranges_rewritten": false,
+  "accuracy": "Ungraded; structural binding is not label-confirmed extraction/matching accuracy",
+  "remaining": [
+    "Blank or merged-cell ambiguity remains unassigned",
+    "Mixed-attachment section routing",
+    "Extraction batching before another paid benchmark"
+  ]
+}

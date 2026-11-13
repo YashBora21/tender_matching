@@ -874,7 +874,7 @@ def _grouped_properties(tables, page_number, tag, previous):
                 state['_property_title'] = label
             rows.append(dict(row=index, page=page_number, number=state.get('_property_number',''),
                 title=state.get('_property_title', ''), description=' '.join(filter(None,[label,value])),
-                row_text=' '.join(filter(None,cells[index])), source_grid_cells=cells[index],
+                row_text=' '.join(filter(None,cells[index])), source_grid_cells=list(table[index]),
                 source_headers=[label] if value else [], source_cells=[value] if value else cells[index],
                 source_row_id=f'properties-{table_index}-row-{index}',
                 extraction_method=ExtractionMethod.TABLE.value, page_tag=tag))

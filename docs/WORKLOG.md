@@ -4233,3 +4233,30 @@ that fixture passed in a53-test focused rerun, which also verifies the final aud
 count change and source gate. Collector/eval helpers:73 passed/3 skipped.
 No new paid benchmark or release-candidate accuracy claim. Next approved-plan
 work:resume stability, item binding and extraction batching before another paid run.
+
+## 2026-11-13 — Resume the interrupted binding phase; isolate unit tests from .env
+
+The previous session ended mid-commit (usage limit) with the property-grid
+binding and resume-stability work staged and its records unwritten. Resumed
+here: targeted tests and the full offline suite (backend, collect, eval) green
+before committing.
+
+cc999bc carries the staged binding phase (Reader 19 headerless item/label/value
+grids, abstention on unknown/duplicated/conflicting identifiers, resume identity
+tests) together with two test-isolation fixes: the spend fixture now disables
+pydantic's env_file so the developer's .env tariff and caps cannot leak into
+assertions, and the shared conftest pins LLM_MATCH_EXTRACTION_BATCH_SIZE=1 so
+single-answer fakes do not inherit a deployment batch size. 6ffe0ba records the
+orphaned D-164/D-165 decisions and the verified-only cache guard test. The final
+raw-cell preservation (source_grid_cells keeps the original cells, None
+included) lands with this record as D-167.
+
+Offline frozen-package scan (eval/audit/item-binding-2026-11-13/results.json):
+assigned rows 48 -> 147 (48 BOQ + 99 specification across 11 items); 119
+candidates remain unassigned, 39 of them property rows with unresolved scope.
+Binding evidence, not an accuracy grade. No paid calls in this pass.
+
+Remaining before a paid benchmark: extraction batching, mixed-attachment
+section routing, merged-cell ambiguity. The user approved paid calls for the
+capped measured re-read (2026-11-13); per the standing plan, extraction batching
+lands first because the Phase 3 estimate exceeded INR 10.

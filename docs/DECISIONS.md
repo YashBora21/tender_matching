@@ -5019,3 +5019,25 @@ Set only ignored local spend-enable, monthly INR1000 cap and INR input/output ta
 ## Restrict new requirement readings to specification and BOQ sources - 2026-11-13
 
 User approved specs/BOQ-only requirement extraction after the reviewed tender reset. Deterministically type all other source roles, retain their original text and type as visible context (including technical and certification clauses), clear candidate eligibility, and make no model calls for them. Enforce the same gate on stale candidates at extraction scheduling. Failed pages remain unresolved and item identity/evidence verification are unchanged. The requirement_source_roles selector is policy data: changing it invalidates source checkpoints; exclude only this scheduling selector from the classifier fingerprint so unchanged clause/context/prompt/schema inputs retain valid cached answers. No model prompt changes. Existing historical readings are not rewritten; a new read supersedes them. Update the PRD to record this explicit user scope override, including removal of cover fallback as a requirement source. Context-only records are also excluded from the audit requirement count, so stored context alone cannot satisfy the completion count.
+
+
+## D-167 - Headerless property grids bind through their own item cells
+
+The specification's ruled item/label/value grid has no column headers; the
+reader flattened it into prose, losing the item-number column and merging
+several products into one paragraph. Reader 19 recognises only the structural
+three-column grid with a numbered group heading or an immediately adjacent
+continuation page, keeps physical row ids, the raw original cells and the real
+row label as field header, and passes the layout through table_context. A blank
+value without a number clears inherited item scope; such rows stay unresolved.
+Unknown, duplicated or conflicting explicit identifiers abstain from assignment,
+including the single-item fallback. Prompts, output schema and verifier are
+unchanged; the table-context cache hash distinguishes the new model input.
+
+*Verified:* tests/test_property_item_binding.py and tests/test_resume_children.py
+(five complete storage/resume cycles keep 18 technical and 9 context children
+with 0 calls); offline frozen-package scan in
+eval/audit/item-binding-2026-11-13/results.json: assigned rows 48 -> 147
+(48 BOQ + 99 specification across 11 items), 119 candidates remain unassigned,
+39 of them property rows with unresolved scope. Binding evidence, not an
+accuracy grade; no paid calls.
