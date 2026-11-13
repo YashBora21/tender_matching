@@ -1283,8 +1283,8 @@ def test_progress_never_rewrites_the_growing_requirement_list(tmp_path, monkeypa
     assert repo.session.commits == count
 
 
-def test_no_specification_uses_cover_only_for_deterministic_candidates(tmp_path):
-    """Synthetic cover certification remains readable without a spec attachment."""
+def test_no_specification_retains_cover_as_context_without_model_calls(tmp_path):
+    """Synthetic cover certification stays visible but cannot become a requirement."""
     import pymupdf
     attachments, directory = _attachments(tmp_path)
     attachments = [row for row in attachments if row['kind']=='boq-csv']
@@ -1303,7 +1303,7 @@ def test_no_specification_uses_cover_only_for_deterministic_candidates(tmp_path)
                 'attribute':None,'value':user,'unit':None,'operator':'eq','mandatory':True}]}
     client=Reader()
     result=run_pipeline('synthetic-tender',directory,attachments,client=client)
-    assert result.failure is None and client.calls==1
+    assert result.failure is None and client.calls==0
     assert result.requirements and all(row.source_role=='cover' for row in result.requirements)
     assert all(row.context_only for row in result.requirements)
     assert [page.source_key for page in result.pages]==['wrapper']

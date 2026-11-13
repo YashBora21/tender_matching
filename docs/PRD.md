@@ -84,6 +84,8 @@ These are the status definitions the write-up must state.
 
 A tender is never sent to the LLM as one prompt. It is inspected locally, segmented, and extracted in bounded batches, with every page accounted for.
 
+**Source scope (user-directed override, 2026-11-13):** New readings produce requirements only from specification and BOQ sources. Cover, ATC, SLA and supporting sources are deterministically clause-typed and retained visibly as context, including their technical/certification clauses; they make no model calls and are excluded from matching and semantic completion blockers. Page-accounting and failed-page rules still apply. This supersedes the earlier allowance for technical candidates from restricted sources and cover fallback. Historical readings remain preserved; re-reading creates a superseding revision.
+
 - FR-T1. **Page triage (no LLM).** Tag each page with one or more of `text`, `table`, `scanned`, `boilerplate-candidate`; a page can carry several tags (prose plus table).
 - FR-T2. **Page ledger.** Every page ends as `parsed`, `skipped` (with reason) or `ocr`. A fourth state, failed, covers extraction or OCR that did not complete and needs retry or review. A failed page never counts as processed: the tender may yield a partial report, but it is labelled incomplete ingestion while any page is unresolved. Page completeness is separate from requirement-extraction completeness (a parsed page can still hide a missed requirement). Extraction failures are never read as missing capabilities.
 - FR-T3. **Selective OCR** only for pages with no or poor extractable text; OCR output is tagged `ocr=true` and lowers confidence.

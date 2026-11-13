@@ -16,6 +16,7 @@
   ],
   "fragment_prose_roles": ["cover", "atc", "sla", "supporting"],
   "primary_roles": ["specification", "boq"],
+  "requirement_source_roles": ["specification", "boq"],
   "restricted_roles": ["cover", "atc", "sla", "supporting", "unknown"],
   "nontechnical_types": ["commercial", "eligibility", "informational"],
   "template_min_distinct_tenders": 3,

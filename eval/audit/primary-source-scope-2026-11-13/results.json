@@ -1,0 +1,71 @@
+{
+  "scope": "New readings: specification and BOQ only; other sources typed visible context",
+  "raw_source_routing": {
+    "rows": 774,
+    "pages": 60,
+    "source_counts": [
+      {
+        "role": "boq",
+        "context_only": false,
+        "count": 48
+      },
+      {
+        "role": "supporting",
+        "context_only": true,
+        "count": 269
+      },
+      {
+        "role": "specification",
+        "context_only": false,
+        "count": 92
+      },
+      {
+        "role": "specification",
+        "context_only": true,
+        "count": 107
+      },
+      {
+        "role": "cover",
+        "context_only": true,
+        "count": 258
+      }
+    ],
+    "form_candidates": [],
+    "generation_calls": 0
+  },
+  "paid_calls": 0,
+  "database_mutations": false,
+  "primary_candidates": 140,
+  "context_rows": 634,
+  "backend_unit_run": {
+    "tests": "1272",
+    "failures": "1",
+    "errors": "0",
+    "skipped": "3",
+    "time": "195.188"
+  },
+  "focused_followup": {
+    "tests": "53",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "18.755"
+  },
+  "collector_eval": {
+    "tests": "76",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "3",
+    "time": "11.672"
+  },
+  "qualification": "One page-cache fixture failed the full run and passed follow-up. Follow-up also verifies final audit context-count change. Source routing is not extraction/matching accuracy.",
+  "prompts_changed": false,
+  "classifier_cache_keys_changed": false,
+  "source_checkpoints_invalidated": true,
+  "remaining": [
+    "Resume stability",
+    "Specification-to-BOQ binding",
+    "Extraction batching",
+    "RC and bounded live validation"
+  ]
+}

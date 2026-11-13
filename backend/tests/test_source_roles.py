@@ -35,12 +35,12 @@ def test_restricted_administrative_text_stays_visible_without_any_model_call(rol
     assert not assessable([vars(stored)]) and not needs_model([vars(stored)])
 
 
-def test_company_iso_clause_is_retained_as_a_candidate_even_on_a_commercial_page():
+def test_company_iso_clause_outside_primary_sources_is_retained_as_context():
     row = record('Synthetic manufacturer must have ISO 9001 certification.', 'cover',
                  page_tag='commercial_legal')
-    assert not row.context_only and row.candidate_type == 'certification'
+    assert row.context_only and row.candidate_type is None
     assert row.requirement_type is RequirementType.CERTIFICATION
-    assert completion_gaps({}, [], [], [asdict(row)])  # no guessed item or attributes
+    assert not completion_gaps({}, [], [], [asdict(row)])
 
 
 @pytest.mark.parametrize('role', ['specification', 'boq'])
@@ -53,13 +53,13 @@ def test_unresolved_primary_criteria_still_block(role):
 
 def test_technical_condition_inside_buyer_terms_is_not_lost():
     row = record('Working pressure 8 bar', 'atc', section='Additional terms and conditions')
-    assert not row.context_only and row.candidate_type == 'technical'
+    assert row.context_only and row.candidate_type is None
     qualification = record('Bidder supplied valves with pressure rating of 16 bar minimum',
                            'atc', section='Additional terms and conditions')
     assert qualification.context_only
     assert qualification.requirement_type is RequirementType.ELIGIBILITY
     unfamiliar = record('Synthetic product shall withstand ZETA exposure.', 'atc')
-    assert unfamiliar.candidate_type == 'technical' and not unfamiliar.context_only
+    assert unfamiliar.candidate_type is None and unfamiliar.context_only
 
 
 def test_review_flag_is_not_tender_incomplete_and_context_is_not_item_assigned():
@@ -77,9 +77,9 @@ def test_review_flag_is_not_tender_incomplete_and_context_is_not_item_assigned()
 def test_role_metadata_round_trips_through_response_cache_and_storage():
     row = record('Synthetic manufacturer requires ISO 9001.', 'atc')
     cached = _as_record(_as_dict(row))
-    assert (cached.source_role, cached.context_only, cached.candidate_type) == ('atc', False, 'certification')
+    assert (cached.source_role, cached.context_only, cached.candidate_type) == ('atc', True, None)
     context = to_stored(row, 'synthetic', model='synthetic', input_hash='synthetic').normalization['source_context']
-    assert context['candidate_type'] == 'certification' and not context['context_only']
+    assert context['candidate_type'] is None and context['context_only']
 
 
 def test_document_roles_are_explicit_and_restricted_names_outrank_coarse_kind():
@@ -101,7 +101,7 @@ def test_wrapper_and_attachment_pages_remain_separate_in_the_ledger():
 
 
 def test_a_nontechnical_model_label_cannot_hide_an_approved_technical_attribute():
-    row = record('pressure 8 bar', 'cover')
+    row = record('pressure 8 bar', 'specification')
     class IncorrectReader:
         def complete_json(self, *args, **kwargs):
             return {'requirements': [{'text':row.text, 'source_quote':row.text,
@@ -127,6 +127,6 @@ def test_package_reader_attaches_roles_before_model_processing(monkeypatch, tmp_
     monkeypatch.setattr(pipeline, '_read_specification', read)
     package = pipeline._read_package('synthetic', tmp_path, [spec,sla], spec, None)
     assert [row['source_role'] for row in package.rows] == ['specification','sla','sla']
-    assert [row['context_only'] for row in package.rows] == [False,True,False]
-    assert package.rows[-1]['candidate_type'] == 'certification'
+    assert [row['context_only'] for row in package.rows] == [False,True,True]
+    assert package.rows[-1]['candidate_type'] is None
     assert [page.source_role for page in package.pages] == ['specification','sla']

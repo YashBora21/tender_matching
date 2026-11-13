@@ -46,16 +46,16 @@ def test_short_noise_is_stored_as_unknown_context_and_never_read_by_model(role):
 
 
 @pytest.mark.parametrize('text', ['8 bar', 'ISO 9001', 'Must be new'])
-def test_short_signal_is_retained_for_interpretation(text):
+def test_short_restricted_signal_is_retained_as_context(text):
     row = record(text)
-    assert row.fragment_reason is None and not row.context_only
-    assert row.candidate_type in {'technical', 'certification'}
+    assert row.fragment_reason is None and row.context_only
+    assert row.candidate_type is None
 
 
 def test_technical_parent_or_page_context_is_retained():
     for context in [dict(section='Technical specification'), dict(page_tag='technical')]:
         row = record('ZETA', **context)
-        assert row.fragment_reason is None and row.candidate_type == 'technical'
+        assert row.fragment_reason is None and row.context_only and row.candidate_type is None
 
 
 @pytest.mark.parametrize('role', ['specification', 'boq'])
@@ -97,7 +97,7 @@ def aliases(tmp_path, monkeypatch):
 
 def test_approved_alias_retains_short_label_and_ambiguity_is_not_discarded(aliases):
     row = record('Zeta label', aliases=aliases)
-    assert row.fragment_reason is None and row.candidate_type == 'technical'
+    assert row.fragment_reason is None and row.context_only and row.candidate_type is None
     aliases[0]['approved'] = False
     assert record('Zeta label', aliases=aliases).fragment_reason is None
     aliases[0]['approved'] = True

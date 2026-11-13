@@ -28,7 +28,7 @@ def test_form_only_page_triggers_no_client_calls(tag):
 @pytest.mark.parametrize('text',['Working pressure 8 bar','Body material carbon steel',
     'The body shall withstand ZETA exposure.','Synthetic manufacturer must have ISO 9001.'])
 def test_form_context_does_not_hide_real_product_or_certification_candidates(text):
-    row=triage(text,'supporting',page_tag='mixed',form_context=True)
+    row=triage(text,'specification',page_tag='mixed',form_context=True)
     assert not row.context_only and row.candidate_type in {'technical','certification'}
 
 
@@ -76,4 +76,4 @@ def test_numbered_form_clause_is_not_an_inch_measurement(text):
 @pytest.mark.parametrize('text,section',[('2.5 inches',None),('2.5 In',None),
                                         ('Size 2.5 in',None),('2.5 In overall length','nominal_size')])
 def test_real_size_measurements_survive_form_number_disambiguation(text,section):
-    assert not triage(text,'supporting',form_context=True,section=section).context_only
+    assert not triage(text,'specification',form_context=True,section=section).context_only

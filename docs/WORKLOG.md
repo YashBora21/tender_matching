@@ -4206,3 +4206,30 @@ The stricter specs/BOQ-only requirement policy is proposed for the next phase;
 this reset does not claim to implement it or fix item assignment. Current
 measured extraction remains incomplete, and another paid run stays blocked by
 our agreed extraction-batching prerequisite. Details:docs/RESET_2026-11-13.md.
+
+
+## 2026-11-13 - Specs/BOQ-only source scope implemented, offline phase
+
+User approved step1. New readings retain only specification/BOQ candidates for
+requirement extraction. Cover/ATC/SLA/supporting/unknown source roles are typed
+locally and stored visibly as context, including technical and certificate lines,
+with zero model calls. The scheduler also gates stale nonprimary candidates.
+Existing historical readings are not rewritten. Failed pages still block and
+ambiguous primary item assignments still require review. Context-only records no
+longer inflate audit.requirements, preventing context alone satisfying completion.
+The API already separates requirements/context and its counts remain consistent.
+
+The selector is policy data. Full source fingerprints change; unchanged primary
+clause cache keys remain reusable because the scheduling-only selector is excluded
+from the classifier fingerprint. No model prompt, evidence or matching changes.
+The PRD records the user's explicit override of earlier restricted-source and
+cover-fallback eligibility. Fresh readings supersede prior rows.
+
+Offline saved-package scan:774 raw rows/60 pages;140 candidates (48 BOQ,92 spec),
+634 context (107 spec,269 supporting,258 cover);0 generation calls. This is source
+routing evidence, not extraction accuracy. No database changes or paid reads.
+Full backend run:1272 tests,1268 passed/3 skipped/1 page-cache fixture failure;
+that fixture passed in a53-test focused rerun, which also verifies the final audit
+count change and source gate. Collector/eval helpers:73 passed/3 skipped.
+No new paid benchmark or release-candidate accuracy claim. Next approved-plan
+work:resume stability, item binding and extraction batching before another paid run.

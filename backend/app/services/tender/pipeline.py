@@ -1192,7 +1192,14 @@ def _extract_all(
     batch_proposals = {}
     groups = []
     source_indices = {}
+    from app.services.tender.source_policy import triage, policy as source_policy
     for offset, row in enumerate(requirements):
+        if not row.context_only and row.source_role and row.source_role not in source_policy()['requirement_source_roles']:
+            decision = triage(row.source_text or row.text, row.source_role,
+                              page_tag=row.page_tag, section=row.source_section, table=bool(row.table_context))
+            row.context_only, row.candidate_type = True, None
+            row.requirement_type = RequirementType(decision.clause_type)
+            row.review_reason = '; '.join(filter(None, [row.review_reason, decision.reason]))
         key = ((row.item_id, row.page, row.source_table_id, row.source_row_id, row.source_text)
                if row.source_text and row.source_table_id and row.source_row_id is not None else ('record', offset))
         if key not in source_indices:

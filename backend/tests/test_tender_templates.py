@@ -56,10 +56,13 @@ def test_conflicting_reviewed_types_do_not_approve_a_mapping(monkeypatch):
 
 @pytest.mark.parametrize('text,candidate', [('pressure 8 bar', 'technical'),
     ('Synthetic manufacturer must have ISO 9001.', 'certification')])
-def test_reviewed_template_cannot_erase_a_positive_technical_or_certification_signal(monkeypatch, text, candidate):
-    monkeypatch.setattr(templates, 'reviewed_data', lambda: {'templates': [template(text)]})
-    result = triage(text, 'cover')
-    assert result.candidate_type == candidate and not result.context_only
+@pytest.mark.parametrize('role',['specification','cover'])
+def test_reviewed_template_keeps_signals_within_the_current_source_scope(monkeypatch, text, candidate,role):
+    monkeypatch.setattr(templates, 'reviewed_data', lambda: {'templates': [template(text,roles=['specification','cover'])]})
+    result = triage(text, role)
+    assert result.clause_type == candidate
+    assert result.context_only == (role=='cover')
+    assert result.candidate_type == (None if role=='cover' else candidate)
 
 
 def test_reviewed_policy_changes_invalidate_source_policy_fingerprint(monkeypatch):

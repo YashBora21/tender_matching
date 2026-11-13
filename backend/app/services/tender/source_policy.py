@@ -1,5 +1,5 @@
 """Deterministic source-role triage before item assignment or a model call."""
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import lru_cache
 from hashlib import sha256
 import json
@@ -23,7 +23,8 @@ def fingerprint(*, for_classification=False):
     from app.services.tender.templates import reviewed_data
     from app.comparison.vocabulary import vocabulary_path
     settings = get_settings()
-    data = {k:v for k,v in policy().items() if not (for_classification and k.startswith('form_'))}
+    data = {k:v for k,v in policy().items() if not (for_classification and
+            (k.startswith('form_') or k == 'requirement_source_roles'))}
     inputs = [data, classification_policy_fingerprint(),
                               certification_pattern().pattern, reviewed_data(),
                               settings.req_min_chars, settings.req_min_words,
@@ -86,6 +87,15 @@ class SourceDecision:
 
 
 def triage(text, role, *, page_tag=None, section=None, table=False, aliases=(), form_context=False):
+    decision = _triage(text, role, page_tag=page_tag, section=section, table=table,
+                       aliases=aliases, form_context=form_context)
+    if role not in policy()['requirement_source_roles']:
+        return replace(decision, context_only=True, candidate_type=None,
+                       reason='Source retained as context by specs/BOQ-only policy; ' + decision.reason)
+    return decision
+
+
+def _triage(text, role, *, page_tag=None, section=None, table=False, aliases=(), form_context=False):
     """A candidate permits reading; it never establishes a capability match."""
     if certification_pattern().search(text):
         return SourceDecision(role, False, 'certification', 'certification',

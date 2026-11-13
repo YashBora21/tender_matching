@@ -224,7 +224,8 @@ def audit_tender(
             if record.get("status") in ("failed", "restricted")
         ),
         items=len(result.items),
-        requirements=sum(not getattr(row, 'fragment_reason', None) for row in result.requirements),
+        requirements=sum(not getattr(row, 'fragment_reason', None) and not row.context_only
+                         for row in result.requirements),
         pages_read=len(ledger),
         failure=result.failure,
         failure_code=result.failure_code,
