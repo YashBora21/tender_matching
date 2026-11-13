@@ -648,7 +648,7 @@ class LLMClient:
                     safe_errors = {'invalid_source_quote', 'classification_requires_complete_source',
                         'invalid_classification_schema', 'source_quote_or_value_validation_failed',
                         'extraction_schema_validation_failed', 'invalid_batch_classification',
-                        'batch_clause_id_mismatch', 'conflicting_clause_classification'}
+                        'invalid_batch_extraction', 'batch_clause_id_mismatch', 'conflicting_clause_classification'}
                     error = str(exc) if str(exc) in safe_errors else 'source_validation_failed'
                     record(attempt, 'validation_failed', error)
                     if repaired or self.retries - retry_start >= get_settings().llm_max_retries:

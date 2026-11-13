@@ -33,7 +33,7 @@ from app.repositories.tender import LLMCache, StoredRequirement, TenderRepo
 from app.schemas.enums import RequirementType, TenderReasonCode
 from app.schemas.models import EXTRACTION_VERSION
 from app.services.requirement.atomize import atomize_records
-from app.services.requirement.extract import extract_requirements
+from app.services.requirement.extract import extract_requirements, extract_batch, BATCH_PROMPT_VERSION
 from app.services.llm import LLMClient, LLMRateLimited, LLMBudgetExceeded
 from app.services.tender.classify import DISCOVERY, WRAPPER_METADATA, NON_TECHNICAL_REASON, is_non_technical
 from app.services.requirement.retype import retype_technical, apply_clause_type, retype
@@ -1193,6 +1193,7 @@ def _extract_all(
 
     client_calls_before = getattr(client, "calls", None)
     batch_proposals = {}
+    batch_extractions = {}
     groups = []
     source_indices = {}
     from app.services.tender.source_policy import triage, policy as source_policy
@@ -1292,6 +1293,29 @@ def _extract_all(
                             for _, candidate in cohort], cache=cache, client=client)
                         batch_proposals.update({position: answer for (position, _), answer in zip(cohort, answers)})
                     options['proposal'] = batch_proposals[index]
+                elif reader is _extract_one and get_settings().requirement_extraction_batch_size > 1:
+                    if index not in batch_extractions:
+                        cohort = []
+                        for position in range(index, len(requirements)):
+                            if len(cohort) >= get_settings().requirement_extraction_batch_size:
+                                break
+                            candidate = requirements[position]
+                            if not _extraction_batchable(candidate, groups[position], preserve_extracted):
+                                continue
+                            candidate_readable = english_half(candidate.source_text or candidate.text)
+                            if _cached_extraction(candidate_readable, candidate, cache) is not None:
+                                continue
+                            cohort.append((position, {'text': candidate_readable,
+                                'item_id': candidate.item_id, 'page': candidate.page,
+                                'section': candidate.source_section,
+                                'extraction_method': candidate.extraction_method,
+                                'table_context': candidate.table_context}))
+                        if len(cohort) > 1:
+                            outcomes = extract_batch([entry for _, entry in cohort], client=client)
+                            batch_extractions.update({position: outcome for (position, _), outcome in zip(cohort, outcomes)})
+                    if index in batch_extractions:
+                        options['precomputed'] = batch_extractions[index]
+                        options['prompt_version'] = BATCH_PROMPT_VERSION
                 outcome, was_call, was_hit, error = reader(
                     readable, requirement, cache=cache, client=client, **options)
                 if isinstance(error, (LLMRateLimited, LLMBudgetExceeded)):
@@ -1383,8 +1407,70 @@ def _extract_all(
     return enriched, calls, hits, limited, limit_detail
 
 
+def _extraction_hash(readable, requirement, prompt_version):
+    settings = get_settings()
+    return content_hash(readable, settings.llm_model or "", prompt_version, settings.schema_version,
+                        requirement.page_tag, requirement.source_section,
+                        classification_policy_fingerprint(),
+                        json.dumps(requirement.table_context, sort_keys=True),
+                        requirement.source_role, requirement.candidate_type)
+
+
+def _cached_extraction(readable, requirement, cache):
+    """A stored answer for this clause, from a batch or a single read."""
+    if cache is None:
+        return None
+    from app.services.requirement.coverage import uncovered_tokens
+    settings = get_settings()
+    model = settings.llm_model or ""
+    for version in (BATCH_PROMPT_VERSION, _prompt_version()):
+        cached = cache.get(_extraction_hash(readable, requirement, version), model,
+                           version, settings.schema_version)
+        if cached is not None:
+            records = [_as_record(item) for item in cached]
+            if records and not uncovered_tokens(readable, records):
+                return records
+    return None
+
+
+def _extraction_batchable(candidate, siblings, preserve_extracted):
+    """Whether the loop would send this row to _extract_one, mirroring its skips.
+
+    Only an optimization for the batch cohort; the loop stays authoritative, so
+    a row wrongly excluded here is simply read on its own. Form and context rows
+    are excluded here so a batch never bills a clause the loop would not read.
+    """
+    if candidate.context_only or candidate.unreadable or is_mangled(candidate.text):
+        return False
+    if not english_half(candidate.source_text or candidate.text):
+        return False
+    if not candidate.item_id and candidate.requirement_type is RequirementType.UNKNOWN:
+        return False
+    from app.services.requirement.coverage import MARKER
+    from app.services.requirement.extract import span_holds
+    candidates = [row for row in siblings if not row.context_only]
+    if preserve_extracted and candidates and all(
+            row.attribute and row.source_span and row.source_text
+            and MARKER not in (row.review_reason or '')
+            and span_holds(row.source_text, row.source_span, row.value)
+            for row in candidates):
+        return False
+    source_type = classify_clause(candidate.source_text or candidate.text,
+                                  page_tag=candidate.page_tag, source_section=candidate.source_section)
+    if source_type.kind in {'commercial', 'eligibility', 'informational'} and not source_type.review_required:
+        return False
+    if candidate.review_required and not candidate.item_id and not candidate.candidate_type and not (
+            get_settings().requirement_classification_enabled
+            and candidate.requirement_type is RequirementType.UNKNOWN):
+        return False
+    if candidate.page_tag and is_non_technical(candidate.page_tag) and source_type.kind != 'technical' and not candidate.candidate_type:
+        return False
+    return True
+
+
 def _extract_one(
-    readable: str, requirement: RequirementRecord, *, cache=None, client=None
+    readable: str, requirement: RequirementRecord, *, cache=None, client=None,
+    precomputed=None, prompt_version=None
 ):
     """Read one line, from the cache when the same input was read before.
 
@@ -1392,37 +1478,33 @@ def _extract_one(
     answer is not a call. `requirements` is `None` when the model was asked
     and did not answer, and `error` says why: the caller keeps the line and
     flags it rather than reading the failure as an empty answer.
+
+    `precomputed` is a batch answer for this clause; it skips the single call
+    but keeps the same verification, retyping and cache write.
     """
     settings = get_settings()
     model = settings.llm_model or ""
-    prompt_version = _prompt_version()
+    version = prompt_version or _prompt_version()
     schema_version = settings.schema_version
-    input_hash = content_hash(readable, model, prompt_version, schema_version,
-                              requirement.page_tag, requirement.source_section,
-                              classification_policy_fingerprint(),
-                              json.dumps(requirement.table_context, sort_keys=True),
-                              requirement.source_role, requirement.candidate_type)
 
-    if cache is not None:
-        cached = cache.get(input_hash, model, prompt_version, schema_version)
+    if precomputed is None:
+        cached = _cached_extraction(readable, requirement, cache)
         if cached is not None:
-            from app.services.requirement.coverage import uncovered_tokens
-            records = [_as_record(item) for item in cached]
-            if records and not uncovered_tokens(readable, records):
-                return records, False, True, None
-
-    outcome = extract_requirements(
-        readable,
-        requirement.item_id,
-        client=client,
-        page=requirement.page,
-        section=requirement.source_section,
-        # The reader said how the clause was read; the stored requirement has
-        # to say the same thing, or a prose clause would be recorded as a
-        # table row and never be atomized on a rerun.
-        extraction_method=requirement.extraction_method,
-        table_context=requirement.table_context,
-    )
+            return cached, False, True, None
+        outcome = extract_requirements(
+            readable,
+            requirement.item_id,
+            client=client,
+            page=requirement.page,
+            section=requirement.source_section,
+            # The reader said how the clause was read; the stored requirement has
+            # to say the same thing, or a prose clause would be recorded as a
+            # table row and never be atomized on a rerun.
+            extraction_method=requirement.extraction_method,
+            table_context=requirement.table_context,
+        )
+    else:
+        outcome = precomputed
     if outcome.rejected and not outcome.requirements:
         return None, True, False, 'source_coverage_gap: source_quote_or_value_validation_failed'
     if outcome.error and not outcome.requirements:
@@ -1441,9 +1523,9 @@ def _extract_one(
     from app.services.requirement.coverage import uncovered_tokens
     if cache is not None and outcome.requirements and not outcome.rejected and outcome.limit is None and not uncovered_tokens(readable, outcome.requirements):
         cache.put(
-            input_hash,
+            _extraction_hash(readable, requirement, version),
             model,
-            prompt_version,
+            version,
             schema_version,
             [_as_dict(item) for item in outcome.requirements],
         )

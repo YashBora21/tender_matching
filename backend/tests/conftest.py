@@ -40,6 +40,7 @@ def fresh_settings(monkeypatch) -> None:
     monkeypatch.setenv('LLM_RETRY_SECONDS', '0')
     # Single-answer fakes must not inherit a deployment batch size.
     monkeypatch.setenv('LLM_MATCH_EXTRACTION_BATCH_SIZE', '1')
+    monkeypatch.setenv('REQUIREMENT_EXTRACTION_BATCH_SIZE', '1')
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

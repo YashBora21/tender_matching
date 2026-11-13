@@ -5041,3 +5041,30 @@ eval/audit/item-binding-2026-11-13/results.json: assigned rows 48 -> 147
 (48 BOQ + 99 specification across 11 items), 119 candidates remain unassigned,
 39 of them property rows with unresolved scope. Binding evidence, not an
 accuracy grade; no paid calls.
+
+
+## D-168 - Independent clauses are extracted in bounded batches, verified one by one
+
+The Phase 3 measured read estimated more than INR 10 per tender, so the approved
+plan batches requirement extraction before any further paid run. Several
+independent specification/BOQ clauses now share one call (default 8, bounded by
+characters), reusing the clause-classification batch pattern. Each clause keeps
+its own verbatim quote/value verification: a clause whose evidence fails is
+rejected on its own and gets the one shared bounded repair, while a wrong schema
+or a mismatched/duplicated clause_id fails the whole answer because then no field
+can be believed. The pipeline forms a cohort only from rows the loop would
+actually send to extraction, mirroring every skip branch, so form and context
+rows are never billed; the loop stays authoritative and a row excluded from the
+cohort is simply read on its own. Batch answers are cached under their own prompt
+version (batch-1) and a single-path resume reads both versions, so a batch read
+is never paid for twice. The single-clause prompt, output schema and four-layer
+verifier are unchanged; the single prompt text is byte-identical, so existing
+cached answers stay valid.
+
+*Verified:* tests/test_extraction_batches.py (12 synthetic tests: one call for
+several clauses with identity preserved, exact-id discipline, per-clause quote
+isolation, one bounded repair, size-1 single path, char-bound splitting, budget
+stop, and pipeline integration with cache reuse and context rows excluded).
+Full offline suite green: backend 1317 tests / 0 failures / 24 skipped, collect
+and eval 76 / 0. No paid calls; this is call-count evidence, not an accuracy
+grade.

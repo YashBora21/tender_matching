@@ -239,6 +239,8 @@ class Settings(BaseSettings):
     requirement_classification_max_chars: int = Field(default=4000, gt=0)
     requirement_classification_batch_size: int = Field(default=10, ge=1, le=12)
     requirement_classification_batch_chars: int = Field(default=24000, gt=0)
+    requirement_extraction_batch_size: int = Field(default=8, ge=1, le=12)
+    requirement_extraction_batch_chars: int = Field(default=24000, gt=0)
     req_min_chars: int = Field(default=20, ge=0)
     req_min_words: int = Field(default=4, ge=0)
     source_form_heading_chars: int = Field(default=800, gt=0)

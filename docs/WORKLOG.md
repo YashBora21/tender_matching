@@ -4260,3 +4260,28 @@ Remaining before a paid benchmark: extraction batching, mixed-attachment
 section routing, merged-cell ambiguity. The user approved paid calls for the
 capped measured re-read (2026-11-13); per the standing plan, extraction batching
 lands first because the Phase 3 estimate exceeded INR 10.
+
+
+## 2026-11-13 — Extraction batching lands (D-168)
+
+Requirement extraction now reads several independent specification/BOQ clauses
+per call (REQUIREMENT_EXTRACTION_BATCH_SIZE, default 8; _BATCH_CHARS 24000),
+mirroring the clause-classification batch. extract.py gains a batch prompt
+(batch-1), schema and extract_batch with per-clause quote/value verification,
+per-field rejection and one shared bounded repair; a wrong schema or
+mismatched/duplicated clause_id fails the whole answer. The single-clause prompt
+is byte-identical (PROMPT_VERSION 9), so cached answers stay valid. pipeline.py
+forms a cohort only from rows the loop would send to _extract_one (every skip
+branch mirrored, so form/context rows are never billed), passes the batch answer
+through _extract_one(precomputed=...) for the same retyping and cache write, and
+caches under batch-1; a single-path resume reads both versions. llm.py accepts
+invalid_batch_extraction as repairable feedback; conftest pins the batch size to
+1 so single-answer fakes are unaffected.
+
+Tests: new tests/test_extraction_batches.py (12). Full offline suite green:
+backend 1317 / 0 failures / 24 skipped; collect + eval 76 / 0. No paid calls.
+
+Remaining before the capped measured re-read: mixed-attachment section routing
+and merged-cell ambiguity (39 property rows may stay flagged). Then one paid
+re-read of the frozen tender, reporting per-stage calls/tokens/cost with the
+purpose split, unresolved well under 460 and technical candidates back to 18.
