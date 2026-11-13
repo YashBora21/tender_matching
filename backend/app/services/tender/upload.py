@@ -77,6 +77,8 @@ def effective_limits() -> dict:
         "max_retries": settings.llm_max_retries,
         "req_min_chars": settings.req_min_chars,
         "req_min_words": settings.req_min_words,
+        "classification_batch_size": settings.requirement_classification_batch_size,
+        "classification_batch_chars": settings.requirement_classification_batch_chars,
         "spend_caps_enabled": getattr(settings, 'llm_spend_caps_enabled', False),
         "schema_version": settings.schema_version,
         "app_version": settings.app_version,

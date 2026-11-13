@@ -1255,8 +1255,9 @@ def _extract_all(
                         cohort = [(position, candidate) for position, candidate in enumerate(requirements[index:], index)
                             if not candidate.item_id and not candidate.context_only and candidate.candidate_type
                             and candidate.requirement_type is RequirementType.UNKNOWN
-                            and candidate.source_table_id == requirement.source_table_id
-                            and candidate.page == requirement.page and candidate.source_role == requirement.source_role]
+                            and not candidate.unreadable and not is_mangled(candidate.text)
+                            and english_half(candidate.source_text or candidate.text)
+                            ][:get_settings().requirement_classification_batch_size]
                         from app.services.requirement.classify import classify_batch
                         answers = classify_batch([{'text': english_half(candidate.source_text or candidate.text),
                             'context': _classification_context(english_half(candidate.source_text or candidate.text), candidate)}

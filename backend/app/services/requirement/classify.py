@@ -195,9 +195,11 @@ def classify_batch(clauses, *, cache=None, client=None):
             results[index] = (value.type, False, True, None)
             continue
         entry = {'clause_id': str(index), 'text': text, 'context': context}
-        if len(json.dumps({'clauses': pending + [entry]}, ensure_ascii=False)) > settings.requirement_classification_max_chars:
+        if len(pending) >= settings.requirement_classification_batch_size or len(
+                json.dumps({'clauses': pending + [entry]}, ensure_ascii=False)) > settings.requirement_classification_batch_chars:
             flush()
-        if len(json.dumps({'clauses': [entry]}, ensure_ascii=False)) > settings.requirement_classification_max_chars:
+        if (len(json.dumps({'clause': text, 'context': context}, ensure_ascii=False)) > settings.requirement_classification_max_chars
+                or len(json.dumps({'clauses': [entry]}, ensure_ascii=False)) > settings.requirement_classification_batch_chars):
             results[index] = classify_clause(text, context=context, cache=cache, client=client)
         else:
             pending.append(entry)

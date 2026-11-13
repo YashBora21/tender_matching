@@ -4902,3 +4902,8 @@ Phase 3 uses exported rc-2026-11-13.3 app code, frozen saved sources and an isol
 ## Preserve every source child on resume and revalidate changed extraction versions - 2026-11-13
 
 Group extraction work by full source identity including item_id, while retaining every context child and previously structured sibling. Reuse completed source children only when the extraction checkpoint key is unchanged and their stored spans/values remain supported; changed model, prompt or vocabulary still follows extraction/cache validation. A budget/error outcome preserves all children and the untouched tail. A partial result cannot replace an existing structured sibling with context. Permanent synthetic regression keeps18 technical children and9 context children across storage/resume without a provider call. No prompt, cache identity, page-ledger or manufacturer-verifier change.
+
+
+## Schedule independent clause classifications in bounded groups of ten - 2026-11-13
+
+Separate the unchanged4000-character per-clause limit from configurable request bounds:10 clauses and24000 characters by default. Build cohorts across source pages/tables while retaining each clause_id, exact text, role, section and neighboring context; never merge item-specific assessments. Preserve existing per-clause quote/type checks and cache keys because the model instructions, per-clause input and output contract are unchanged. Scheduling bounds appear in effective numeric limits. This fixes singleton cohorts and avoids treating a per-clause bound as the entire batch allowance. No template approval or neighboring-context removal.

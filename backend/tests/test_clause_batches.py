@@ -65,6 +65,7 @@ def test_requests_split_at_configured_bound(monkeypatch):
     from app.core.config import get_settings
     rows = [dict(text='Synthetic ' + str(i) + ' ' + 'x' * 100, context={}) for i in range(6)]
     monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_MAX_CHARS', '500')
+    monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_BATCH_CHARS', '500')
     get_settings.cache_clear()
     client = Client()
     result = classify_batch(rows, client=client)
@@ -77,3 +78,19 @@ def test_budget_stop_propagates_without_empty_success():
     class Limited(Client):
         def complete_json(self, *args, **kwargs): raise LLMBudgetExceeded('synthetic')
     with pytest.raises(LLMBudgetExceeded): classify_batch(clauses(), client=Limited())
+
+
+def test_eight_independent_contexts_share_a_request_without_changing_any_input(monkeypatch):
+    from app.core.config import get_settings
+    monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_BATCH_SIZE', '8')
+    monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_BATCH_CHARS', '24000')
+    get_settings.cache_clear()
+    rows = [dict(text=f'Synthetic property {i}', context={'section':f'Synthetic section {i}',
+            'source_role':'specification','nearby_source_clauses':['Synthetic context '*30]}) for i in range(24)]
+    client = Client()
+    result = classify_batch(rows, client=client)
+    assert len(client.calls) == 3 and len(result) == 24
+    sent = [entry for payload in client.calls for entry in payload['clauses']]
+    assert [(r['text'],r['context']) for r in sent] == [(r['text'],r['context']) for r in rows]
+    assert all(r[0] is RequirementType.TECHNICAL for r in result)
+    get_settings.cache_clear()
