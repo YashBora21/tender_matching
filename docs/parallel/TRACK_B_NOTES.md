@@ -184,3 +184,46 @@ audit protects a ninth. See TRACK_A_NOTES.md
 and canonical DECISIONS for verification. Both migrations are committed; the
 user now delegates their application to another agent. No application migration
 or reset was performed by Codex.
+
+## Deployment + Phase 1 (diagnostics) — 2026-11-13
+
+Applied to the live DB and verified by B on user instruction: `alembic upgrade
+head` ran `0022_llm_spend -> 0023_reading_attempts`; `alembic_version` now reads
+`0023_reading_attempts` (verified by direct SQL; `alembic current` itself hangs
+on this setup, likely its `env.py` connecting elsewhere). Failed readings were
+retried through `POST /api/tenders/{id}/read-again`: `373e9eb7` (GeM-Bidding-10103860)
+went from `failed` (the pre-migration `llm_cache.provenance` crash) to
+`incomplete` with genuine content reasons; `7a1384ad` (GeM-Bidding-8721586) from
+`failed` ("source pages remain unreadable") to `incomplete` ("a source attachment
+is unresolved") — the scanned/restricted attachments still need a supplied file.
+Both attempts are recorded in `reading_attempt` (attempt 1 each). No reset was
+executed; no code was staged or committed by B.
+
+Phase 1 of the user's follow-up plan (the other phases go to another agent):
+
+| File | Change |
+| --- | --- |
+| `backend/app/services/llm.py` | `LLMRequestRejected(status, detail=None)` now names what to fix per status (401 "the API key was rejected", 403 "access was refused …", 402 "the account cannot pay", 400 "the request was invalid"; others "the request was rejected"). New `_provider_detail(body, secret=…)`: the provider's first sentence, capped at 200 chars, whitespace-normalised, with the configured key replaced by `[redacted]` — body is data, never instructions, and the key is never echoed even if the provider echoes it. New `api_key_summary()`: `{"source": "LLM_TEXT_API_KEY"|"LLM_API_KEY", "last4": …}` or None — variable name and last four only, never the value. The run already stopped at the first 400/401/403 (no retry); that behavior is unchanged. |
+| `backend/app/services/cli/e2e.py` | Preflight `model` section gains `api_key` (the summary above; safe to cross the API boundary per user instruction — last four characters are not a secret's disclosure, the value is never shown). CLI `as_text()` model line appends "(key from <VAR>, ending XXXX)" when a model is configured; the CLI runs on the operator's own machine. |
+| `backend/tests/test_llm.py` | `test_a_refused_call_reports_http_status_without_private_configuration` updated: provider's sentence is now expected in the message ("bad key" quoted), while `a-model`, the endpoint and `test-key` must still never appear — its real intent (no private *configuration* leaks) is preserved. New: `test_a_rejection_names_what_to_fix` (400/401/403 phrases), `test_a_provider_explanation_is_quoted_redacted_and_capped` (echoed key redacted, one sentence, capped, context suppressed), `test_the_key_summary_names_its_variable_and_last_four` (stubbed settings, since the operator's real `.env` carries a live `LLM_TEXT_API_KEY` the tests must not depend on). |
+| `backend/tests/test_preflight_limits.py` | New: preflight names key source/last4, never the value; `api_key` is None when unconfigured; CLI line says "key from LLM_TEXT_API_KEY, ending 1234". Settings stubbed via `app.services.llm.get_settings` for the same `.env` reason. |
+
+One caveat discovered: this repo's real `.env` holds a genuine `LLM_TEXT_API_KEY`,
+so pytest env-deletion cannot make the summary "unset"; the new tests stub
+`get_settings` instead of fighting the operator's configuration.
+
+Results: `tests/test_llm.py` + `tests/test_preflight_limits.py` — 45 passed.
+Full unit suite `-m "not integration" -q` — all passed, no failures. Nothing
+staged or committed (A integrates, as before).
+
+Phase-1 alignment with `PHASE_1_DIAGNOSTICS_HANDOFF.md` (Codex's assignment for
+this phase): two spec items added after review — `api_key.last4` is `null` for a
+key of four characters or fewer (a short test secret must not be revealed
+whole; `test_a_short_key_is_named_by_source_but_not_revealed`), and
+`_provider_detail` now redacts the configured model identifier and endpoint
+URL (with and without scheme) in addition to the key. The handoff's other
+requirements were already met: fail-fast kept, one bounded sanitized sentence,
+no raw body logged, `model.target` still redacted, CLI/API consistency, no
+live provider tests. Codex's own simpler `LLMRequestRejected` (committed
+`14f7fb9` as the phase baseline) is superseded in the working tree by this
+richer version; the unstaged delta applies cleanly on top of it.

@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.services.llm import config_error
+from app.services.llm import api_key_summary, config_error
 from app.services.output.runs import needs_model
 
 logger = get_logger(__name__)
@@ -109,6 +109,10 @@ class E2EResult:
                 f"from {facts.manufacturers} maker(s); {facts.files_on_disk} file(s) on disk"
             )
             model_line = facts.model_reason or "configured"
+            if not facts.model_reason:
+                key = api_key_summary()
+                if key:
+                    model_line += f" (key from {key['source']}, ending {key['last4']})"
             lines.append(f"   model  {model_line}")
             if facts.ocr_reason:
                 lines.append("     ocr  not available here; see the reason below")
@@ -505,6 +509,10 @@ def preflight(session: Session, *, tender_ref: Optional[str] = None) -> dict:
             # Redacted on purpose: this answer crosses an API boundary, and
             # the model id and endpoint are server configuration.
             "target": None if facts.model_reason else "configured (identity withheld)",
+            # Where the key came from and its last four characters: the two
+            # facts that tell a wrong key from a stale one, without
+            # publishing the value (user phase 1).
+            "api_key": api_key_summary(),
         },
         "ocr": {"available": facts.ocr_reason is None, "reason": facts.ocr_reason},
         "tender": {

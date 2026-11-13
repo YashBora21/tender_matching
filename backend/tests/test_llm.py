@@ -246,7 +246,9 @@ def test_a_limit_answered_with_a_header_stops_the_run_with_that_wait(monkeypatch
 
 
 def test_a_refused_call_reports_http_status_without_private_configuration(monkeypatch):
-    """Synthetic provider identifiers and bodies must not reach reports/logs."""
+    """Synthetic provider identifiers must not reach reports/logs, but the
+    provider's own one-sentence explanation is quoted (user phase 1), with
+    the configured key redacted wherever it appears."""
     import io
     import urllib.error
 
@@ -271,8 +273,157 @@ def test_a_refused_call_reports_http_status_without_private_configuration(monkey
     assert "HTTP 401" in str(raised.value)
     assert "a-model" not in str(raised.value)
     assert "api.example.test" not in str(raised.value)
-    assert "bad key" not in str(raised.value)
+    assert "test-key" not in str(raised.value)
+    assert "bad key" in str(raised.value)
     assert raised.value.__suppress_context__
+
+
+@pytest.mark.parametrize(
+    "status,phrase",
+    [
+        (400, "the request was invalid"),
+        (401, "the API key was rejected"),
+        (403, "access was refused"),
+    ],
+)
+def test_a_rejection_names_what_to_fix(monkeypatch, status, phrase):
+    """A 401 that says 'check credentials' and a 400 that says the same are
+    two different diagnoses; the status decides the sentence."""
+    import io
+    import urllib.error
+
+    from app.services.llm import LLMError
+
+    def fake_urlopen(request, timeout=None):
+        raise urllib.error.HTTPError(
+            request.full_url, status, "failed", {}, io.BytesIO(b"")
+        )
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_MODEL", "a-model")
+    monkeypatch.setenv("LLM_BASE_URL", "https://api.example.test/v1")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    with pytest.raises(LLMError) as raised:
+        LLMClient().chat("system", "user")
+
+    assert f"HTTP {status}" in str(raised.value)
+    assert phrase in str(raised.value)
+
+
+def test_a_provider_explanation_is_quoted_redacted_and_capped(monkeypatch):
+    """The provider's words help the operator, but they are quoted, one
+    sentence, bounded, and a key echoed back is replaced before anyone
+    reads it. The configured model and endpoint are identifiers too: a
+    provider that names them must not make them reach a report."""
+    import io
+    import urllib.error
+
+    from app.services.llm import LLMError
+
+    echoed = "denied key sk-live-abcdef123456 for model a-model at https://api.example.test/v1"
+    body = (
+        '{"error": {"message": "' + echoed + '. Second sentence nobody needs."}}'
+    ).encode("utf-8")
+
+    def fake_urlopen(request, timeout=None):
+        raise urllib.error.HTTPError(
+            request.full_url, 401, "Unauthorized", {}, io.BytesIO(body)
+        )
+
+    monkeypatch.setattr("app.services.llm.urllib.request.urlopen", fake_urlopen)
+    monkeypatch.setenv("LLM_API_KEY", "sk-live-abcdef123456")
+    monkeypatch.setenv("LLM_MODEL", "a-model")
+    monkeypatch.setenv("LLM_BASE_URL", "https://api.example.test/v1")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+
+    with pytest.raises(LLMError) as raised:
+        LLMClient().chat("system", "user")
+
+    text = str(raised.value)
+    assert "sk-live-abcdef123456" not in text
+    assert "[redacted]" in text
+    assert "denied key" in text
+    assert "a-model" not in text
+    assert "api.example.test" not in text
+    assert "Second sentence" not in text
+    assert len(text) < 500
+
+
+def test_a_short_key_is_named_by_source_but_not_revealed(monkeypatch):
+    """A key of four characters or fewer would be shown whole by a naive
+    last-four, so a short test secret is named by source alone."""
+    from app.services import llm
+
+    class _Stub:
+        llm_text_api_key = "ab"
+        llm_api_key = None
+
+    monkeypatch.setattr(llm, "get_settings", lambda: _Stub())
+
+    assert llm.api_key_summary() == {"source": "LLM_TEXT_API_KEY", "last4": None}
+
+
+@pytest.mark.parametrize('private', ['synthetic-secret-with-a-tail', 'synthetic-model-with-a-tail',
+                                     'api.synthetic.example.test/v1'])
+def test_rejection_redacts_before_sentence_and_length_boundaries(monkeypatch, private):
+    from app.services.llm import _provider_detail
+    from app.core.config import get_settings
+    monkeypatch.setenv('LLM_API_KEY', 'synthetic-secret-with-a-tail')
+    monkeypatch.setenv('LLM_MODEL', 'synthetic-model-with-a-tail')
+    monkeypatch.setenv('LLM_BASE_URL', 'https://api.synthetic.example.test/v1')
+    get_settings.cache_clear()
+    detail = _provider_detail('X' * 190 + ' ' + private + '. Later sentence.',
+                              secret='synthetic-secret-with-a-tail')
+    assert private[:8] not in detail
+    assert len(detail) <= 200
+    assert 'Later sentence' not in detail
+
+
+def test_rejection_removes_control_characters_and_unschemed_endpoint(monkeypatch):
+    from app.services.llm import _provider_detail
+    from app.core.config import get_settings
+    monkeypatch.setenv('LLM_BASE_URL', 'https://api.synthetic.example.test/v1')
+    get_settings.cache_clear()
+    detail = _provider_detail('Denied\x00\x1b at api.synthetic.example.test/v1.', secret=None)
+    assert detail == 'Denied at [redacted].'
+
+
+def test_the_key_summary_names_its_variable_and_last_four(monkeypatch):
+    """Two keys are told apart by their source variable and last four
+    characters; the value and any longer prefix stay behind (user phase 1).
+
+    The settings are stubbed because the operator's own `.env` may carry a
+    real key: the test must not depend on what that file happens to hold.
+    """
+    from app.services import llm
+
+    class _Stub:
+        llm_text_api_key = "sk-text-999988887777abcd"
+        llm_api_key = "sk-shared-000011112222ef12"
+
+    monkeypatch.setattr(llm, "get_settings", lambda: _Stub())
+
+    summary = llm.api_key_summary()
+
+    assert summary == {"source": "LLM_TEXT_API_KEY", "last4": "abcd"}
+    assert "sk-text-999988887777abcd" not in str(summary)
+
+    _Stub.llm_text_api_key = None
+
+    summary = llm.api_key_summary()
+
+    assert summary == {"source": "LLM_API_KEY", "last4": "ef12"}
+    assert "sk-shared-000011112222ef12" not in str(summary)
+
+    _Stub.llm_api_key = None
+
+    assert llm.api_key_summary() is None
 
 
 def test_a_body_is_read_past_its_first_sentence_for_the_wait(monkeypatch):

@@ -66,13 +66,70 @@ class LLMBudgetExceeded(LLMError):
 
 
 class LLMRequestRejected(LLMError):
-    """A permanent request failure stops the run instead of failing every clause."""
+    """A permanent request failure stops the run instead of failing every clause.
 
-    def __init__(self, status: int):
+    The status is translated into the one sentence that tells the operator
+    what to fix, and the provider's own words are quoted redacted: the body
+    is data, not instructions, and no configured secret may be echoed back
+    into a log or report (user phase 1).
+    """
+
+    def __init__(self, status: int, detail: Optional[str] = None):
         self.status = status
-        super().__init__(f'the configured LLM rejected the request (HTTP {status}); '
-                         'check credentials, model and request limits before reading again')
+        reason = _REJECTION_REASONS.get(status, "the request was rejected")
+        message = (
+            f"the configured LLM rejected the request (HTTP {status}): {reason}; "
+            "check credentials, model and request limits before reading again"
+        )
+        if detail:
+            message += f' - the provider said: "{detail}"'
+        super().__init__(message)
 
+
+_REJECTION_REASONS = {
+    400: "the request was invalid",
+    401: "the API key was rejected",
+    402: "the account cannot pay for this call",
+    403: "access was refused (the key lacks access to this model, or the provider checked the client)",
+}
+
+
+def _provider_detail(body: str, *, secret: Optional[str]) -> Optional[str]:
+    """The provider's first sentence about a 4xx, capped and redacted.
+
+    One sentence is the useful part; a page of HTML from a proxy is noise.
+    The provider's text is untrusted data: it is quoted, never followed, and
+    everything configured that could be a credential or an identifier is
+    replaced before the sentence is cut - redaction happens before the
+    boundaries, or a secret straddling the cut would survive half-read.
+    Control characters are dropped, and an endpoint is redacted with and
+    without its scheme, because a provider may quote either form.
+    """
+    text = " ".join(re.sub(r"[\x00-\x1f\x7f]", "", body or "").split())
+    if not text:
+        return None
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        parsed = None
+    if isinstance(parsed, dict):
+        error = parsed.get("error")
+        if isinstance(error, dict):
+            error = error.get("message")
+        if isinstance(error, str):
+            text = " ".join(re.sub(r"[\x00-\x1f\x7f]", "", error).split())
+    settings = get_settings()
+    configured = [secret, settings.llm_model, settings.llm_base_url]
+    base_url = settings.llm_base_url or ""
+    scheme = re.match(r"[a-zA-Z][a-zA-Z0-9+.-]*://", base_url)
+    if scheme:
+        configured.append(base_url[scheme.end():])
+    for value in configured:
+        if value:
+            text = text.replace(value, "[redacted]")
+    text = re.sub(r"https?://\S+", "[redacted]", text)
+    sentence = re.split(r"(?<=[.!?])\s", text)[0][:200].strip()
+    return sentence or None
 
 
 class _RateLimited(Exception):
@@ -89,7 +146,6 @@ class _RateLimited(Exception):
 
 class _TransientFailure(LLMError):
     """A temporary transport/provider failure may use the configured retries."""
-
 
 
 NO_MODEL = "no LLM model is configured (set LLM_MODEL)"
@@ -122,6 +178,28 @@ def config_error() -> Optional[str]:
     """
     settings = get_settings()
     return _missing(settings.llm_model, settings.text_api_key, settings.llm_base_url)
+
+
+def api_key_summary() -> Optional[dict]:
+    """Which environment variable the text key came from, and its last four.
+
+    The summary crosses the preflight payload, so it carries the variable's
+    name - enough to tell a dedicated text key from the shared one - and
+    four trailing characters to tell two keys apart. The value itself and
+    any longer prefix never leave the process (user phase 1). A key of four
+    characters or fewer is named by source alone: its whole value is the
+    last four, and a short test secret must not be revealed whole.
+    """
+    settings = get_settings()
+    if settings.llm_text_api_key:
+        return {"source": "LLM_TEXT_API_KEY", "last4": _last4(settings.llm_text_api_key)}
+    if settings.llm_api_key:
+        return {"source": "LLM_API_KEY", "last4": _last4(settings.llm_api_key)}
+    return None
+
+
+def _last4(key: str) -> Optional[str]:
+    return key[-4:] if len(key) > 4 else None
 
 
 # A wait is told in one of three places, and none of them is a vendor's
@@ -473,7 +551,9 @@ class LLMClient:
             if exc.code in {408, 500, 502, 503, 504}:
                 raise _TransientFailure(f'temporary LLM failure (HTTP {exc.code})') from None
             if 400 <= exc.code < 500:
-                raise LLMRequestRejected(exc.code) from None
+                raise LLMRequestRejected(
+                    exc.code, detail=_provider_detail(body, secret=self.api_key)
+                ) from None
             raise LLMError(
                 f"the configured LLM returned HTTP {exc.code}"
             ) from None

@@ -65,3 +65,59 @@ def test_a_missing_model_is_said_without_a_target(monkeypatch):
     assert body["model"]["configured"] is False
     assert body["model"]["target"] is None
     assert body["model"]["reason"] == "no API key is configured"
+
+
+def test_the_preflight_names_the_key_source_and_last_four(monkeypatch):
+    """A stale key is told from a wrong one by the variable it came from and
+    its last four characters; the value never crosses the boundary (user
+    phase 1). The summary is read from a stub because the operator's `.env`
+    may carry a real key the test must not depend on."""
+    from app.services import llm
+
+    class _Stub:
+        llm_text_api_key = None
+        llm_api_key = "sk-synthetic-1234567890abcdef"
+
+    _patch(monkeypatch, Facts())
+    monkeypatch.setattr(llm, "get_settings", lambda: _Stub())
+
+    body = e2e.preflight(None)
+
+    assert body["model"]["api_key"] == {"source": "LLM_API_KEY", "last4": "cdef"}
+    assert "sk-synthetic-1234567890abcdef" not in str(body)
+
+
+def test_the_preflight_admits_when_no_key_is_configured(monkeypatch):
+    from app.services import llm
+
+    class _Stub:
+        llm_text_api_key = None
+        llm_api_key = None
+
+    _patch(monkeypatch, Facts())
+    monkeypatch.setattr(llm, "get_settings", lambda: _Stub())
+
+    body = e2e.preflight(None)
+
+    assert body["model"]["api_key"] is None
+
+
+def test_the_cli_model_line_says_where_the_key_came_from(monkeypatch):
+    """The CLI text is the operator's own screen: it may name the key's
+    source and last four characters (user phase 1)."""
+    from app.services import llm
+
+    class _Stub:
+        llm_text_api_key = "sk-text-abcd1234"
+        llm_api_key = None
+
+    _patch(monkeypatch, Facts())
+    monkeypatch.setattr(llm, "get_settings", lambda: _Stub())
+
+    result = e2e.run_end_to_end(
+        "nonexistent-tender-ref", session=object(), check_only=True
+    )
+
+    text = result.as_text()
+    assert "key from LLM_TEXT_API_KEY, ending 1234" in text
+    assert "sk-text-abcd1234" not in text
