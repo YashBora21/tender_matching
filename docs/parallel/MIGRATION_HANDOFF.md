@@ -66,3 +66,29 @@ The refreshed preview after migration has6 selected tenders,21 attachments,
 are retained; no cache entries would be deleted. Raw preview is in
 `.audit_tmp/reset-preview-2026-11-13.txt` locally. Review it before any execution.
 No reset is authorized by this migration handoff.
+
+
+## Runtime configuration diagnosis and fix
+
+The live API and direct database query show the same latest attempt IDs and
+numeric limits, and stored reading models match current configuration. The
+running bare-uvicorn server inherited a different LLM_TEXT_API_KEY from its
+terminal, overriding the working private-file key. Codex restarted the idle
+backend through `venv\Scripts\python.exe scripts/dev_backend.py`; it is ready
+and its key now matches the private file. Use `make run` or that launcher for
+future starts. Changing private dotenv values requires restarting the backend.
+No key or model was changed. Do not launch a second server while port8000 is up.
+
+Localhost IPv6 timed out; the configured database's IPv4 loopback connected
+immediately. Only the private database address was corrected, preserving all
+other connection fields. Alembic now honors DB_CONNECT_TIMEOUT, and its current
+command promptly reports0023 at head. No migration was applied by Codex.
+
+The text provider accepted one tiny synthetic request and one saved-clause
+request with the private-file credentials. This proves transport/JSON acceptance,
+not extraction correctness. Old incomplete readings retain their original
+errors; retry them through read-again. No new full-tender read was started by
+Codex after the credential correction. Permanent HTTP4xx failures now stop the
+operation after one call rather than marking every clause unreadable. Rate
+limits/timeouts and evidence validation retain their existing bounded handling.
+Latest release candidate:rc-2026-11-13.2. Audit:eval/audit/runtime-config-2026-11-13/results.json.

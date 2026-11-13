@@ -1,0 +1,66 @@
+{
+  "code_commit": "14f7fb9f99b9833f5e9246e213a63fa25c5ab46d",
+  "release_candidate": "rc-2026-11-13.2",
+  "application_database_revision": "0023_reading_attempts",
+  "application_and_cli_reading_attempt_ids_match": true,
+  "application_and_cli_model_matches": true,
+  "application_and_cli_numeric_limits_match": true,
+  "inherited_server_override_mismatches": [
+    "LLM_TEXT_API_KEY"
+  ],
+  "server_restarted_via_existing_dotenv_launcher": true,
+  "restarted_server_key_matches_private_file": true,
+  "backend_ready": true,
+  "private_credentials_changed": false,
+  "private_database_address_changed_to_verified_working_loopback": true,
+  "database_connectivity": {
+    "IPv6": "timeout at1 second",
+    "IPv4": "connected in0.001 seconds"
+  },
+  "alembic_timeout_uses_existing_config": true,
+  "alembic_current_command": "returned0023_reading_attempts at head",
+  "permanent_provider_rejection": "operation stops after first non-rate-limit/time-out HTTP4xx; no missing-evidence verdict",
+  "provider_probes": [
+    {
+      "source": "synthetic connectivity",
+      "calls": 1,
+      "prompt_tokens": 22,
+      "completion_tokens": 10
+    },
+    {
+      "source": "one saved clause,21 characters",
+      "calls": 1,
+      "prompt_tokens": 1229,
+      "completion_tokens": 5,
+      "quality_grade": "transport/JSON only; not an extraction accuracy pass"
+    }
+  ],
+  "estimated_provider_cost_inr": null,
+  "cost_reason": "No verified tariff in this diagnostic",
+  "full_tender_rerun_after_config_fix": false,
+  "application_migrations_performed_by_codex": false,
+  "application_reset_performed": false,
+  "verification": {
+    "backend_unit": {
+      "tests": 1172,
+      "passed": 1169,
+      "skipped": 3,
+      "failures": 0,
+      "errors": 0,
+      "seconds": 125.536
+    },
+    "collector_and_eval_unit": {
+      "tests": 76,
+      "passed": 73,
+      "skipped": 3,
+      "failures": 0,
+      "errors": 0,
+      "seconds": 6.624
+    }
+  },
+  "remaining": [
+    "Retry two readings through the now-correctly-configured backend",
+    "Supply restricted attachment through authorized manual upload",
+    "Current-policy full-tender accuracy, timing and cost remain ungraded"
+  ]
+}

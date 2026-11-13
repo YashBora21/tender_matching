@@ -4031,3 +4031,30 @@ or reset the application database. Backup command and handoff are in docs/parall
 No paid calls or full-tender rerun after the parallel-policy baseline. Current-
 policy speed, correctness/false-confident count, verified cost and label-based
 valve/pump acceptance remain unmeasured. See eval/audit/parallel-integration-2026-11-13/results.json.
+
+
+## 2026-11-13 - Diagnose runtime key mismatch and database connection wait
+
+The user supplied logs from the second agent's migration/retry. Matching attempt
+IDs prove the API and direct query target the same database; reading model and
+numeric limits match current CLI configuration. HTTP400s still made many source
+clauses unresolved. A project-server environment comparison found a different
+inherited LLM_TEXT_API_KEY overriding the working private file. Restarted only
+the project backend via its existing dotenv-aware launcher; no current read or
+recent matching job was active. Eight historical retrieving rows from October/
+early November remain untouched. Backend is ready and key equality verified.
+Two authorized bounded probes used1251 input and15 output tokens; one was synthetic
+and one replayed a21-character saved clause with no database/cache writes. These
+are transport/JSON checks, not accuracy grades. Cost unestimated without tariff.
+
+IPv6 localhost timed out, while IPv4 loopback connected in0.001s. Corrected only
+the private database address and committed1c4c98c, passing DB_CONNECT_TIMEOUT into
+Alembic's engine. alembic current returns0023 at head. No application migration
+or reset by Codex. Commit14f7fb9 makes permanent HTTP4xx rejections propagate
+through classification/requirement/fact extraction, stopping after one call
+instead of returning absent evidence or repeatedly failing the source tail.
+Transient/rate-limit and one-evidence-repair budgets are unchanged; no prompt or
+cache-key changes. Final exported code tests and release hash are in the runtime
+config audit. Collector socket fixtures failed under the sandbox, then passed
+outside it. No full-tender rerun after the key correction; the second agent can
+retry using the now-correct backend. Historical results remain preserved.
