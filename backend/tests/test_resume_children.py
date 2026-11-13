@@ -96,3 +96,24 @@ def test_incomplete_prose_siblings_are_extracted_once_per_source_row():
     assert client.calls==1 and not limited
     assert sum(r.requirement_type is RequirementType.TECHNICAL for r in output)==2
     assert sum(r.context_only for r in output)==1
+    for _ in range(2):
+        stored=[dict(asdict(to_stored(r,'synthetic')),type=r.requirement_type.value) for r in output]
+        class Repo:
+            def list_requirements(self,_):return stored
+        output,_,_,limited,_=_extract_all(_stored_records(Repo(),'synthetic'),client=client,preserve_extracted=True)
+        assert not limited and len(output)==3
+    assert client.calls==3
+
+
+def test_repeated_storage_resumes_do_not_multiply_prose_children_or_calls():
+    rows=[r for i in range(1,10) for r in siblings(str(i))]
+    for r in rows:r.source_row_id='prose:'+r.item_id
+    class Forbidden:
+        def complete_json(self,*args,**kwargs):raise AssertionError('Complete sources must not be re-extracted')
+    for _ in range(5):
+        stored=[dict(asdict(to_stored(r,'synthetic')),type=r.requirement_type.value) for r in rows]
+        class Repo:
+            def list_requirements(self,_):return stored
+        rows,_,_,limited,_=_extract_all(_stored_records(Repo(),'synthetic'),client=Forbidden(),preserve_extracted=True)
+        assert not limited and len(rows)==27
+        assert sum(r.requirement_type is RequirementType.TECHNICAL for r in rows)==18

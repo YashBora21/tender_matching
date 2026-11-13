@@ -71,7 +71,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "18"
+READER_VERSION = "19"
 
 
 @dataclass
@@ -845,6 +845,45 @@ def _is_real_table(
     return filled / cells >= floor
 
 
+def _grouped_properties(tables, page_number, tag, previous):
+    """Preserve ruled item/label/value grids whose groups have no column header."""
+    state = dict(previous or {}) if (previous or {}).get('_property_page') == page_number - 1 else {}
+    rows = []
+    for table_index, table in enumerate(tables, 1):
+        if not table or any(len(row) != 3 for row in table):
+            return None
+        cells = [[_clean_cell(cell) for cell in row] for row in table]
+        if any(row[0] and not row[0].isdigit() for row in cells):
+            return None
+        heading = any(number and label and not value for number, label, value in cells)
+        if not heading and not state.get('_property_page'):
+            return None
+        for index, (number, label, value) in enumerate(cells):
+            if not any((number, label, value)):
+                continue
+            if not label:
+                return None
+            if number:
+                if number != state.get('_property_number'):
+                    state['_property_title'] = ''
+                state['_property_number'] = number
+            if not value:
+                if not number:
+                    # A blank value may be a new unnumbered group; do not inherit its predecessor.
+                    state['_property_number'] = ''
+                state['_property_title'] = label
+            rows.append(dict(row=index, page=page_number, number=state.get('_property_number',''),
+                title=state.get('_property_title', ''), description=' '.join(filter(None,[label,value])),
+                row_text=' '.join(filter(None,cells[index])), source_grid_cells=cells[index],
+                source_headers=[label] if value else [], source_cells=[value] if value else cells[index],
+                source_row_id=f'properties-{table_index}-row-{index}',
+                extraction_method=ExtractionMethod.TABLE.value, page_tag=tag))
+    if not rows or not any(row['source_headers'] for row in rows):
+        return None
+    state['_property_page'] = page_number
+    return rows, state
+
+
 def _read_tables(
     page,
     text: str,
@@ -857,9 +896,17 @@ def _read_tables(
     The columns are returned as well as the rows, because a table that runs
     over a page break has no header of its own and the next page needs them.
     """
+    tables = page.extract_tables() or []
+    grouped = _grouped_properties(tables, page_number, tag, columns)
+    held = sum(len(_clean_cell(cell)) for table in tables for row in table for cell in row)
+    page_chars = len(' '.join(text.split()))
+    if grouped and (not page_chars or held >= TABLE_TEXT_SHARE * page_chars):
+        return grouped
+    if (columns or {}).get('_property_number'):
+        columns = None
     accepted: list[tuple[list[list[Optional[str]]], int, Optional[dict]]] = []
     found_columns = columns
-    for table in page.extract_tables() or []:
+    for table in tables:
         if not table:
             continue
         if not _is_real_table(table, carried=found_columns is not None):
@@ -1166,7 +1213,9 @@ def assign_to_items(
     prose specification has no item column, and every clause it states is a
     clause of that item.
     """
-    by_number = {item.item_id.rsplit(":", 1)[-1]: item for item in items}
+    number_counts = Counter(item.item_id.rsplit(':', 1)[-1] for item in items)
+    by_number = {item.item_id.rsplit(":", 1)[-1]: item for item in items
+                 if number_counts[item.item_id.rsplit(':', 1)[-1]] == 1}
     title_counts = Counter(_title_key(item.title) for item in items if item.title)
     by_title = {_title_key(item.title): item for item in items if item.title and title_counts[_title_key(item.title)] == 1}
     only_item = items[0] if len(items) == 1 else None
@@ -1181,6 +1230,13 @@ def assign_to_items(
         identifier_review = False
         number = (row.get("number") or "").strip()
         item = by_number.get(number)
+        titles = {by_title[key].item_id for field in ('title','description','row_description')
+                  if (key := _title_key(row.get(field) or '')) in by_title}
+        if ((number and item is None) or len(titles) > 1 or
+                (item is not None and titles and item.item_id not in titles)):
+            unassigned.append(dict(row, review_required=True,
+                review_reason='Source item identifiers are unknown, duplicated or conflicting; reconcile with BOQ'))
+            continue
         if row.get('part_number'):
             # Exact identifier tokens can bridge a misspelled nomenclature, never a conflicting serial.
             token = re.escape(' '.join(row['part_number'].casefold().split()))
@@ -1226,7 +1282,9 @@ def assign_to_items(
                 context_only=bool(row.get("context_only")),
                 fragment_reason=row.get("fragment_reason"),
                 candidate_type=row.get("candidate_type"),
-                table_context=({"headers": row["source_headers"], "cells": row["source_cells"]}
+                table_context=({"headers": row["source_headers"], "cells": row["source_cells"],
+                                **({'layout':'item_label_value','original_cells':row['source_grid_cells']}
+                                   if 'source_grid_cells' in row else {})}
                                if row.get("source_headers") and row.get("source_cells") else None),
                 item_id=item.item_id,
                 # A clause on a page that is not a specification is recorded,

@@ -8,7 +8,7 @@ from __future__ import annotations
 import pytest
 from contextlib import nullcontext
 
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.services import spend
 from app.services.llm import LLMBudgetExceeded, LLMClient
 from app.services.spend import SpendCapReached, SpendLedger, SpendLedgerUnavailable
@@ -34,6 +34,8 @@ def _clean(monkeypatch):
         # Removed, not blanked: an empty string is not a valid boolean or
         # number, and the point is to test the defaults, not a parse failure.
         monkeypatch.delenv(key, raising=False)
+    # delenv cannot stop pydantic reading the developer's .env file itself.
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

@@ -587,7 +587,9 @@ def run_pipeline(
                     context_only=bool(row.get('context_only')),
                     fragment_reason=row.get('fragment_reason'),
                     candidate_type=row.get('candidate_type'),
-                    table_context=({"headers": row["source_headers"], "cells": row["source_cells"]}
+                    table_context=({"headers": row["source_headers"], "cells": row["source_cells"],
+                                    **({'layout':'item_label_value','original_cells':row['source_grid_cells']}
+                                       if 'source_grid_cells' in row else {})}
                                    if row.get("source_headers") and row.get("source_cells") else None),
                     item_id="",
                     requirement_type=(RequirementType(row["clause_type"]) if row.get("clause_type") else
@@ -602,7 +604,8 @@ def run_pipeline(
                             "Context retained: " + row["source_policy_reason"]])) if row.get("context_only") else
                         f"{NON_TECHNICAL_REASON} {tag}"
                         if classified
-                        else "the specification row names no item in the bill of quantities"
+                        else '; '.join(filter(None, [row.get('review_reason'),
+                            "the specification row names no item unambiguously in the bill of quantities"]))
                     ),
                       source_table_id=row.get('source_table_id'),
                       source_row_id=row.get('source_row_id'),
