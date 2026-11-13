@@ -78,7 +78,7 @@ def test_mixed_legacy_offsets_and_quote_are_rejected_instead_of_ignored():
     assert result.fell_back and result.error and not result.requirements
 
 
-def test_rejected_quote_preserves_original_clause_and_does_not_cache_partial_output():
+def test_rejected_field_preserves_good_fields_and_source_without_caching_partial_output():
     from app.services.tender.pipeline import _extract_all
     from app.services.tender.ingest import RequirementRecord
     text = 'size 25 mm and pressure 80 bar'
@@ -89,7 +89,9 @@ def test_rejected_quote_preserves_original_clause_and_does_not_cache_partial_out
         def put(self, *args): raise AssertionError('partial invalid quote response must not be cached')
     rows, *_ = _extract_all([RequirementRecord(text=text, item_id='synthetic-item')],
                             client=Client(payload), cache=Cache())
-    assert len(rows) == 1 and rows[0].text == rows[0].source_text == text
+    assert len(rows) == 1 and rows[0].value == '25' and rows[0].source_text == text
+    assert rows[0].source_span is not None
+    assert rows[0].normalization['source_context']['rejected_fields'][0]['verification'] == 'rejected'
     assert rows[0].review_required and rows[0].item_id == 'synthetic-item'
 
 

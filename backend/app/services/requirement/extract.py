@@ -152,6 +152,8 @@ class ExtractionResult:
     fell_back: bool = False
     unreadable_lines: int = 0
     error: Optional[str] = None
+    rejected_fields: list[dict] = field(default_factory=list)
+    limit: Optional[LLMError] = None
 
 
 def span_holds(text: str, span: tuple[int, int], value: Optional[str] = None) -> bool:
@@ -207,31 +209,56 @@ def extract_requirements(
         result.unreadable_lines = 1
         return result
 
+    verified = {}
+    rejected = {}
+    failure = None
+    def identity(item):
+        return (item.attribute, item.type, item.value, item.unit, item.operator)
     try:
-        client = client or LLMClient()
+        client = client or LLMClient(purpose='extraction')
         payload = json.dumps({'source_text': readable, 'table': table_context}, ensure_ascii=False) if table_context else readable
         def validate(answer):
             try:
                 parsed_answer = ExtractionResponse(**answer)
             except (ValidationError, TypeError):
                 raise LLMError('extraction_schema_validation_failed') from None
-            if any(_verified_span(readable, item, table_context) is None for item in parsed_answer.requirements):
+            failed = False
+            previous_failures = list(rejected)
+            for item in parsed_answer.requirements:
+                key = identity(item)
+                proof = key + (item.source_quote,)
+                if _verified_span(readable, item, table_context) is None:
+                    rejected[proof] = item
+                    failed = True
+                else:
+                    verified.setdefault(key, item)
+                    same_field = [k for k in previous_failures if k[:2] == key[:2]]
+                    if len(same_field) == 1:
+                        rejected.pop(same_field[0], None)
+                    rejected.pop(proof, None)
+            if failed:
                 raise LLMError('source_quote_or_value_validation_failed')
         answer = client.complete_json(SYSTEM_PROMPT, payload, validate=validate, purpose='extraction')
-        parsed = ExtractionResponse(**answer)
-    except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
-        # The provider's limit is not a failed reading: the line was never
-        # read. Let it out so the stage stops instead of recording a silence
-        # it did not observe.
+        validate(answer)
+    except (LLMRateLimited, LLMBudgetExceeded) as exc:
+        if not verified:
+            raise
+        result.limit = exc
+    except LLMRequestRejected:
         raise
     except (LLMError, ValidationError, TypeError) as exc:
-        logger.warning("extraction failed for %s: %s", item_id, exc)
-        result.fell_back = True
-        result.error = str(exc)
+        failure = str(exc)
+    result.rejected = [item.text for item in rejected.values()]
+    result.rejected_fields = [dict(item.model_dump(), verification='rejected') for item in rejected.values()]
+    if not verified:
+        if failure:
+            logger.warning("extraction failed for %s: %s", item_id, failure)
+            result.fell_back = True
+            result.error = failure
         return result
 
     from app.comparison.units import parse_unit
-    for item in parsed.requirements:
+    for item in verified.values():
         span = _verified_span(readable, item, table_context)
         if span is None:
             result.rejected.append(item.text)
@@ -249,6 +276,8 @@ def extract_requirements(
                 mandatory=item.mandatory,
                 source_span=span,
                 source_text=readable,
+                normalization=({'source_context': {'rejected_fields': result.rejected_fields}}
+                               if result.rejected_fields else None),
                 review_required=unresolved_unit,
                 review_reason='extracted measurement unit could not be resolved' if unresolved_unit else None,
                 page=page,

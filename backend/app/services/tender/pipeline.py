@@ -1144,6 +1144,8 @@ def _classify_unscoped(readable, requirement, *, cache=None, client=None, propos
     if label is RequirementType.UNKNOWN and not technical_context:
         outcome, extracted_call, extracted_hit, extraction_error = _extract_one(
             readable, requirement, cache=cache, client=client)
+        if isinstance(extraction_error, (LLMRateLimited, LLMBudgetExceeded)):
+            return outcome or [requirement], called or extracted_call, hit and extracted_hit, extraction_error
         from app.services.requirement.coverage import uncovered_tokens
         if (outcome and all(row.requirement_type in {
                 RequirementType.COMMERCIAL, RequirementType.ELIGIBILITY, RequirementType.INFORMATIONAL}
@@ -1209,6 +1211,7 @@ def _extract_all(
                 requirement.requirement_type = RequirementType(decision.clause_type)
     for index, requirement in enumerate(requirements):
         siblings = groups[index]
+        source_limit = None
         added: list[RequirementRecord] = []
         original_source = requirement.source_text or requirement.text
         readable = english_half(original_source)
@@ -1279,6 +1282,8 @@ def _extract_all(
                     options['proposal'] = batch_proposals[index]
                 outcome, was_call, was_hit, error = reader(
                     readable, requirement, cache=cache, client=client, **options)
+                if isinstance(error, (LLMRateLimited, LLMBudgetExceeded)):
+                    source_limit = error
             except (LLMRateLimited, LLMBudgetExceeded) as exc:
                 # Stop at the first limit. Everything from here on was never
                 # asked about, so it stays as it was: the stage is resumable,
@@ -1355,6 +1360,10 @@ def _extract_all(
         enriched.extend(added)
         if on_read is not None:
             on_read(enriched)
+        if source_limit is not None:
+            limited, limit_detail = True, str(source_limit)
+            enriched.extend(row for group in groups[index + 1:] for row in group)
+            break
 
     client_calls_after = getattr(client, "calls", None)
     if isinstance(client_calls_before, int) and isinstance(client_calls_after, int):
@@ -1402,9 +1411,9 @@ def _extract_one(
         extraction_method=requirement.extraction_method,
         table_context=requirement.table_context,
     )
-    if outcome.rejected:
+    if outcome.rejected and not outcome.requirements:
         return None, True, False, 'source_coverage_gap: source_quote_or_value_validation_failed'
-    if outcome.error:
+    if outcome.error and not outcome.requirements:
         # The model was asked and did not answer. Nothing is cached: the next
         # run has to ask again.
         return None, True, False, outcome.error
@@ -1418,7 +1427,7 @@ def _extract_one(
         extracted.source_section = requirement.source_section
         retype(extracted)
     from app.services.requirement.coverage import uncovered_tokens
-    if cache is not None and outcome.requirements and not uncovered_tokens(readable, outcome.requirements):
+    if cache is not None and outcome.requirements and not outcome.rejected and outcome.limit is None and not uncovered_tokens(readable, outcome.requirements):
         cache.put(
             input_hash,
             model,
@@ -1426,7 +1435,7 @@ def _extract_one(
             schema_version,
             [_as_dict(item) for item in outcome.requirements],
         )
-    return list(outcome.requirements), True, False, None
+    return list(outcome.requirements), True, False, outcome.limit
 
 
 def _as_dict(item: RequirementRecord) -> dict:

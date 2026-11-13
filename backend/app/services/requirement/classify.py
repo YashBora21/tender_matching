@@ -61,7 +61,7 @@ def classify_clause(text, *, context=None, cache=None, client=None):
     if parsed is not None:
         return parsed.type, False, True, None
     try:
-        answer = (client or LLMClient()).complete_json(SYSTEM_PROMPT, payload,
+        answer = (client or LLMClient(purpose='classification')).complete_json(SYSTEM_PROMPT, payload,
             validate=lambda answer: _parse_source_type(text, answer), purpose='classification')
         parsed = _parse_source_type(text, answer)
     except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
@@ -131,27 +131,44 @@ class BatchTypes(BaseModel):
     clauses: list[BatchClauseType]
 
 
+SAFE_CLAUSE_ERRORS = {'invalid_source_quote', 'classification_requires_complete_source'}
+
+
 def parse_batch(answer, entries):
+    """Return the clauses that verified and the reasons of those that did not.
+
+    Per-field rejection: a clause whose quote fails the evidence standard is
+    reported as failed with its reason, and the clauses that verified are
+    kept. Only a failure that makes the whole answer untrustworthy - a wrong
+    schema, an id that does not match the request, a duplicate, or one text
+    classified two ways - fails everything, because then no field can be
+    believed.
+    """
     try:
         parsed = BatchTypes.model_validate(answer)
     except (ValidationError, TypeError):
         raise LLMError('invalid_batch_classification') from None
     expected = {entry['clause_id']: entry for entry in entries}
     found = {}
+    failures = {}
     interpretations = {}
     for row in parsed.clauses:
-        if row.clause_id not in expected or row.clause_id in found:
+        if row.clause_id not in expected or row.clause_id in found or row.clause_id in failures:
             raise LLMError('batch_clause_id_mismatch')
         entry = expected[row.clause_id]
         identity = json.dumps([entry['text'], entry['context']], sort_keys=True)
         if identity in interpretations and interpretations[identity] != row.type:
             raise LLMError('conflicting_clause_classification')
         interpretations[identity] = row.type
-        found[row.clause_id] = _parse_source_type(expected[row.clause_id]['text'],
-            {'type': row.type.value, 'quote': row.quote})
-    if found.keys() != expected.keys():
+        try:
+            found[row.clause_id] = _parse_source_type(expected[row.clause_id]['text'],
+                {'type': row.type.value, 'quote': row.quote})
+        except LLMError as exc:
+            reason = str(exc)
+            failures[row.clause_id] = reason if reason in SAFE_CLAUSE_ERRORS else 'source_validation_failed'
+    if found.keys() | failures.keys() != expected.keys():
         raise LLMError('batch_clause_id_mismatch')
-    return found
+    return found, failures
 
 
 def classify_batch(clauses, *, cache=None, client=None):
@@ -165,20 +182,41 @@ def classify_batch(clauses, *, cache=None, client=None):
         if not pending:
             return
         entries = list(pending)
+        accepted, failures, conflicts = {}, {}, set()
+        def validate(value):
+            found, rejected = parse_batch(value, entries)
+            for identifier, candidate in found.items():
+                if identifier in accepted and accepted[identifier].type != candidate.type:
+                    conflicts.add(identifier)
+                    accepted.pop(identifier)
+                if identifier not in conflicts:
+                    accepted[identifier] = candidate
+                    failures.pop(identifier, None)
+            failures.update({identifier:reason for identifier,reason in rejected.items() if identifier not in accepted})
+            failures.update({identifier:'conflicting_clause_classification' for identifier in conflicts})
+            if failures:
+                raise LLMError('invalid_source_quote')
+        error = None
         try:
-            answer = (client or LLMClient()).complete_json(BATCH_SYSTEM_PROMPT,
+            answer = (client or LLMClient(purpose='classification')).complete_json(BATCH_SYSTEM_PROMPT,
                 json.dumps({'clauses': entries}, ensure_ascii=False),
-                validate=lambda value: parse_batch(value, entries), purpose='classification')
-            parsed = parse_batch(answer, entries)
+                validate=validate, purpose='classification')
+            validate(answer)
         except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
+            for entry in entries:
+                value = accepted.get(entry['clause_id'])
+                if value is not None and cache is not None:
+                    cache.put(clause_key(entry['text'], entry['context'], model, BATCH_PROMPT_VERSION),
+                        model, BATCH_PROMPT_VERSION, settings.schema_version, value.model_dump(mode='json'))
             raise
         except LLMError as exc:
-            for offset, entry in enumerate(entries):
-                results[int(entry['clause_id'])] = (None, offset == 0, False, type(exc).__name__)
-            pending.clear()
-            return
+            error = type(exc).__name__
         for offset, entry in enumerate(entries):
-            value = parsed[entry['clause_id']]
+            value = accepted.get(entry['clause_id'])
+            if value is None:
+                results[int(entry['clause_id'])] = (None, offset == 0, False,
+                    failures.get(entry['clause_id'],error or 'source_validation_failed'))
+                continue
             if cache is not None:
                 cache.put(clause_key(entry['text'], entry['context'], model, BATCH_PROMPT_VERSION),
                     model, BATCH_PROMPT_VERSION, settings.schema_version, value.model_dump(mode='json'))

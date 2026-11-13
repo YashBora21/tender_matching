@@ -41,15 +41,22 @@ def test_two_clauses_share_one_call_but_remain_individually_cached():
     assert len(client.calls) == 1
 
 
-@pytest.mark.parametrize('problem', ['missing', 'duplicate', 'unknown', 'wrong_quote'])
+@pytest.mark.parametrize('problem', ['missing', 'duplicate', 'unknown'])
 def test_batch_requires_exact_ids_and_each_own_quote(problem):
     entries = [dict(clause_id=str(i), **row) for i, row in enumerate(clauses())]
     rows = [dict(clause_id=row['clause_id'], type='technical', quote=row['text']) for row in entries]
     if problem == 'missing': rows.pop()
     if problem == 'duplicate': rows[1]['clause_id'] = '0'
     if problem == 'unknown': rows[1]['clause_id'] = '9'
-    if problem == 'wrong_quote': rows[1]['quote'] = rows[0]['quote']
     with pytest.raises(LLMError): parse_batch({'clauses': rows}, entries)
+
+
+def test_a_wrong_quote_rejects_only_its_own_clause():
+    entries=[dict(clause_id=str(i),**row) for i,row in enumerate(clauses())]
+    answer={'clauses':[dict(clause_id=row['clause_id'],type='technical',quote=row['text']) for row in entries]}
+    answer['clauses'][1]['quote']=answer['clauses'][0]['quote']
+    found,failed=parse_batch(answer,entries)
+    assert list(found)==['0'] and failed=={'1':'invalid_source_quote'}
 
 
 def test_duplicate_clauses_keep_separate_results_and_cannot_get_conflicting_types():
@@ -74,12 +81,6 @@ def test_requests_split_at_configured_bound(monkeypatch):
     get_settings.cache_clear()
 
 
-def test_budget_stop_propagates_without_empty_success():
-    class Limited(Client):
-        def complete_json(self, *args, **kwargs): raise LLMBudgetExceeded('synthetic')
-    with pytest.raises(LLMBudgetExceeded): classify_batch(clauses(), client=Limited())
-
-
 def test_eight_independent_contexts_share_a_request_without_changing_any_input(monkeypatch):
     from app.core.config import get_settings
     monkeypatch.setenv('REQUIREMENT_CLASSIFICATION_BATCH_SIZE', '8')
@@ -94,3 +95,9 @@ def test_eight_independent_contexts_share_a_request_without_changing_any_input(m
     assert [(r['text'],r['context']) for r in sent] == [(r['text'],r['context']) for r in rows]
     assert all(r[0] is RequirementType.TECHNICAL for r in result)
     get_settings.cache_clear()
+
+
+def test_budget_stop_propagates_without_empty_success():
+    class Limited(Client):
+        def complete_json(self, *args, **kwargs): raise LLMBudgetExceeded('synthetic')
+    with pytest.raises(LLMBudgetExceeded): classify_batch(clauses(), client=Limited())
