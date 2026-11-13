@@ -43,7 +43,7 @@ def test_explicit_empty_response_is_distinct_from_malformed_response():
 
 
 def test_batch_uses_its_own_schema(monkeypatch):
-    monkeypatch.setenv('MATCH_EXTRACTION_BATCH_SIZE', '2')
+    monkeypatch.setenv('LLM_MATCH_EXTRACTION_BATCH_SIZE', '2')
     client = Client({'passages': [{'passage_id': 0, 'requirements': []}]}, facts.BatchExtractionResponse)
     results = facts.extract_fact_batch('Synthetic size', ['Synthetic text'], client=client)
     assert len(results) == 1 and not results[0].error and client.calls == 1

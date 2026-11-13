@@ -14,7 +14,7 @@ class Client:
 
 
 def test_batch_preserves_passage_identity(monkeypatch):
-    monkeypatch.setenv("MATCH_EXTRACTION_BATCH_SIZE", "2")
+    monkeypatch.setenv("LLM_MATCH_EXTRACTION_BATCH_SIZE", "2")
     client = Client({"passages": [
         {"passage_id": 1, "requirements": [{"found": False}]},
         {"passage_id": 0, "requirements": [{"found": True, "value": "SS316", "quote": "Body SS316"}]},
@@ -26,13 +26,13 @@ def test_batch_preserves_passage_identity(monkeypatch):
 
 @pytest.mark.parametrize("ids", [[0], [0, 0], [0, 2]])
 def test_bad_ids_fail_every_passage(monkeypatch, ids):
-    monkeypatch.setenv("MATCH_EXTRACTION_BATCH_SIZE", "2")
+    monkeypatch.setenv("LLM_MATCH_EXTRACTION_BATCH_SIZE", "2")
     client = Client({"passages": [{"passage_id": i, "requirements": []} for i in ids]})
     assert all(r.error for r in extract_fact_batch("Synthetic", ["A", "B"], client=client))
 
 
 def test_quote_cannot_cross_passages(monkeypatch):
-    monkeypatch.setenv("MATCH_EXTRACTION_BATCH_SIZE", "2")
+    monkeypatch.setenv("LLM_MATCH_EXTRACTION_BATCH_SIZE", "2")
     client = Client({"passages": [
         {"passage_id": 0, "requirements": [{"found": True, "quote": "Body SS316"}]},
         {"passage_id": 1, "requirements": []},
@@ -53,7 +53,7 @@ def test_matcher_groups_two_misses_into_one_call(monkeypatch):
     from app.services.match.retrieve import Candidate
     from types import SimpleNamespace
 
-    monkeypatch.setenv("MATCH_EXTRACTION_BATCH_SIZE", "2")
+    monkeypatch.setenv("LLM_MATCH_EXTRACTION_BATCH_SIZE", "2")
     monkeypatch.setattr(match, "_cached_fact", lambda *a: None)
     monkeypatch.setattr(match, "search", lambda *a, **k: [
         Candidate(chunk_id="a", document_id="d", text="Synthetic unrelated A", page=1),
@@ -75,7 +75,7 @@ def test_budget_exhaustion_propagates_instead_of_becoming_silence(monkeypatch):
     class Exhausted:
         def complete_json(self,*args, **kwargs):
             raise LLMBudgetExceeded('Synthetic budget exhausted')
-    monkeypatch.setenv('MATCH_EXTRACTION_BATCH_SIZE','2')
+    monkeypatch.setenv('LLM_MATCH_EXTRACTION_BATCH_SIZE','2')
     with pytest.raises(LLMBudgetExceeded):
         extract_fact('Synthetic','Synthetic passage',client=Exhausted())
     with pytest.raises(LLMBudgetExceeded):
