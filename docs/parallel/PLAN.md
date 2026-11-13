@@ -1,7 +1,7 @@
 # Parallel implementation contract — 2026-11-12
 
-Status: agreed task split; implementation in progress. This document is a handoff,
-not a claim that the new policy is implemented.
+Status: both tracks integrated into logical commits; deployment and reviewed reset
+remain separate. See MIGRATION_HANDOFF.md for the newly authorized migration task.
 
 Repository: `https://github.com/YashBora21/tender_matching.git`.
 Workspace: `C:\Users\Lenovo\OneDrive\Desktop\tender_matching`.
@@ -66,6 +66,11 @@ imports them at integration. One logical change per commit. Do not stage all.
 2. A owns `completion_gaps()` and role-aware `page_coverage()`. B calls those
    helpers rather than reimplementing completion in API/history/reset code.
    B's read UI must retain and expose context clauses and separate source pages.
+   Server reports now expose `context_clauses` (entries with source_role, type,
+   page, source_text, reason and no manufacturer results). The page summary's
+   `sources` entries expose `source_role`; persisted page tags also include
+   `source_role:<role>`. Please display these via optional fields in B's React
+   reading/report views; A supplies HTML/CSV visibility without frontend edits.
 
 3. B wraps ingestion in an append-only reading attempt and associates its limit
    snapshot, outcome and counts. A returns existing pipeline/audit metrics;

@@ -3992,3 +3992,42 @@ User authorized live LLM tests whenever needed on uploaded tenders. Ran frozen G
 User requested two simultaneous tracks with their external OpenRouter coding agent. Created docs/parallel/PLAN.md, complete OPENROUTER_TRACK_B.md assignment and TRACK_A_NOTES.md; B owns lifecycle/preflight/reset-preview interfaces and A owns source/LLM/completion. Preserved historic blocker inventory separately in eval/audit/parallel-implementation-2026-11-12/blocker-baseline.json:138 blockers belonged to506 rows; the older487-row revision had265 blockers and487 unmapped-attribute flags. Source/type/reason counts and candidate definitions are recorded without provider targets.
 
 Started A by preventing nontechnical/untyped clauses from receiving technical normalization flags, preserving independent source-scope/OCR review and unmapped technical review, and retaining source_context metadata. Derived policy version2 invalidates resolution, not model answers. Focused suite202 passed, zero skipped/failures/errors,31.578 seconds. Initial fixture temp-directory setup errors were resolved with a fresh verified workspace-local temporary directory. No provider calls, reset, live migration or backup execution. New source-role/completion/batching policies remain implementation work, not claimed complete. Canonical decisions/work logs and final integration remain owned by A to avoid cross-agent conflicts.
+
+
+## 2026-11-13 - Integrated source policy, history and guarded reset
+
+Consolidated both shared-checkout tracks into logical commits: fa49726 evidence
+repair,6370d2e deterministic source routing/review-template discovery,db5f2bb
+independent bounded classification batching,b633c9c schema prerequisite,a2315c5
+reading history/current-limit reread and source-context UI,b46362b protected reset,
+and4a32018 fixture isolation. Reader17 in4d700b3 then resolves the newly investigated
+blank-page failure generically: no source text plus entirely white rendered pixels
+records a skipped page with a reason; visible or render-failed pages retain OCR
+and failure handling. No verifier relaxation, aliases or grouping enablement.
+
+Final exported committed snapshot4d700b3124415f399de1e98bd364bf6582eec532:
+1158 unit passes,3 corpus-dependent skips,0 failures/errors; all4 no-hardcoding
+checks also pass against the local corpus. Frontend39 tests pass, lint/build
+clean. Eight migration/reading/cache/reset database checks passed in a disposable
+database, which was removed. An initial exported run exposed tests relying on
+private configuration and a misplaced fake-repo method; these were corrected
+before the final run. Unrelated local spend-cap runtime/config work remains
+unstaged and outside this snapshot; the prerequisite table schema is committed.
+
+Real local source check for7a1384ad:23 specification pages and3 supporting pages
+accounted for,24 parsed,1 OCR,1 explicit blank skip,0 failures. Specification
+reading13.837 seconds; supporting reading34.394 seconds includes local OCR setup.
+No LLM calls, database writes or manufacturer comparison. The restricted source
+still needs an authorized supplied copy. The former unreadable-page status was
+caused by an entirely blank specification page being sent to OCR; the annexure's
+first2 pages already have text and its third image page is OCR-readable.
+
+Read-only template discovery nominated137 clauses across13 tenders for review;
+none approved. Reset preview now selects6 tenders and protects9, including the new
+source audit;1848 requirements and73 results are selected. All737 legacy cache
+entries are retained,0 cache deletions. Application revision observed0023 after
+the user delegated migration/deployment to the other agent; Codex did not migrate
+or reset the application database. Backup command and handoff are in docs/parallel.
+No paid calls or full-tender rerun after the parallel-policy baseline. Current-
+policy speed, correctness/false-confident count, verified cost and label-based
+valve/pump acceptance remain unmeasured. See eval/audit/parallel-integration-2026-11-13/results.json.

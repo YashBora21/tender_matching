@@ -1,0 +1,114 @@
+{
+  "code_commit": "4d700b3124415f399de1e98bd364bf6582eec532",
+  "release_candidate": "rc-2026-11-13.1",
+  "release_state": "offline_checks_passed_live_acceptance_pending",
+  "provider_calls_in_phase": 0,
+  "application_migration_performed_by_codex": false,
+  "application_reset_performed": false,
+  "migration_application": "delegated to second agent; current database revision verified read-only",
+  "grouping": "off",
+  "source_check": {
+    "tender_id": "7a1384ad-de10-474e-af6c-8de31eabc732",
+    "filename": "GeM-Bidding-8721586.pdf",
+    "provider_calls": 0,
+    "database_writes": 0,
+    "sources": [
+      {
+        "sha256": "793ac5a7d90e8df4af9f9d3531247953ba39df54d196f6fe3106ce2f9a2f57d9",
+        "kind": "spec",
+        "elapsed_seconds": 13.837,
+        "pages": 23,
+        "rows": 408,
+        "error": null,
+        "failed": [],
+        "skipped": [
+          {
+            "page": 3,
+            "reason": "rendered_blank_page: no source text and entirely white at OCR resolution"
+          }
+        ],
+        "ocr_pages": []
+      },
+      {
+        "sha256": "97dca22f1d15e70afb72c391b85b787f952e049f8dd497c35f37029363088e43",
+        "kind": "scanned",
+        "elapsed_seconds": 34.394,
+        "pages": 3,
+        "rows": 13,
+        "error": null,
+        "failed": [],
+        "skipped": [],
+        "ocr_pages": [
+          3
+        ]
+      }
+    ]
+  },
+  "baseline_calls": {
+    "previous_experimental_run": 270,
+    "current_policy_full_run": null,
+    "comparability": "No current-policy full-tender run yet; no speed or accuracy comparison claimed"
+  },
+  "templates": {
+    "unapproved_candidates": 137,
+    "distinct_tenders": 13
+  },
+  "verification": {
+    "frontend_tests_passed": 39,
+    "frontend_lint": "passed",
+    "frontend_build": "passed",
+    "blank_page_focused_tests_passed": 74,
+    "local_no_hardcoding_tests_passed": 4,
+    "previous_unit_snapshot": {
+      "commit": "4a32018",
+      "passed": 1155,
+      "skipped": 3
+    },
+    "disposable_database_tests": {
+      "snapshot": "b46362b",
+      "passed": 8,
+      "application_database_changed": false,
+      "test_database_removed": true
+    },
+    "final_unit_snapshot": {
+      "commit": "4d700b3124415f399de1e98bd364bf6582eec532",
+      "tests": 1161,
+      "passed": 1158,
+      "skipped": 3,
+      "failures": 0,
+      "errors": 0,
+      "seconds": 142.52,
+      "skip_reason": "Three corpus-dependent checks require local raw files; all four no-hardcoding checks passed separately against the local corpus."
+    }
+  },
+  "remaining": [
+    "Apply migrations through0023 via deployment agent",
+    "Supply authorized local copy of restricted attachment",
+    "Review reset preview before any execution",
+    "Review template candidates; approve none automatically",
+    "Full current-policy tender extraction and label-based matching comparison remain unmeasured"
+  ],
+  "reset_preview": {
+    "selected_count": 6,
+    "protected_count": 9,
+    "counts": {
+      "tenders": 6,
+      "attachments": 21,
+      "items": 45,
+      "requirements": 1848,
+      "requirements_active": 714,
+      "requirements_superseded": 1134,
+      "extraction_batches": 25,
+      "page_ledger": 64,
+      "source_tables": 59,
+      "reading_attempts": 0,
+      "runs": 4,
+      "results": 73,
+      "llm_cache_delete": 0
+    },
+    "notes": [],
+    "executed": false,
+    "local_preview_file": ".audit_tmp/reset-preview-2026-11-13.txt"
+  },
+  "observed_application_revision": "0023_reading_attempts"
+}

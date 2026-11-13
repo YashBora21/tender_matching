@@ -53,8 +53,8 @@ Do not implement Track A's extraction/classification/completion changes.
 ## Exact backup commands for the user (PowerShell at repo root)
 
 ```powershell
-New-Item -ItemType Directory -Force .\backups | Out-Null
-$BackupFile = ".\backups\tender-before-reset-$(Get-Date -Format yyyyMMdd-HHmmss).dump"
+New-Item -ItemType Directory -Force .\.audit_tmp\backups | Out-Null
+$BackupFile = ".\.audit_tmp\backups\tender-before-reset-$(Get-Date -Format yyyyMMdd-HHmmss).dump"
 docker exec tender-pg-local sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc --no-owner --no-acl -f /tmp/tender-before-reset.dump'
 docker cp tender-pg-local:/tmp/tender-before-reset.dump $BackupFile
 docker exec tender-pg-local pg_restore --list /tmp/tender-before-reset.dump
