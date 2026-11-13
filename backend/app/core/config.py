@@ -10,7 +10,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -126,7 +126,8 @@ class Settings(BaseSettings):
     # passage is a model call, so this is the cost ceiling of a match, and a
     # smaller number is a recall/cost trade the report has to name (FR-22).
     match_max_candidates: int = 20
-    match_extraction_batch_size: int = 1
+    match_extraction_batch_size: int = Field(default=1, validation_alias=AliasChoices(
+        'LLM_MATCH_EXTRACTION_BATCH_SIZE', 'match_extraction_batch_size'))
     match_extraction_batch_chars: int = 12000
     # A short document is read whole: when one page of a document with at most
     # this many pages is retrieved, its sibling pages are added to the result
