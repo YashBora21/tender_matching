@@ -17,6 +17,7 @@ import type { Assessment, Report, ReviewEntry } from '../types'
 import { AssessmentTable } from './AssessmentTable'
 import { EvidenceDrawer } from './EvidenceDrawer'
 import { Notice } from './Notice'
+import { ContextClauses } from './ContextClauses'
 import { ReviewQueue } from './ReviewQueue'
 import { Trail } from './Trail'
 
@@ -207,6 +208,8 @@ export function ReportPage({
           </div>
         )}
       </section>
+
+      <ContextClauses rows={report.context_clauses ?? []} />
 
       <section className="panel">
         <h2>{report.incomplete_ingestion || pages.incomplete_ingestion ? 'Ranking unavailable' : 'Ranking'}</h2>

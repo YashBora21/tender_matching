@@ -662,3 +662,23 @@ def test_context_is_visible_once_without_manufacturer_results_or_score():
     saved=next(row for row in rows if row['requirement_id']=='synthetic-context')
     assert saved['manufacturer']==saved['status']==saved['score']==''
     assert saved['quote']==source
+
+
+def test_retained_fragments_have_a_collapsed_escaped_section_and_no_assessment():
+    source = 'Loose <script>scrap</script>'
+    fragment = {'id':'synthetic-fragment','item_id':None,'text':source,'source_text':source,
+        'type':'unknown','mandatory':True,'page':2,'value':None,'unit':None,
+        'review_required':True,'review_reason':'Synthetic independent review',
+        'normalization':{'source_context':{'source_role':'cover','context_only':True,
+            'fragment_reason':'fragment (below prose floor, no signal)'}}}
+    report = _report(requirements=[REQUIREMENTS[0],fragment],
+        results=[_result('r1','mfr-a','Acme','full_match',evidence=EVIDENCE)])
+    assert report['results']['expected'] == 1
+    assert len(report['context_clauses']) == 1 and report['context_clauses'][0]['results'] == []
+    assert not report['not_assessed'] and report['unknown_requirements']['unknown'] == 0
+    html = render_html(report)
+    assert '<details><summary>Fragments (1)</summary>' in html
+    assert '<script>' not in html
+    fragment_section = html.split('<summary>Fragments (1)</summary>', 1)[1].split('</details>', 1)[0]
+    assert fragment_section.count('Loose &lt;script&gt;scrap&lt;/script&gt;') == 1
+    assert 'Synthetic independent review' in report['context_clauses'][0]['reason']

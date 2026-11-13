@@ -21,6 +21,7 @@ import type {
   TenderRequirements,
 } from '../types'
 import { Notice } from './Notice'
+import { ContextClauses } from './ContextClauses'
 
 const POLL_MS = 1000
 
@@ -415,20 +416,7 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
         {tender && <TenderSummary tender={tender} />}
       </section>
 
-      {!!tender?.context_clauses?.length && (
-        <section className="panel">
-          <details>
-            <summary>Source context ({tender.context_clauses.length})</summary>
-            <p>These clauses remain visible for review and do not block technical extraction.</p>
-            <ul>{tender.context_clauses.map((row) => (
-              <li key={row.id}>
-                <strong>{row.source_role ?? 'unknown'} · {row.type} · page {row.page}</strong>
-                <p>{row.source_text ?? row.text}</p>
-              </li>
-            ))}</ul>
-          </details>
-        </section>
-      )}
+      {tender && <ContextClauses rows={tender.context_clauses ?? []} />}
 
       {tender && phase !== 'uploading' && phase !== 'reading' && (
         <AttachmentsPanel tenderId={tender.tender_id} />

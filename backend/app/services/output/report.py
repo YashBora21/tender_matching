@@ -302,10 +302,13 @@ def build_report(
         }
 
         entry['source_role'] = source_context(requirement).get('source_role')
+        entry['fragment_reason'] = source_context(requirement).get('fragment_reason')
         entry['context_only'] = context_only(requirement)
         if entry['context_only']:
             entry['results'] = []
             entry['reason'] = requirement.get('review_reason') or 'Source context; excluded from capability scoring'
+            if entry['fragment_reason'] and entry['fragment_reason'] not in entry['reason']:
+                entry['reason'] = entry['fragment_reason'] + '; ' + entry['reason']
             context_clauses.append(entry)
             continue
 
@@ -608,15 +611,21 @@ def _unsupported_table(report: dict) -> str:
 
 
 def _context_table(report):
-    rows = ''.join('<tr><td>' + _escape(row.get('source_role')) + '</td><td>' +
-        _escape(row.get('type')) + '</td><td>' + _escape(row.get('page')) + '</td><td>' +
-        _escape(row.get('source_text') or row.get('text')) + '</td></tr>'
-        for row in report.get('context_clauses') or [])
-    if not rows:
-        return ''
-    return ('<h2>Source context</h2><p>These clauses are retained with their types and sources; '
-            'they are excluded from capability scoring.</p><table><thead><tr><th>Source</th>'
-            '<th>Type</th><th>Page</th><th>Text</th></tr></thead><tbody>' + rows + '</tbody></table>')
+    sections = []
+    for fragment, title in ((True, 'Fragments'), (False, 'Source context')):
+        clauses = [row for row in report.get('context_clauses') or []
+                   if bool(row.get('fragment_reason')) == fragment]
+        if not clauses:
+            continue
+        rows = ''.join('<tr><td>' + _escape(row.get('source_role')) + '</td><td>' +
+            _escape(row.get('type')) + '</td><td>' + _escape(row.get('page')) + '</td><td>' +
+            _escape(row.get('source_text') or row.get('text')) + '</td><td>' +
+            _escape(row.get('fragment_reason') or row.get('reason')) + '</td></tr>' for row in clauses)
+        sections.append(f'<details><summary>{title} ({len(clauses)})</summary>'
+            '<p>Retained with their sources and reasons; excluded from capability scoring.</p>'
+            '<table><thead><tr><th>Source</th><th>Type</th><th>Page</th><th>Text</th><th>Reason</th>'
+            '</tr></thead><tbody>' + rows + '</tbody></table></details>')
+    return ''.join(sections)
 
 
 def _not_assessed_table(report: dict) -> str:

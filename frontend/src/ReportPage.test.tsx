@@ -26,6 +26,20 @@ function renderReport() {
 }
 
 describe('ReportPage', () => {
+  it('keeps fragments in a collapsed source view without adding assessments', async () => {
+    vi.mocked(getReport).mockResolvedValue(report({context_clauses: [{
+      requirement_id: 'fragment-1', text: 'Loose <script>scrap</script>',
+      source_text: 'Loose <script>scrap</script>', page: 2, type: 'unknown',
+      source_role: 'cover', fragment_reason: 'fragment (below prose floor, no signal)',
+    }]}))
+    const { container } = renderReport()
+    const summary = await screen.findByText('Fragments (1)')
+    expect(summary.closest('details')?.hasAttribute('open')).toBe(false)
+    expect(screen.getAllByText('Loose <script>scrap</script>')).toHaveLength(1)
+    expect(container.querySelector('script')).toBeNull()
+    expect(screen.getAllByText('The body shall be stainless steel')).toHaveLength(2)
+  })
+
   it('renders the ranking and every requirement with its manufacturer', async () => {
     renderReport()
 

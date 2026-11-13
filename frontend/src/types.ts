@@ -28,6 +28,7 @@ export interface RequirementRow {
   source_text: string | null
   source_role?: string
   context_only?: boolean
+  fragment_reason?: string | null
   page: number
   type: string
   attribute: string | null
@@ -58,6 +59,19 @@ export interface TenderRequirements {
   counts: { items: number; requirements: number; flagged: number }
   requirements: RequirementRow[]
   context_clauses?: RequirementRow[]
+}
+
+export interface ContextClause {
+  id?: string
+  requirement_id?: string
+  text: string
+  source_text: string | null
+  type: string
+  page: number | null
+  source_role?: string | null
+  fragment_reason?: string | null
+  reason?: string | null
+  review_reason?: string | null
 }
 
 /** One document a tender links to, as the manifest records it.
@@ -227,6 +241,7 @@ export interface Report {
   results: { stored: number; expected: number; complete: boolean }
   manufacturers: ManufacturerSummary[]
   requirements: ReportRequirement[]
+  context_clauses?: ContextClause[]
   unsupported_requirements: ReportRequirement[]
   review_queue: ReviewEntry[]
   status_meanings: Record<string, string>
