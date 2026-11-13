@@ -65,6 +65,16 @@ class LLMBudgetExceeded(LLMError):
     """
 
 
+class LLMRequestRejected(LLMError):
+    """A permanent request failure stops the run instead of failing every clause."""
+
+    def __init__(self, status: int):
+        self.status = status
+        super().__init__(f'the configured LLM rejected the request (HTTP {status}); '
+                         'check credentials, model and request limits before reading again')
+
+
+
 class _RateLimited(Exception):
     """The provider's limit was hit. Worth retrying.
 
@@ -462,6 +472,8 @@ class LLMClient:
                 ) from None
             if exc.code in {408, 500, 502, 503, 504}:
                 raise _TransientFailure(f'temporary LLM failure (HTTP {exc.code})') from None
+            if 400 <= exc.code < 500:
+                raise LLMRequestRejected(exc.code) from None
             raise LLMError(
                 f"the configured LLM returned HTTP {exc.code}"
             ) from None

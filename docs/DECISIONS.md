@@ -4872,3 +4872,8 @@ The exported code snapshot4d700b3 passes1158 unit tests with3 local-corpus skips
 ## Bound Alembic connections like application connections - 2026-11-13
 
 Alembic now passes the existing DB_CONNECT_TIMEOUT to its engine, matching application connection handling. A read-only diagnosis found that localhost IPv6 timed out while the IPv4 loopback connected immediately; the private database URL was changed only to the verified working address, retaining database, port and credentials. alembic current now returns0023_reading_attempts promptly. No application migration, provider change, LLM prompt/cache-key change or data reset in this fix.
+
+
+## Stop permanent provider rejections before reading more clauses - 2026-11-13
+
+Separate permanent HTTP4xx request/authentication rejections from malformed model answers. Except for rate limits and timeouts already handled separately, reject once and propagate through requirement classification/extraction and fact extraction, so the operation fails with a safe configuration error instead of repeatedly calling every clause or claiming absent evidence. Keep transient retry ceilings and the one bounded evidence-repair retry unchanged. No prompt, cache-key, verifier or scoring changes. Real diagnosis found stale LLM_TEXT_API_KEY inherited by the bare-uvicorn server; restart through the existing dotenv launcher restores the valid private-file key. Two bounded authorized probes succeeded; no new full-tender rerun in this fix.

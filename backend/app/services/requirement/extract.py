@@ -28,7 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.logging import get_logger
 from app.schemas.enums import RequirementType
-from app.services.llm import LLMClient, LLMError, LLMRateLimited, LLMBudgetExceeded
+from app.services.llm import LLMClient, LLMError, LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected
 from app.services.tender.ingest import RequirementRecord, english_half, is_mangled
 from app.services.requirement.evidence import span_supports, quote_span
 
@@ -219,7 +219,7 @@ def extract_requirements(
                 raise LLMError('source_quote_or_value_validation_failed')
         answer = client.complete_json(SYSTEM_PROMPT, payload, validate=validate)
         parsed = ExtractionResponse(**answer)
-    except (LLMRateLimited, LLMBudgetExceeded):
+    except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
         # The provider's limit is not a failed reading: the line was never
         # read. Let it out so the stage stops instead of recording a silence
         # it did not observe.

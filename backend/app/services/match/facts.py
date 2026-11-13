@@ -22,7 +22,7 @@ from hashlib import sha256
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app.core.logging import get_logger
-from app.services.llm import LLMClient, LLMError, LLMRateLimited, LLMBudgetExceeded
+from app.services.llm import LLMClient, LLMError, LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected
 
 logger = get_logger(__name__)
 
@@ -128,7 +128,7 @@ def extract_fact(
         answer = client.complete_json(SYSTEM_PROMPT + '\n' + json.dumps(
             ExtractionResponse.model_json_schema(), separators=(',', ':')), user)
         parsed = ExtractionResponse(**answer)
-    except (LLMRateLimited, LLMBudgetExceeded):
+    except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
         # A limit is an unanswered question, not a passage that states
         # nothing. It stops the run and is recorded as such (Phase 12 rule).
         raise
@@ -197,7 +197,7 @@ def extract_fact_batch(requirement_text: str, passages: list[str], *, client=Non
             else:
                 results.append(FactResult(facts=facts))
         return results
-    except (LLMRateLimited, LLMBudgetExceeded):
+    except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
         raise
     except (LLMError, ValidationError, TypeError, ValueError) as exc:
         return [FactResult(error=str(exc)) for _ in passages]

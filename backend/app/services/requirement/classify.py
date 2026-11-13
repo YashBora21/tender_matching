@@ -4,7 +4,7 @@ import json
 from pydantic import BaseModel, ConfigDict, ValidationError
 from app.core.config import get_settings
 from app.schemas.enums import RequirementType
-from app.services.llm import LLMClient, LLMError, LLMRateLimited, LLMBudgetExceeded, STRUCTURED_VALIDATION_VERSION
+from app.services.llm import LLMClient, LLMError, LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected, STRUCTURED_VALIDATION_VERSION
 
 PROMPT_VERSION = "clause-type-6"
 CLASSIFICATION_RULES = """Technical means a physical measurable product capability; order quantity is commercial, not a capability.
@@ -64,7 +64,7 @@ def classify_clause(text, *, context=None, cache=None, client=None):
         answer = (client or LLMClient()).complete_json(SYSTEM_PROMPT, payload,
             validate=lambda answer: _parse_source_type(text, answer))
         parsed = _parse_source_type(text, answer)
-    except (LLMRateLimited, LLMBudgetExceeded):
+    except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
         raise
     except (LLMError, ValidationError, TypeError) as exc:
         return None, True, False, str(exc) if str(exc) in {'invalid_source_quote', 'classification_requires_complete_source'} else type(exc).__name__
@@ -170,7 +170,7 @@ def classify_batch(clauses, *, cache=None, client=None):
                 json.dumps({'clauses': entries}, ensure_ascii=False),
                 validate=lambda value: parse_batch(value, entries))
             parsed = parse_batch(answer, entries)
-        except (LLMRateLimited, LLMBudgetExceeded):
+        except (LLMRateLimited, LLMBudgetExceeded, LLMRequestRejected):
             raise
         except LLMError as exc:
             for offset, entry in enumerate(entries):
