@@ -60,18 +60,31 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         task = asyncio.create_task(
             _reconcile_until_it_works(get_settings().reconcile_retry_seconds)
         )
+    # The OCR worker and the embedding model load in the background: the API
+    # answers requests while they warm up (a schema or report request reads
+    # the database, not a model). Both load lazily on first use anyway, so a
+    # read that starts before warm-up finishes simply loads what it needs.
+    warm = asyncio.create_task(asyncio.to_thread(_warm_models))
     try:
-        await asyncio.to_thread(warm_ocr)
-        if get_settings().embedding_backend.strip().lower() == "sentence-transformers":
-            # Load and exercise the shared local model before accepting tender runs.
-            await asyncio.to_thread(embed, ["Synthetic embedding readiness check."])
         yield
     finally:
+        warm.cancel()
+        # The in-flight model load is not interruptible, so this await waits
+        # for it to return before the worker is closed (no stray engine).
+        with suppress(asyncio.CancelledError):
+            await warm
         await asyncio.to_thread(close_ocr)
         if task is not None:
             task.cancel()
             with suppress(asyncio.CancelledError):
                 await task
+
+
+def _warm_models() -> None:
+    warm_ocr()
+    if get_settings().embedding_backend.strip().lower() == "sentence-transformers":
+        # Load and exercise the shared local model before a tender run needs it.
+        embed(["Synthetic embedding readiness check."])
 
 
 def create_app() -> FastAPI:
