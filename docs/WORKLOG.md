@@ -4375,3 +4375,29 @@ mode; actual scanned pages still require a successful live worker and verifier.
 A local signature probe succeeded in1.390s.48 focused tests passed;after the final
 fingerprint helper refactor,all5 OCR tests passed again. Full offline suite:1379 passed /6 skipped,zero failures/errors.
 No provider configuration change,extra paid call,reset or old-reading deletion.
+
+
+### 2026-11-14 — capped real read and D-172 duplicate-batch regression
+
+RC805d4bc /rc-2026-11-14.3:338.447s,36 calls,74317 input/26665 output
+tokens,estimated INR8.8973.34 extraction calls+2 repairs. All60 pages parsed;
+21 BOQ technical candidates. Stop:the additional INR10 conservative reservation
+guard,not provider throttling. Stored generic resumable state is rate_limited.
+31 blocker rows remain,including overlapping16 unknown/unprocessed,3 unassigned,
+6 coverage flags and technical rows without attributes. Old attempts preserved;
+no successful whole-tender completion or accuracy/false-confident grade claimed.
+
+Stage times:items2.387s,document package205.641s,extraction103.519s,persistence
+0.364s. Removing requirement storage would not fix the measured slow path.
+The paid trace exposed15 repeated extraction prompts (estimated INR3.7793).
+Root cause:cached current rows eagerly bought the same unread future cohort.
+Synthetic regression failed before the fix (4 calls),passes after (1 call).
+56 focused extraction/pipeline tests pass;the preceding OCR full-suite snapshot
+had1379 passed/6 skipped,with final OCR fingerprint refactor rechecked separately.
+No paid calls after the batch scheduling fix. Aggregate report:
+eval/audit/submission-2026-11-14/extraction-followup.json. Source responses private.
+
+Remaining:resume unfinished extraction under corrected scheduling;profile local
+document preparation (largest measured stage);resolve genuinely blank/ambiguous
+source rows without inventing values;then retrieval and frontend/E2E validation.
+Grouping stays off. No resets,deletions,alias approvals or model configuration edits.

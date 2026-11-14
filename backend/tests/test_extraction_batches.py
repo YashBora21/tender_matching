@@ -227,3 +227,18 @@ def test_context_rows_stay_out_of_the_batch(monkeypatch):
     assert not limited and calls == 1
     assert len(output) == 4
     get_settings.cache_clear()
+
+def test_cached_prefix_does_not_repeatedly_buy_the_same_future_batch(monkeypatch):
+    from app.services.tender.pipeline import _extract_all
+    batch_on(monkeypatch)
+    cache = Cache()
+    cached = spec_rows(4)
+    _extract_all(cached, client=PipelineClient(), cache=cache)
+    tail = spec_rows(3)
+    for row in tail:
+        row.text = 'Uncached '+row.text
+    client = PipelineClient()
+    output, calls, hits, limited, _ = _extract_all(cached+tail, client=client, cache=cache)
+    assert not limited and len(output) == 7 and hits == 4
+    assert calls == client.calls == 1
+    get_settings.cache_clear()

@@ -1300,11 +1300,15 @@ def _extract_all(
                         batch_proposals.update({position: answer for (position, _), answer in zip(cohort, answers)})
                     options['proposal'] = batch_proposals[index]
                 elif reader is _extract_one and get_settings().requirement_extraction_batch_size > 1:
-                    if index not in batch_extractions:
+                    if (index not in batch_extractions
+                            and _extraction_batchable(requirement, siblings, preserve_extracted)
+                            and _cached_extraction(readable, requirement, cache) is None):
                         cohort = []
                         for position in range(index, len(requirements)):
                             if len(cohort) >= get_settings().requirement_extraction_batch_size:
                                 break
+                            if position in batch_extractions:
+                                continue
                             candidate = requirements[position]
                             if not _extraction_batchable(candidate, groups[position], preserve_extracted):
                                 continue

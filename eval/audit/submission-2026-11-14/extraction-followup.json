@@ -1,0 +1,54 @@
+{
+  "rc": "rc-2026-11-14.3",
+  "commit": "805d4bce53fcf4c1d2aa76db9478ec7a698510ea",
+  "attempt_id": "9b948654-e96c-4540-91d6-e257e93563bb",
+  "stored_status": "rate_limited",
+  "stop_cause": "benchmark_estimated_reservation_cap",
+  "provider_rate_limit": false,
+  "status_qualification": "Stored rate_limited is the current generic resumable limit state; this stop was the local spend guard,not provider throttling.",
+  "additional_estimated_cap_inr": 10,
+  "llm_calls": 36,
+  "tokens": {
+    "prompt_tokens": 74317,
+    "completion_tokens": 26665
+  },
+  "wall_seconds": 338.4473142999923,
+  "stage_seconds": {
+    "_read_items": 2.387117100006435,
+    "_read_package": 205.6414369000122,
+    "_extract_all": 103.51863990002312,
+    "_persist": 0.36375279998173937
+  },
+  "estimated_cost_inr": 8.8973,
+  "page_states": {
+    "parsed": 60
+  },
+  "boq_technical_candidates": 21,
+  "remaining_blockers": 31,
+  "overlapping_causes": {
+    "unknown_or_unprocessed": 16,
+    "unassigned": 3,
+    "coverage": 6,
+    "technical_without_attribute": 9
+  },
+  "purpose_totals": {
+    "extraction": {
+      "calls": 34,
+      "input_tokens": 70222,
+      "output_tokens": 25240,
+      "estimated_cost_inr": 8.4181
+    },
+    "repair": {
+      "calls": 2,
+      "input_tokens": 4095,
+      "output_tokens": 1425,
+      "estimated_cost_inr": 0.4792
+    }
+  },
+  "repeated_extraction_prompts": 15,
+  "estimated_repeated_cost_inr": 3.7793,
+  "accuracy": "ungraded",
+  "grouping": "off",
+  "collection": "saved frozen package,no refetching",
+  "scope": "Resumable extraction attempt; matching and E2E acceptance not run."
+}

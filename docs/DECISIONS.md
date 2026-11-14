@@ -5109,3 +5109,15 @@ error. Cache identities still include worker code, settings, installed package
 versions and model-weight bytes. The worker code change intentionally refreshes
 OCR-dependent checkpoints; no text-model prompt/schema/response-key change.
 No verification bypass or reuse of failed page readings.
+
+
+## D-172 schedule extraction batches only for unread current rows - 2026-11-14
+
+A paid read exposed repeated future batches:cached prefix rows triggered eager
+cohort construction before the loop reused their cached answers. A regression
+with4 cached rows and3 unread rows reproduced4 calls for one future batch.
+Only an uncached,eligible current row now opens a cohort;already scheduled
+positions stay out of later cohorts. Verified cached and precomputed responses
+are still consumed at their own source positions,with item identity preserved.
+No prompt,schema,response-key or verification change. The synthetic regression
+now uses1 call and preserves all7 rows and4 cache hits.
