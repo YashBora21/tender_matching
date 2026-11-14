@@ -4688,3 +4688,26 @@ phase. Unrelated conftest changes and other untracked files remain untouched.
 Plan and evidence identities:docs/parallel/FRONTEND_REFERENCE_PLAN.md.
 Remaining:live tender-to-report E2E and evidence quality validation;styling and
 synthetic tests do not establish extraction/retrieval accuracy.
+
+
+### 2026-11-14 - Live E2E exposes compound-container extraction bypass (D-187)
+
+Re-read fixed valve tender preserving history;60 pages parsed,11 items,21 primary
+BOQ technical rows. Reading27.873s,total36.202s;168 results across8 makers all
+no_evidence_found/unmapped attribute.0 new calls/tokens/cost. This is a structural
+E2E report,not an accuracy/performance acceptance pass.10 active container values
+absorb multiple approved attribute labels and bypass cache/resume atomization.
+
+Added vocabulary-driven compound-value review trigger to coverage and matching
+resume/cohort skip checks. Coarse invalid containers no longer count as atomic
+coverage or survive alongside successfully reconstructed fields;valid siblings
+and historical DB revisions preserved. Coverage policy4 changes downstream stage
+keys;prompts and individual response keys unchanged.44 focused tests and1389
+backend unit tests passed;24 integration deselected. No gate relaxation or alias
+approval.
+
+Read-only retrieval diagnostic on6 confirmed historical query/source labels:
+document recall@3 5/6,page recall@3 3/6;both@20 6/6. Local model load plus first
+encode37.599s,warm retrieval2.493s,no paid call. This is separate from current
+end-to-end status accuracy. Private artifacts referenced by
+.audit_tmp/latest-live-e2e.txt;earlier attempt remains preserved.

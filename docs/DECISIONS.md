@@ -5319,3 +5319,22 @@ evidence drawer. Make file selection keyboard accessible and route actual droppe
 files through the existing PDF validator. No new dependency,backend,LLM prompt,
 cache key or database change. Public marketing illustrations do not establish
 private product equivalence or measured correctness.
+
+## D-187 reject compound container values as atomic extraction - 2026-11-14
+
+Live validation found BOQ container fields retained as one technical requirement
+whose value absorbed several specifications. Their full-value quotes covered all
+source tokens, so old answers/resume paths bypassed further extraction and every
+assessment abstained on unmapped attribute. Detect multiple distinct,nonoverlapping
+approved attribute labels within a value using vocabulary data,never tender or
+category words. Such a value cannot prove atomic coverage or a complete resumed
+source. Re-extract the source through existing bounded batches/validators;do not
+retain the invalid container alongside successfully reconstructed atoms. Preserve
+old revisions and valid atomic siblings. This is a conservative review trigger,
+not proof that every other value is atomic. Open-vocabulary atomic fields still
+remain unresolved rather than being auto-aliased.
+
+Coverage policy advances to structured-source-coverage-4,invalidation propagates
+to extraction/resolution stage keys. Per-clause response keys and model prompts
+are unchanged;cached responses are revalidated with the stricter coverage rule.
+No verifier relaxation or match-status change.

@@ -2,9 +2,28 @@
 import re
 from app.comparison.vocabulary import load_vocabulary, vocabulary_path, normalise_token
 
-POLICY_VERSION = "structured-source-coverage-3"
+POLICY_VERSION = "structured-source-coverage-4"
 MARKER = "source_coverage_gap"
 _TOKEN = re.compile(r"[A-Za-z]+|[0-9]+(?:\.[0-9]+)?|[<>]=?|[+\-±]")
+
+
+def absorbs_multiple_attributes(value):
+    """A container value naming distinct technical fields is not one atomic fact."""
+    text = ' '.join(match.group().casefold() for match in _TOKEN.finditer(value or ''))
+    matches = []
+    for spec in load_vocabulary(vocabulary_path()).attributes:
+        if not spec.approved:
+            continue
+        for label in (spec.canonical_term, *spec.approved_synonyms):
+            words = ' '.join(match.group().casefold() for match in _TOKEN.finditer(label))
+            if words:
+                matches.extend((match.start(),match.end(),spec.canonical_term)
+                    for match in re.finditer(r'(?<!\w)'+re.escape(words)+r'(?!\w)',text))
+    selected = []
+    for start,end,attribute in sorted(matches,key=lambda match:-(match[1]-match[0])):
+        if not any(start < right and end > left for left,right,_ in selected):
+            selected.append((start,end,attribute))
+    return len({attribute for _,_,attribute in selected}) > 1
 
 
 def uncovered_tokens(text, requirements, *, source_number=None):
@@ -13,6 +32,8 @@ def uncovered_tokens(text, requirements, *, source_number=None):
     approved_names={normalise_token(name) for spec in vocabulary.attributes if spec.approved
                     for name in (spec.canonical_term, *spec.approved_synonyms)}
     for requirement in requirements:
+        if absorbs_multiple_attributes(requirement.value):
+            continue
         approved = normalise_token(requirement.attribute or '') in approved_names
         from app.services.requirement.evidence import labelled_field_supported
         anchored = labelled_field_supported(text, requirement.source_span, requirement.attribute,

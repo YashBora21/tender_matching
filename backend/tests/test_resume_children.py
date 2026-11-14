@@ -63,6 +63,26 @@ def test_partial_source_error_cannot_displace_existing_technical_sibling():
     assert any(row.context_only for row in output)
 
 
+def test_resume_reextracts_compound_container_without_keeping_it_as_an_atomic_fact():
+    source='size 6 inches; operating pressure 8 bar'
+    row=RequirementRecord(text=source,source_text=source,item_id='synthetic-item',page=1,
+        source_role='boq',page_tag='technical',attribute='Synthetic container',value=source,
+        source_span=(0,len(source)),requirement_type=RequirementType.TECHNICAL)
+    class Reader:
+        calls=0
+        def complete_json(self,*args,**kwargs):
+            self.calls+=1
+            answer={'requirements':[dict(text=q,source_quote=q,attribute=a,value=v,unit=u,type='technical')
+                for a,v,u,q in [('nominal_size','6','inch','6 inches'),('operating_pressure','8','bar','8 bar')]]}
+            kwargs['validate'](answer)
+            return answer
+    reader=Reader()
+    output,_,_,limited,_=_extract_all([row],client=reader,preserve_extracted=True)
+    assert reader.calls==1 and not limited
+    assert {r.attribute for r in output}=={'nominal_size','operating_pressure'}
+    assert all(r.source_text==source for r in output)
+
+
 def test_prose_rows_get_stable_distinct_ids_and_existing_ids_are_preserved(monkeypatch,tmp_path):
     source={'kind':'spec','path':'synthetic.pdf','sha256':'synthetic'}
     def read(*args):

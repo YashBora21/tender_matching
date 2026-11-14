@@ -26,3 +26,13 @@ def test_unapproved_attribute_cannot_launder_source_words():
 
 def test_empty_facts_leave_source_content_uncovered():
     assert uncovered_tokens('pressure 12 bar',[])==['12','bar','pressure']
+
+
+def test_whole_compound_value_does_not_establish_atomic_extraction():
+    from app.services.requirement.coverage import absorbs_multiple_attributes
+    source='size 25 mm operating pressure 12 bar'
+    record=fact('Synthetic container',source);record.source_span=(0,len(source))
+    assert absorbs_multiple_attributes(source)
+    assert uncovered_tokens(source,[record])
+    assert not absorbs_multiple_attributes('10 to 16 inches')
+    assert not absorbs_multiple_attributes('Carbon Steel')

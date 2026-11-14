@@ -1238,11 +1238,12 @@ def _extract_all(
         readable = english_half(original_source)
         source_type = classify_clause(original_source, page_tag=requirement.page_tag,
                                       source_section=requirement.source_section)
-        from app.services.requirement.coverage import MARKER
+        from app.services.requirement.coverage import MARKER, absorbs_multiple_attributes
         from app.services.requirement.extract import span_holds
         candidates = [row for row in siblings if not row.context_only]
         complete = preserve_extracted and bool(candidates) and all(
             row.attribute and row.source_span and row.source_text
+            and not absorbs_multiple_attributes(row.value)
             and MARKER not in (row.review_reason or '')
             and span_holds(row.source_text, row.source_span, row.value)
             for row in candidates)
@@ -1406,7 +1407,7 @@ def _extract_all(
         identity = lambda row: (row.requirement_type, row.attribute, row.value, row.unit, row.source_span, row.text if not row.attribute else None)
         retained = {identity(row) for row in added}
         for sibling in siblings:
-            if (sibling.context_only or (preserve_extracted and sibling.attribute)) and identity(sibling) not in retained:
+            if (sibling.context_only or (preserve_extracted and sibling.attribute and not absorbs_multiple_attributes(sibling.value))) and identity(sibling) not in retained:
                 added.append(sibling)
                 retained.add(identity(sibling))
         for record in added:
@@ -1464,11 +1465,12 @@ def _extraction_batchable(candidate, siblings, preserve_extracted):
         return False
     if not candidate.item_id and candidate.requirement_type is RequirementType.UNKNOWN:
         return False
-    from app.services.requirement.coverage import MARKER
+    from app.services.requirement.coverage import MARKER, absorbs_multiple_attributes
     from app.services.requirement.extract import span_holds
     candidates = [row for row in siblings if not row.context_only]
     if preserve_extracted and candidates and all(
             row.attribute and row.source_span and row.source_text
+            and not absorbs_multiple_attributes(row.value)
             and MARKER not in (row.review_reason or '')
             and span_holds(row.source_text, row.source_span, row.value)
             for row in candidates):
