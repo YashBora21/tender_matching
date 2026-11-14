@@ -5190,3 +5190,14 @@ buy future cohorts,and already scheduled candidates stay excluded. Source tables
 are not truncated and verification is unchanged. Prompt text,schema,contract hash
 and response-cache rules are unchanged;batch composition may be smaller when
 context is dense. No limit increase,provider change or new dependency.
+
+
+## D-178 the API serves while models warm - 2026-11-14
+
+FastAPI startup awaited the Paddle worker boot and the embedding readiness
+check before its first request, so a schema or health call timed out while the
+GPU engine loaded. The two warm-ups now run as one background task; the app
+accepts requests immediately, and both loaders stay lazy so a read that starts
+before warm-up finishes loads what it needs. On shutdown the in-flight load is
+not interruptible, so close waits for it before closing the worker (no stray
+engine). No route, schema or limit changed.

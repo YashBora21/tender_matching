@@ -4505,3 +4505,29 @@ extractor context-count mismatch and avoids eager future batches at cached
 candidates.64 focused fact/matcher/source-guard tests pass,including dense-context
 and cached-prefix regressions. Full suite pending before retry. No fact/result
 rows were published or changed by the failed matcher probe.
+
+### 2026-11-14 — matcher probe pass 1, live services restored (rc-2026-11-14.7)
+
+Committed f242bc9 (agent 2's staged D-177 fix; full suite exit 0) and froze RC
+tag rc-2026-11-14.7. Capped matcher probe on it: 9 paid calls, INR 1.60
+estimated, stopped at the INR 3 cap. 6 pairs assessed: zero pair errors, zero
+confident-but-unverified claims; 166 unmapped-label requirements counted free;
+ABB/Crompton free category-gate abstentions; AVK/Bray/CIRCOR corpus gaps;
+Bharat Bijlee read 20 candidates from its category-silent documents and
+answered no_evidence_found with review (silence rule, not leakage - its corpus
+is motors-only). No confirmed match seen: reservation pricing (upper bound
+INR ~1.55/call) makes the remaining INR 1.4 unusable. Resumption tooling:
+.audit_tmp/matcher_probe.py (--resume, --manufacturers-first).
+
+Live-service blockers fixed. Frontend: agent 2's zombie vite listener on 5173
+killed; dev server now serves http://localhost:5173 (IPv6 ::1; an IPv4-only
+check cannot see it). Backend: _lifespan awaited OCR-worker boot and embedding
+warm-up before serving (root cause of the schema-request timeout); startup now
+warms models in a background task and serves immediately - committed ae96476;
+cold start answers /api/health in 2.24s. app tests pass; uvicorn verified.
+
+Browser E2E reached the paid boundary on the frozen valve tender: re-upload of
+the same bytes is deduped ("already uploaded"), the stored reading renders
+(17 pages, 11 items, 161 requirements, 147 flagged, 715 context clauses), and
+the manufacturer picker groups 8 valve / 3 motors / 6 pumps / 2 unrecorded
+manufacturers. No run was started; matching cost at scale is unmeasured.
