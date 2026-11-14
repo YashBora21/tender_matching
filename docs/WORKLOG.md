@@ -4454,3 +4454,30 @@ summed. Native PDF parsing dominates;do not remove persistence to fix it.
 Next phase:retrieval and frontend/E2E validation with reviewed labels. A forced
 read-again currently needs the saved human confirmation reapplied/reviewed;normal
 reuse of this complete reading preserves it. No claim of production readiness.
+
+
+### 2026-11-14 — retrieval validation (no paid calls)
+
+Read-only local embedding validation on code8c43c85.6 confirmed historical
+compound document/page labels:document recall@3=5/6,@20=6/6;page recall@3=3/6,
+@20=6/6. With/without requirement-embedding reuse,candidate order and recalls
+are identical. Current matching candidate cutoff20 and fact-extraction batch8
+verified from numeric configuration;no configuration was changed.
+
+Current active rows only for item-scope checks:11 BOQ items x3 labelled makers,
+33 pairs,no manufacturer or known-category leak. A private benchmark initially
+used title instead of the repository's name key;corrected the benchmark and
+reran without generative calls. No archived requirement was sampled as a current
+row. Historical gold IDs were used only for the separately identified gold slice.
+
+45 searches:median0.221s,p950.515s. Warm local embeddings:median0.0337s,
+p950.0660s. Cold local embedding model load40.756s,separate from warm search;
+device CUDA.19 embedding calls total. Zero generative calls or LLM cost;no
+corpus/vector/database changes.144 retrieval/matching/cache/verifier/category/
+recall tests passed. Aggregate:eval/audit/submission-2026-11-14/retrieval-validation.json.
+Detailed candidate rows remain private in.audit_tmp/retrieval-validation-20261114.
+
+Keep the retrieval architecture/cutoff for now. This small gold slice does not
+grade all914 active context/requirement rows or final manufacturer claims.
+Next:bounded real matching/verifier evaluation and frontend/E2E checks;do not
+claim end-to-end accuracy or that6/6 retrieval pages mean6 correct matches.

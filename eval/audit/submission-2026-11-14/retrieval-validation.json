@@ -1,0 +1,53 @@
+{
+  "model_load_seconds": 40.75555780000286,
+  "embedding_device": "cuda:0",
+  "gold_labels": 6,
+  "unlabelled": 0,
+  "unconfirmed": 0,
+  "gold_recall": {
+    "without_embedding_reuse": {
+      "document_hits": {
+        "3": 0.8333333333333334,
+        "20": 1.0
+      },
+      "page_hits": {
+        "3": 0.5,
+        "20": 1.0
+      }
+    },
+    "with_embedding_reuse": {
+      "document_hits": {
+        "3": 0.8333333333333334,
+        "20": 1.0
+      },
+      "page_hits": {
+        "3": 0.5,
+        "20": 1.0
+      }
+    }
+  },
+  "candidate_order_equal_with_reuse": true,
+  "scope_pairs": 33,
+  "items_checked": 11,
+  "scope_leaks": 0,
+  "search_latency_seconds": {
+    "count": 45,
+    "p50": 0.2213696999824606,
+    "p95": 0.5149717399734071
+  },
+  "embedding_calls": 19,
+  "embedding_warm_latency_seconds": {
+    "p50": 0.03371275000972673,
+    "p95": 0.06604419003124345
+  },
+  "generative_calls": 0,
+  "estimated_llm_cost_inr": 0,
+  "accuracy_qualification": "Six confirmed historical compound document/page labels;current-item scope smoke checks are ungraded. No published matching-status grade.",
+  "code_commit": "8c43c85587ce5c1f1bfa1959d29771bf2a14ad89",
+  "gold_file_sha256": "d91e9b2a26aef6dd2d803fc625ed5efdd9d3303140df3303f1a02c809000a4ab",
+  "effective_match_candidates": 20,
+  "effective_fact_extraction_batch_size": 8,
+  "offline_tests_passed": 144,
+  "database_mode": "read_only",
+  "documents_or_vectors_changed": false
+}

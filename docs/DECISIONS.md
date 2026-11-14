@@ -5149,3 +5149,17 @@ Store the detailed confirmation privately with the tender and in normalization.
 The existing forced-reread pipeline does not automatically consume that private
 confirmation file;it must be reapplied/reviewed after a forced reread. A complete
 unchanged reading continues to be reused. No prompt or response-cache-key change.
+
+
+## D-175 retain measured hybrid retrieval and its20-candidate cutoff - 2026-11-14
+
+On6 confirmed historical compound source-page labels,current retrieval finds
+all6 pages within20 candidates. At3 candidates,page recall is3/6 and document
+recall5/6. Keep the effective20-candidate cutoff;reducing it to3 for speed would
+lose known source pages.11 current BOQ items across3 manufacturers have no
+manufacturer/known-category leak in33 inspected pairs. Unknown document metadata
+remains uncertain,not proof of product applicability. Existing unit checks cover
+model filtering,cache-first flow and evidence guards. No retrieval rewrite,
+threshold edit,embedding migration or corpus change is justified by this slice.
+This measures source retrieval only;matching-status accuracy needs a separate
+verifier/comparison evaluation. No prompt or response-cache-key change.
