@@ -21,3 +21,12 @@ def test_wrong_column_is_reported_separately_from_citation(monkeypatch):
     assert result['citation_passed']
     assert result['machine_issue'] == 'wrong_column'
     assert result['human_value_correct'] == ''
+
+
+
+def test_legacy_writer_requires_explicit_opt_in_before_reading_or_writing(monkeypatch):
+    import pytest
+    from eval import apply_evidence_review
+    monkeypatch.setattr(apply_evidence_review,'get_engine',lambda:pytest.fail('Database must not open without opt-in'))
+    with pytest.raises(SystemExit,match='No database changes made'):
+        apply_evidence_review.main([])

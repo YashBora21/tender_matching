@@ -4554,3 +4554,34 @@ as explicitly requested and explained. Unrelated conftest edits untouched.
 The inherited worklog contains a pre-existing non-UTF8 byte;append this entry
 without rewriting prior bytes. Byte-level last-commit scan found no private
 configuration values;the older UTF8-only history scan could not decode it.
+
+
+### 2026-11-14 - Part A evidence quality and reviewed mappings
+
+Implemented read-only CLI fact_cache and general reassess_source_context wrapper.
+Historical apply writer now refuses without --yes;old reviewer data untouched.
+Audited325 fact rows:252 empty nonclaims,73 claims.17 marked verified all lack
+stored context;310 rows have absent/empty context.86 source pages examined,
+75 have native text.11 need an OCR/source path before native quote verification.
+73 claims contain11 duplicate-claim and12 duplicate-source groups;6 product/
+attribute conflict groups remain distinct.0 proposals satisfy every reuse gate;
+17 verified-to-review transitions are proposals only,not applied.2 canonical
+attribute repairs are suggested from approved labels but fail other gates.
+
+Produced197 unapproved mapping-label groups with scope examples and blank
+human review fields. Detailed artifacts remain private:
+.audit_tmp/part-a-final-review-20261114/ (README,fact-review-claims.csv,
+mapping-review.csv,facts.json,inventory.json,summary.json). Public aggregate:
+eval/audit/part-a-cache-2026-11-14/. Part B handoff:
+docs/parallel/PART_A_CACHE_HANDOFF.md.
+
+133 relevant tests passed,zero failures/errors. PostgreSQL READ ONLY enforced
+zero DB writes;separate readback matched the original fact snapshot. All325 rows,
+statuses and provenance unchanged;no fact deleted/promoted,alias approved or
+paid LLM call made. Old intermediate audits retained under separate directories.
+No edits to matcher-owned files or unrelated conftest changes.
+
+Remaining:human review of claim/mapping sheets;plan a reviewed append-only apply
+or re-extract genuine claims with verified scope. Do not bulk-extract252 empty
+placeholders or claim the cache is repaired/applied yet. Part B can use these
+findings while implementing request reuse and context deduplication.

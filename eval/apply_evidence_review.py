@@ -1,4 +1,5 @@
 """Apply the explicitly reviewed fact quarantine, preserving a recovery record."""
+import argparse
 import csv
 import json
 import sys
@@ -21,7 +22,12 @@ QUARANTINE = {
  '6d525eb1-66cb-474b-a271-decf9ddd9d0b':'Scalar 10 truncates source range 10-16 inches',
 }
 
-def main():
+def main(argv=None):
+    parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--yes',action='store_true',help='Apply the historical reviewed quarantine only;not current repair proposals')
+    args=parser.parse_args(argv)
+    if not args.yes:
+        raise SystemExit('No database changes made. First run reassess_source_context.py --output-dir PATH and review its dry-run report. Historical quarantine application requires --yes.')
     source=ROOT/'eval/audit/evidence-review.csv'
     with source.open(encoding='utf-8-sig',newline='') as f:
         labels=list(csv.DictReader(f))

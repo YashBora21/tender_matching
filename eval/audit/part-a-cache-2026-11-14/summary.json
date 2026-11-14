@@ -1,0 +1,52 @@
+{
+  "mode": "dry_run",
+  "database_writes": 0,
+  "llm_calls": 0,
+  "snapshot_sha256": "d99d9cd915408a25f4d5c3187dedc718624611dd0bda10415241c23387f46d0c",
+  "before": {
+    "facts": 325,
+    "empty_nonclaim_rows": 252,
+    "claim_bearing_rows": 73,
+    "by_status": {
+      "needs_review": 308,
+      "verified": 17
+    },
+    "missing_context": 310,
+    "verified_missing_context": 17,
+    "source_pages": 86
+  },
+  "duplicate_claim_groups": 45,
+  "duplicate_source_groups": 61,
+  "cache_key_conflict_groups": 6,
+  "projected_by_status": {
+    "needs_review": 325
+  },
+  "transitions": {
+    "needs_review->needs_review": 308,
+    "verified->needs_review": 17
+  },
+  "recovered_pages": 86,
+  "proposed_attribute_repairs": 2,
+  "mapping_labels": 197,
+  "human_approvals_added": 0,
+  "facts_preserved": 325,
+  "verification_code_sha256": "5533853ce547a32aaca8d3500669152dea1e954782062152d900ddf265f5817d",
+  "auditor_code_sha256": "65253629dccdbe542c1790b13c016e2b6fad869f03fb3dfbca90e259fe9f85b2",
+  "claims": {
+    "claim_bearing": 73,
+    "readable_native_pages": 75,
+    "examined_pages": 86,
+    "claim_layer_failures": {
+      "1": 21,
+      "2": 0,
+      "3": 39,
+      "4": 68
+    },
+    "positive_duplicate_claim_groups": 11,
+    "positive_duplicate_source_groups": 12
+  },
+  "tests_passed": 133,
+  "snapshot_readback_matched": true,
+  "applied_changes": 0,
+  "qualification": "Dry-run proposals only;no claim truth/accuracy grade and no automatic promotions. Source/context and review artifacts remain private."
+}

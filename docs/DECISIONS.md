@@ -5216,3 +5216,23 @@ still required when tracking is enabled. No provider settings,prompts,response
 keys,evidence verification,request-size bounds or retry policy changed.
 The private deployment now explicitly chooses tracking=true and caps=false;
 public defaults do not enable accounting or impose new limits.
+
+
+## D-180 read-only fact recovery and unapproved mapping proposals - 2026-11-14
+
+Audit every current fact in a repeatable-read READ ONLY transaction. Separate
+empty nonclaim placeholders from actual claims;recover original PDF context with
+hash-checked native-page helpers. Retain original values,quotes,units,conditions,
+IDs and extraction provenance. Enumerate exact source cells and re-run existing
+verifier/anchor/range gates;metadata alone cannot establish model scope. An
+existing reviewed scope is usable only against identical fact/source evidence.
+Family uncertainty,ambiguous cells,missing conditions,conflicts and unapproved
+attributes remain review-only. Canonical repair suggestions use approved data
+only;never manufacture an operator,value,quote or model identity.
+
+Export per-fact old/proposed statuses and conflict/duplicate IDs without applying
+changes. Mapping suggestions retain component/scope examples and start unapproved.
+Do not overwrite reviewer artifacts. Require explicit opt-in for the historical
+quarantine writer;it does not apply current proposals. Current apply needs a
+separate reviewed,stale-snapshot-checked plan. No verifier,prompt,response schema
+or cache-key change;no paid call required for this offline recovery.
