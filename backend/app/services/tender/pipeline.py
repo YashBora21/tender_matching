@@ -589,6 +589,8 @@ def run_pipeline(
                     fragment_reason=row.get('fragment_reason'),
                     candidate_type=row.get('candidate_type'),
                     table_context=({"headers": row["source_headers"], "cells": row["source_cells"],
+                                    **({'cell_recovery':row['source_cell_recovery']}
+                                       if row.get('source_cell_recovery') else {}),
                                     **({'layout':'item_label_value','original_cells':row['source_grid_cells']}
                                        if 'source_grid_cells' in row else {})}
                                    if row.get("source_headers") and row.get("source_cells") else None),

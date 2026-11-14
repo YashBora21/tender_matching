@@ -5121,3 +5121,17 @@ positions stay out of later cohorts. Verified cached and precomputed responses
 are still consumed at their own source positions,with item identity preserved.
 No prompt,schema,response-key or verification change. The synthetic regression
 now uses1 call and preserves all7 rows and4 cache hits.
+
+
+## D-173 recover broken-border value cells from exact native geometry - 2026-11-14
+
+Visual source review showed5 apparent blank values were present in the PDF but
+lost by native table extraction because borders were broken. For an exact native
+3-column grid match,an ordinary label cell ending before the table's right edge
+can recover an empty value from that row's exact right-column crop. A spanning
+heading cannot trigger recovery;an empty crop remains empty. Preserve original
+native cells,crop coordinates and recovery method in table context for assigned
+and unassigned rows. No label words,values,categories or tender-specific branches.
+Reader21 refreshes the local requirement checkpoint. Changed table context uses
+the existing table-context cache hash;unchanged contexts retain valid responses.
+No LLM instructions,schema,verifier or alias approval change.

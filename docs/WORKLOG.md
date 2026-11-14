@@ -4401,3 +4401,25 @@ Remaining:resume unfinished extraction under corrected scheduling;profile local
 document preparation (largest measured stage);resolve genuinely blank/ambiguous
 source rows without inventing values;then retrieval and frontend/E2E validation.
 Grouping stays off. No resets,deletions,alias approvals or model configuration edits.
+
+
+### 2026-11-14 — corrected-batching resume and native-cell source review
+
+rc-2026-11-14.4 /2bc8c20 completed extraction without a budget stop in115.469s:
+4 calls,7511 input/1940 output tokens,INR0.7105 estimated,11 reported cache hits.
+An intermediate commentary incorrectly said59 cache hits;corrected to11 from the
+recorded metrics. All60 pages parsed,21 BOQ technical candidates,8 blockers:
+5 missing extracted values,1 omitted standards condition,2 unassigned item rows.
+Stored status remains incomplete;previous attempts preserved. No retrieval grade.
+
+Visual review located the actual tables in the mixed attachment,not the other
+PDFs whose manifest kind also says spec. The5 values are present:broken table
+borders lost their native value cells. D-173 recovers them from exact label-row
+and value-column geometry,retaining coordinates and original cells. Offline
+probe recovered5 cells with exact source-crop support in0.598s,zero LLM calls.
+105 focused parser/pipeline/extraction tests passed before the final unassigned
+metadata propagation. Full offline suite:1382 passed /6 skipped,zero failures/errors.
+
+The resume reused its parsed checkpoint,so did not invoke package reading and
+produced no document-reading profile. Do not treat115s as a cold-document result.
+No further paid calls yet;new reader checkpoint must be measured separately.

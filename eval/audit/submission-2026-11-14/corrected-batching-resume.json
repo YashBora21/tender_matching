@@ -1,0 +1,31 @@
+{
+  "rc": "rc-2026-11-14.4",
+  "commit": "2bc8c2086e4e89169679621683495f5c727b6bec",
+  "attempt_id": "a6a74a43-9dd3-4fe3-9783-e14a5685f948",
+  "status": "incomplete",
+  "wall_seconds": 115.46884019998834,
+  "calls": 4,
+  "input_tokens": 7511,
+  "output_tokens": 1940,
+  "reported_cache_hits": 11,
+  "estimated_cost_inr": 0.7105,
+  "stage_seconds": {
+    "_read_items": 11.732580999960192,
+    "_extract_all": 46.77828480000608,
+    "_persist": 6.731127100007143
+  },
+  "page_states": {
+    "parsed": 60
+  },
+  "boq_technical_candidates": 21,
+  "remaining_blockers": 8,
+  "blocker_groups": {
+    "native_value_cell_loss": 5,
+    "unrepresented_standard_condition": 1,
+    "unassigned_item": 2
+  },
+  "accuracy": "ungraded",
+  "grouping": "off",
+  "document_read_profile": "No package read on this resume;valid requirement checkpoint reused.",
+  "source_verification": "Five lost value cells visually confirmed and recovered offline by exact source column crops;not yet a new stored reading."
+}

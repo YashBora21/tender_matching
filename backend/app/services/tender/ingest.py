@@ -71,7 +71,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "20"
+READER_VERSION = "21"
 
 
 @dataclass
@@ -900,7 +900,9 @@ def _read_tables(
     over a page break has no header of its own and the next page needs them.
     """
     tables = page.extract_tables() or []
+    tables = [[list(row) for row in table] for table in tables]
     labels = {}
+    recovered = {}
     if tables and all(len(row) == 3 for table in tables for row in table) and hasattr(page, 'find_tables'):
         try:
             for table_index, native in enumerate(page.find_tables(), 1):
@@ -911,10 +913,25 @@ def _read_tables(
                     if (cell and native.bbox[0] <= cell[0] < cell[2] <= native.bbox[2]
                             and native.bbox[1] <= cell[1] < cell[3] <= native.bbox[3]):
                         labels[table_index, index] = cell[2] == native.bbox[2]
+                        values = tables[table_index - 1][index]
+                        if (not labels[table_index, index] and values[1] and not values[2]
+                                and hasattr(page, 'crop')):
+                            bounds = (cell[2], cell[1], native.bbox[2], cell[3])
+                            value = _clean_cell(page.crop(bounds).extract_text() or '')
+                            if value:
+                                recovered[table_index, index] = {'bbox':list(bounds),
+                                    'native_cells':list(values), 'method':'native_value_column_crop'}
+                                values[2] = value
         except Exception:
             # No reliable geometry means the existing conservative scope rule applies.
             labels = {}
     grouped = _grouped_properties(tables, page_number, tag, columns, labels)
+    if grouped:
+        for row in grouped[0]:
+            table_index = int(row['source_row_id'].split('-')[1])
+            evidence = recovered.get((table_index, row['row']))
+            if evidence:
+                row['source_cell_recovery'] = evidence
     held = sum(len(_clean_cell(cell)) for table in tables for row in table for cell in row)
     page_chars = len(' '.join(text.split()))
     if grouped and (not page_chars or held >= TABLE_TEXT_SHARE * page_chars):
@@ -1301,6 +1318,8 @@ def assign_to_items(
                 fragment_reason=row.get("fragment_reason"),
                 candidate_type=row.get("candidate_type"),
                 table_context=({"headers": row["source_headers"], "cells": row["source_cells"],
+                                **({'cell_recovery':row['source_cell_recovery']}
+                                   if row.get('source_cell_recovery') else {}),
                                 **({'layout':'item_label_value','original_cells':row['source_grid_cells']}
                                    if 'source_grid_cells' in row else {})}
                                if row.get("source_headers") and row.get("source_cells") else None),

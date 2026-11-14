@@ -73,3 +73,34 @@ def test_native_label_geometry_distinguishes_empty_property_from_new_heading():
     assert rows[1]['source_label_spans_value'] is False
     assert rows[2]['source_cells']==['ZETA']
     assert rows[3]['source_label_spans_value'] is True
+
+
+@pytest.mark.parametrize('value',['8 bar',''])
+def test_broken_value_border_recovers_only_exact_column_and_retains_provenance(value):
+    from types import SimpleNamespace
+    grid=[['1','Synthetic assembly',None],[None,'Synthetic rating',None],
+          [None,'Synthetic next group',None]]
+    native=SimpleNamespace(bbox=(0,0,3,3),extract=lambda:grid,
+        rows=[SimpleNamespace(cells=[None,(1,i,2 if i==1 else 3,i+1),None]) for i in range(3)])
+    page=Page(grid);page.find_tables=lambda:[native]
+    crops=[]
+    def crop(bounds):
+        assert bounds==(2,1,3,2)
+        crops.append(bounds)
+        return SimpleNamespace(extract_text=lambda:value)
+    page.crop=crop
+    # A neighbouring value makes the grid a property table even when this cell is truly blank.
+    grid.append([None,'Synthetic material','ZETA'])
+    native.bbox=(0,0,3,4)
+    native.rows.append(SimpleNamespace(cells=[None,(1,3,2,4),None]))
+    rows,_=_read_tables(page,'',1,'technical',None)
+    assert len(crops)==1 and grid[1][2] is None
+    if value:
+        row=rows[1]
+        assert row['row_text']=='Synthetic rating 8 bar' and row['source_cells']==['8 bar']
+        evidence=row['source_cell_recovery']
+        assert evidence['bbox']==[2,1,3,2] and evidence['native_cells']==[None,'Synthetic rating',None]
+        assigned,_=assign_to_items([row],[TenderItem(item_id='1',title='Synthetic assembly')])
+        assert assigned[0].table_context['cell_recovery']==evidence
+    else:
+        assert not rows[1].get('source_cell_recovery') and not rows[1]['source_headers']
