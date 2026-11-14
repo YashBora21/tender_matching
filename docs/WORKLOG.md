@@ -4308,3 +4308,30 @@ Benchmark instrumentation self-checks both batch schemas and singles, blocking
 context-only records. No paid generation in this gate; tariff checked privately
 against the configured target. Next:one approved capped re-read on a new RC,
 with native spend ledger, per-purpose metrics and all reading history preserved.
+
+
+## 2026-11-14 - Approved paid submission benchmark, performance gate met
+
+Measured rc-2026-11-14.1 (2e3627a):130.856s,31 HTTP calls,62289 input/20033 output
+tokens, estimated INR6.8782. Native ledger agrees:extraction24/INR5.5326,
+repair3/INR0.7300,classification4/INR0.6156,matching0.23 extraction batches have8
+clauses plus1 single; classification3 batches of10 plus1 of3.3 bounded repairs;
+0 pending reservations,0 form/contract calls,11 reported cache hits. All60 pages
+parsed;4564 superseded rows and old attempts preserved. Collection excluded.
+
+The INR25 cap was not reached. Tariff checked privately;100 INR/USD is a
+conservative budget assumption. Earlier unrecorded billing remains unknown.
+Targets met:estimated cost below INR10,unresolved108 below460,BOQ technical
+candidates21 with18-child regression intact. This is not full acceptance:
+108 child rows/68 source groups unresolved,198 review flags. Overlapping causes:
+78 coverage flags,35 missing item assignments,29 unknown clause types. Several
+coverage flags concern labels stored with value-only quotes; diagnose header/
+field coverage and typing offline without relaxing evidence or approving aliases.
+No manufacturer comparison, accuracy grade or false-confident grade. Grouping off.
+
+Automatic approval review rejected publishing raw review artifacts because source
+text could be private. Kept detailed results/queue under.audit_tmp; public report
+contains aggregate metrics/narrative only. Code and metric reporting remain within
+the user's push authorization. No further paid calls or data resets.
+Report:eval/audit/submission-2026-11-14/. Remaining:coverage/type accounting,
+merged-cell scope, reviewed aliases and human verdicts; #13/#16/#39 not claimed done.

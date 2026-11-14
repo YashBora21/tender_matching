@@ -1,0 +1,108 @@
+{
+  "release_candidate": "rc-2026-11-14.1",
+  "measured_commit": "2e3627a820d08a0343c102edec834b4208a40c22",
+  "status": "incomplete",
+  "stop_reason": "source clauses contain content not represented by structured requirements; some source clauses could not be interpreted or assigned; technical clauses have unresolved BOQ item assignments",
+  "metrics": {
+    "llm_calls": 31,
+    "llm_cache_hits": 11,
+    "prompt_tokens": 62289,
+    "completion_tokens": 20033,
+    "llm_retries": 3,
+    "requirements": 155,
+    "pages_read": 60,
+    "items": 11,
+    "wall_seconds": 130.85649779997766,
+    "stage_seconds": {
+      "_read_items": 0.5354284000350162,
+      "_read_package": 14.8287845000159,
+      "_extract_all": 78.82586559996707,
+      "_persist": 0.5433783999760635
+    },
+    "combined_estimated_inr": 6.8782,
+    "saved_answers_replayed": 0
+  },
+  "by_purpose": {
+    "extraction": {
+      "calls": 24,
+      "input_tokens": 47998,
+      "output_tokens": 16367,
+      "cost_inr": 5.5326
+    },
+    "repair": {
+      "calls": 3,
+      "input_tokens": 6129,
+      "output_tokens": 2184,
+      "cost_inr": 0.73
+    },
+    "classification": {
+      "calls": 4,
+      "input_tokens": 8162,
+      "output_tokens": 1482,
+      "cost_inr": 0.6156
+    }
+  },
+  "page_states": {
+    "parsed": 60
+  },
+  "wrapper_pages": 17,
+  "unresolved_child_rows": 108,
+  "unresolved_source_groups": 68,
+  "blocker_causes_nonexclusive": [
+    {
+      "role": "specification",
+      "reason": "clause_type_unknown",
+      "count": 29
+    },
+    {
+      "role": "specification",
+      "reason": "item_unassigned",
+      "count": 35
+    },
+    {
+      "role": "specification",
+      "reason": "source_content_unrepresented",
+      "count": 78
+    }
+  ],
+  "review_flagged_rows": 198,
+  "boq_technical_candidates": 21,
+  "batch_sizes_by_purpose": {
+    "extraction": {
+      "8": 23,
+      "1": 1
+    },
+    "repair": {
+      "8": 3
+    },
+    "classification": {
+      "10": 3,
+      "3": 1
+    }
+  },
+  "client_attempt_seconds": {
+    "sum": 72.71218760008924,
+    "p50": 2.390835100028198,
+    "p95": 2.8373016000259668,
+    "includes_native_ledger": true
+  },
+  "orchestration_other_seconds": 36.12304089998361,
+  "native_ledger_verified": true,
+  "unsettled_reservations": 0,
+  "all_old_attempts_preserved": true,
+  "superseded_rows": 4564,
+  "form_or_contract_calls": 0,
+  "matching_calls": 0,
+  "grouping_enabled": false,
+  "accuracy_grade": null,
+  "false_confident_claims": null,
+  "accuracy_note": "No full-tender extraction gold. Matching was not run because reading is incomplete. No false-confident grade can be inferred from zero comparisons.",
+  "scope_note": "Saved 60-page package, cached downloads and 11 reported cache hits; not a cold OCR or full manufacturer-retrieval benchmark.",
+  "offline_suite": {
+    "tests": "1371",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "6",
+    "time": "116.904"
+  }
+}

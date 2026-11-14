@@ -1,5 +1,11 @@
 # Tender Requirement Matching
 
+**Measured status (2026-11-14):** saved60-page package,130.86s,31 calls,estimated
+INR6.88. Reading remains incomplete with108 unresolved child rows; end-to-end
+accuracy is ungraded. See the
+[aggregate submission report](eval/audit/submission-2026-11-14/README.md).
+Detailed source-review data is kept privately and excluded from GitHub.
+
 A system that reads a tender PDF, extracts every technical requirement from it,
 compares each requirement against a corpus of manufacturer documents, and
 produces a compatibility report in which **every decision is backed by a
