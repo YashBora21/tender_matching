@@ -4531,3 +4531,26 @@ the same bytes is deduped ("already uploaded"), the stored reading renders
 (17 pages, 11 items, 161 requirements, 147 flagged, 715 context clauses), and
 the manufacturer picker groups 8 valve / 3 motors / 6 pumps / 2 unrecorded
 manufacturers. No run was started; matching cost at scale is unmeasured.
+
+
+### 2026-11-14 - user-requested uncapped testing (9a70a90)
+
+The user explicitly removed local spending/call/token ceilings. Private.env
+now disables spend caps,sets call/token budgets0 and daily/monthly ceilings0,
+while enabling independent spend tracking. All other private values unchanged.
+Added LLM_SPEND_TRACKING_ENABLED so cost accounting survives cap removal;
+existing capped-mode enforcement remains unchanged. Source verification,
+per-request size/output bounds and retries are unchanged.
+
+Restarted only workspace backend processes because inherited old budget values
+overrode.env. No current tender reads were active;7 old active-status run rows
+were dated Oct27-Nov3 and left untouched. Live /api/preflight returned200 with
+call_budget0,token_budget0,spend_caps_enabledfalse,spend_tracking_enabledtrue.
+78 focused tests passed,zero failures/errors. No paid call or new tender run
+was started by this change. Previous stopped-attempt messages stay historical
+until the user retries. Charges can exceed the earlier INR1000 monthly budget,
+as explicitly requested and explained. Unrelated conftest edits untouched.
+
+The inherited worklog contains a pre-existing non-UTF8 byte;append this entry
+without rewriting prior bytes. Byte-level last-commit scan found no private
+configuration values;the older UTF8-only history scan could not decode it.
