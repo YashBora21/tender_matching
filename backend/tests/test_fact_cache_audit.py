@@ -1,7 +1,7 @@
 """Synthetic cache recovery claims;no provider or application database writes."""
 from copy import deepcopy
 import pytest
-from app.services.cli.fact_cache import inventory,recover_fact,mapping_review
+from app.services.cli.fact_cache import inventory,recover_fact,mapping_review,load_review,native_quote_spans,REVIEW_SOURCE_FIELDS,digest
 
 
 def source():
@@ -107,3 +107,95 @@ def test_database_attribute_cannot_bypass_mapping_approval(monkeypatch):
     result=fact_cache.recover_fact(row,context,page)
     assert not result['cache_eligible_after_reviewed_apply']
     assert 'canonical_attribute_unresolved' in result['blockers']
+
+
+def review_sheet(tmp_path, row, **changes):
+    import csv
+    entry={key:row.get(key) for key in REVIEW_SOURCE_FIELDS}
+    entry.update(human_decision='supported',human_notes='Synthetic source reviewed')
+    entry.update(changes)
+    path=tmp_path/'synthetic-review.csv'
+    with path.open('w',encoding='utf-8',newline='') as out:
+        writer=csv.DictWriter(out,fieldnames=list(entry));writer.writeheader();writer.writerow(entry)
+    return path
+
+
+def test_review_is_bound_to_every_original_source_field(tmp_path):
+    row,_,_=source()
+    review=load_review(review_sheet(tmp_path,row),[row])[row['fact_id']]
+    assert review['decision']=='supported' and review['original_fact_sha256']==digest(row)
+    assert len(review['sheet_sha256'])==64
+
+
+@pytest.mark.parametrize('change',[{'value':'3'},{'model':'Synthetic B'},{'quote':'Synthetic replacement'},
+    {'verification_status':'verified'},{'sha256':'synthetic-other-hash'},
+    {'fact_id':'synthetic-unknown'},{'human_decision':'yes'},{'human_notes':''}])
+def test_stale_or_invalid_review_is_rejected_before_proposals(tmp_path,change):
+    row,_,_=source()
+    with pytest.raises(ValueError):load_review(review_sheet(tmp_path,row,**change),[row])
+
+
+def test_duplicate_review_identity_is_rejected(tmp_path):
+    row,_,_=source();path=review_sheet(tmp_path,row)
+    contents=path.read_text();path.write_text(contents+contents.splitlines(keepends=True)[1])
+    with pytest.raises(ValueError,match='duplicate'):load_review(path,[row])
+
+
+@pytest.mark.parametrize('decision',['incorrect','uncertain'])
+def test_negative_review_blocks_otherwise_verifiable_fact(decision):
+    row,context,page=source()
+    result=recover_fact(row,context,page,human_review={'original_fact_sha256':digest(row),'decision':decision})
+    assert not result['cache_eligible_after_reviewed_apply']
+    assert 'reviewer_'+decision in result['blockers']
+
+
+def test_supported_review_is_not_implicit_model_scope_approval():
+    row,context,page=source();context['tables']=[[['Size'],['2']]]
+    result=recover_fact(row,context,page,human_review={'original_fact_sha256':digest(row),'decision':'supported'})
+    assert 'model_scope_requires_review' in result['blockers']
+    assert not result['cache_eligible_after_reviewed_apply']
+
+
+def test_supported_review_cannot_override_wrong_model_or_clipped_range():
+    row,context,page=source()
+    row.update(value='10',quote='Synthetic A size 10–16 inches',unit='inches')
+    context['tables']=[[['Model','Size'],['Synthetic B','10']]]
+    before=deepcopy(row)
+    result=recover_fact(row,context,row['quote'],human_review={'original_fact_sha256':digest(row),'decision':'supported'})
+    assert not result['cache_eligible_after_reviewed_apply']
+    assert 'the claimed scalar is only an endpoint of a quoted range' in result['blockers']
+    assert row==before
+
+
+def test_normalized_nominal_fields_sit_beside_unchanged_source_claim():
+    row,context,page=source();row.update(value='50 to 80',unit='DN')
+    row['quote']='Synthetic A size DN50 to DN80';context['tables'][0][1][1]=row['value']
+    before=deepcopy(row)
+    result=recover_fact(row,context,row['quote'])
+    assert result['normalization']['range']==[2,3] and result['normalization']['unit']=='inch'
+    assert result['layers'][3]['passed']
+    assert result['source_context']['claim']['value']=='50 to 80'
+    assert row==before
+
+
+def test_normalization_never_invents_unknown_operator():
+    row,context,page=source();row.update(operator=None,unit='NPS')
+    result=recover_fact(row,context,page)
+    assert not result['layers'][3]['passed'] and not result['cache_eligible_after_reviewed_apply']
+    assert result['source_context']['claim']['operator'] is None
+
+
+def test_stale_review_digest_cannot_be_used_on_modified_fact():
+    row,context,page=source()
+    with pytest.raises(ValueError,match='snapshot'):
+        recover_fact(row,context,page,human_review={'original_fact_sha256':'synthetic-stale','decision':'supported'})
+
+
+def test_native_multiline_quote_proposals_keep_geometry_without_approving_scope():
+    lines=[{'line_id':'synthetic-1','text':'Synthetic size:','bbox':[0,0,10,10]},
+           {'line_id':'synthetic-2','text':'2 inch','bbox':[0,10,10,20]}]
+    context={'native_lines':lines}
+    matches=native_quote_spans(context,'Synthetic size: 2 inch')
+    assert matches[0]['line_ids']==['synthetic-1','synthetic-2']
+    assert matches[0]['lines']==lines and matches[0]['review_required']
+    assert not native_quote_spans(context,'Synthetic unrelated quote')

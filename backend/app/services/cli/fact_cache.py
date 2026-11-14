@@ -12,7 +12,7 @@ import re
 from sqlalchemy import text
 from app.comparison.attributes import attribute_by_term
 from app.comparison.vocabulary import load_vocabulary, vocabulary_path
-from app.services.requirement.structured_values import resolve_name
+from app.services.requirement.structured_values import normalize_fields, resolve_name
 from app.services.match.verify import check_source_anchor, check_range_endpoint, verify
 from app.services.textnorm import normalise_text
 
@@ -51,7 +51,61 @@ def _same(left,right):
     return normalise_text(str(left or '')).casefold()==normalise_text(str(right or '')).casefold()
 
 
-def recover_fact(row,context,page_text,*,scope_reviewed=False,review_blockers=(),aliases=()):
+REVIEW_SOURCE_FIELDS = ('fact_id','manufacturer','model','attribute','original_name','value',
+    'unit','conditions','page','quote','path','sha256','verification_status')
+
+
+def load_review(path, rows):
+    """Bind reviewer decisions to unchanged source fields; never infer scope approval."""
+    current = {row['fact_id']: row for row in rows}
+    reviews = {}
+    original_limit = csv.field_size_limit()
+    try:
+        csv.field_size_limit(max(original_limit, path.stat().st_size))
+        with path.open(encoding='utf-8-sig', newline='') as source:
+            reader = csv.DictReader(source)
+            if not set((*REVIEW_SOURCE_FIELDS, 'human_decision', 'human_notes')).issubset(reader.fieldnames or []):
+                raise ValueError('review sheet is missing required columns')
+            for entry in reader:
+                identity = entry['fact_id']
+                if identity not in current or identity in reviews:
+                    raise ValueError('review contains an unknown or duplicate fact identity')
+                row = current[identity]
+                if any(entry.get(key) != ('' if row.get(key) is None else str(row[key])) for key in REVIEW_SOURCE_FIELDS):
+                    raise ValueError('review source fields are stale or modified; generate a new review')
+                decision = entry['human_decision'].strip().lower()
+                if decision not in ('supported', 'incorrect', 'uncertain') or not entry['human_notes'].strip():
+                    raise ValueError('each reviewed row needs a valid decision and notes')
+                reviews[identity] = {'decision': decision, 'notes': entry['human_notes'],
+                    'original_fact_sha256': digest(row)}
+    finally:
+        csv.field_size_limit(original_limit)
+    file_hash = sha256(path.read_bytes()).hexdigest()
+    return {identity: dict(review, sheet_sha256=file_hash) for identity, review in reviews.items()}
+
+
+def native_quote_spans(context, quote):
+    """Locate the original quote without creating a model/attribute binding."""
+    needle = normalise_text(quote or '')
+    lines = context.get('native_lines') or []
+    joined = ''; offsets = []
+    for line in lines:
+        value = normalise_text(line.get('text') or '')
+        start = len(joined) + bool(joined)
+        joined += (' ' if joined else '') + value
+        offsets.append((start, len(joined), line))
+    matches = []
+    if needle:
+        for match in re.finditer(re.escape(needle), joined):
+            members = [line for start, end, line in offsets if start < match.end() and end > match.start()]
+            matches.append({'line_ids': [line['line_id'] for line in members],
+                'lines': members, 'normalized_span': [match.start(), match.end()],
+                'review_required': True, 'method': 'exact_native_quote_span',
+                'reason': 'quote location alone does not establish attribute, model or conditions'})
+    return matches
+
+
+def recover_fact(row,context,page_text,*,scope_reviewed=False,review_blockers=(),aliases=(),human_review=None):
     """Retain the claim;enumerate exact cells and run the unchanged verifier."""
     context=deepcopy(context)
     context.pop('extraction_model',None)
@@ -59,24 +113,35 @@ def recover_fact(row,context,page_text,*,scope_reviewed=False,review_blockers=()
     context['passage']=page_text
     claim={key:row.get(key) for key in ('value','unit','operator','conditions','quote')}
     attribute,_=resolve_name(row.get('attribute') or row.get('original_name'),aliases)
+    normalized = normalize_fields(attribute or row.get('original_name'), row.get('value'), row.get('unit'), aliases=aliases)
     claim['attribute']=attribute or row.get('original_name')
     original=(row.get('source_context') or {}).get('claim') or {}
     if original.get('model_or_series'):
         claim['model_or_series']=original['model_or_series']
     context['claim']=claim
     blockers=list(review_blockers)
+    if human_review:
+        if human_review.get('original_fact_sha256') != digest(row):
+            raise ValueError('review is not bound to the current fact snapshot')
+        context['human_review'] = deepcopy(human_review)
+        if human_review['decision'] != 'supported':
+            blockers.append('reviewer_' + human_review['decision'])
     if not row.get('value') and not row.get('quote'):blockers.append('empty_nonclaim_placeholder')
     if row.get('document_product_id') and row['document_product_id']!=row.get('product_id'):
         blockers.append('linked_document_product_mismatch')
     if not attribute or attribute_by_term(attribute) is None:
         blockers.append('canonical_attribute_unresolved')
+    if normalized['review_required']:
+        blockers.append('normalization:' + normalized['review_reason'])
+    spec = attribute_by_term(attribute or '')
     report=verify(quote=row.get('quote'),page_text=page_text,passage=page_text,
         document_manufacturer=row.get('document_manufacturer'),document_model=context.get('document_model'),
         document_family=context.get('document_family'),document_model_or_family=context.get('model_or_family'),
         expected_manufacturer=row.get('manufacturer'),expected_model=row.get('model'),
         is_family_level=bool(row.get('is_family_level') or row.get('document_is_family_level')),attribute=attribute,value=row.get('value'),
         requirement_unit=row.get('unit'),capability_unit=row.get('unit'),
-        operator_is_known=row.get('operator') not in (None,'unknown'),source_tables=context.get('tables',[]))
+        operator_is_known=bool(row.get('operator')) and row.get('operator')!='unknown',source_tables=context.get('tables',[]),
+        convertible=(not normalized['review_required'] if spec and getattr(spec,'normalization',None)=='nominal' else None))
     blockers.extend(report.review_reasons)
     range_gate=check_range_endpoint(row.get('quote'),row.get('value'))
     if range_gate:blockers.append(range_gate.reason)
@@ -121,7 +186,8 @@ def recover_fact(row,context,page_text,*,scope_reviewed=False,review_blockers=()
     return {'fact_id':row['fact_id'],'previous_status':row['verification_status'],
         'proposed_attribute':attribute,'proposed_status':'verified' if eligible else 'needs_review','cache_eligible_after_reviewed_apply':eligible,
         'blockers':blockers,'layers':[{'layer':r.layer.value,'passed':r.passed,'borderline':r.borderline,'reason':r.reason} for r in report.layers],
-        'source_context':context,'candidate_anchors':choices,'original_fact_sha256':digest(row),
+        'source_context':context,'candidate_anchors':choices,'native_quote_spans':native_quote_spans(context,row.get('quote')),
+        'normalization':normalized,'human_review':deepcopy(human_review),'original_fact_sha256':digest(row),
         'claim_unchanged':True,'database_writes':0}
 
 
@@ -156,6 +222,7 @@ def mapping_review(rows,aliases):
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir',type=Path,required=True)
+    parser.add_argument('--review-sheet',type=Path,help='Previously reviewed claims; source fields must still match')
     args=parser.parse_args(argv)
     out=args.output_dir
     if out.exists() and any(out.iterdir()):raise SystemExit('Refusing to overwrite an existing audit/review directory')
@@ -177,6 +244,7 @@ def main(argv=None):
           FROM fact f JOIN product p ON p.id=f.product_id JOIN manufacturer m ON m.id=p.manufacturer_id
           JOIN document d ON d.id=f.document_id LEFT JOIN product dp ON dp.id=d.product_id JOIN manufacturer dm ON dm.id=d.manufacturer_id
           LEFT JOIN attribute a ON a.id=f.attribute_id ORDER BY f.id""")).mappings()]
+        reviews = load_review(args.review_sheet, rows) if args.review_sheet else {}
         snapshot=digest(rows);before=inventory(rows)
         (out/'inventory.json').write_text(json.dumps(before,indent=2,default=str)+'\n',encoding='utf-8')
         conflict_ids={i for group in before['cache_key_conflicts'] for i in group['fact_ids']}
@@ -206,11 +274,13 @@ def main(argv=None):
                 context,page_text=pages[key]
                 # Product identity is per fact,even when a page is shared by several products.
                 context=dict(context,document_model=row['document_model'],document_family=row['document_family'],model_or_family=row['model_or_family'])
-                proposals.append(recover_fact(row,context,page_text,scope_reviewed=reviewed,review_blockers=blockers,aliases=aliases))
+                proposals.append(recover_fact(row,context,page_text,scope_reviewed=reviewed,review_blockers=blockers,aliases=aliases,
+                    human_review=reviews.get(row['fact_id'])))
             except (OSError,ValueError,RuntimeError) as exc:
                 proposals.append({'fact_id':row['fact_id'],'previous_status':row['verification_status'],
                     'proposed_status':'needs_review','cache_eligible_after_reviewed_apply':False,
                     'blockers':['source_recovery_failed:'+type(exc).__name__],
+                    'human_review':reviews.get(row['fact_id']),
                     'source_error_code':str(exc) if str(exc) in ('source_integrity_failed','source_page_out_of_bounds') else type(exc).__name__,
                     'original_fact_sha256':digest(row),'claim_unchanged':True,'database_writes':0})
         reqs=[dict(r) for r in session.execute(text("SELECT id::text,tender_id::text,item_id,source_page AS page,source_section,source_text,source_table_id::text,attribute,value,unit,type,normalization FROM requirement WHERE superseded_at IS NULL AND type IN ('technical','certification') ORDER BY id")).mappings()]
@@ -239,15 +309,20 @@ def main(argv=None):
             'auditor_code_sha256':sha256(Path(__file__).read_bytes()).hexdigest(),
             'recovered_pages':len(pages),'projected_conflict_groups':len(projected['cache_key_conflicts']),
             'proposed_attribute_repairs':sum(bool(p.get('proposed_attribute')) and not r.get('attribute') for r,p in zip(rows,proposals)),
-            'mapping_labels':len(mappings),'human_approvals_added':0,'facts_preserved':len(rows)}
+            'mapping_labels':len(mappings),'human_approvals_added':0,'facts_preserved':len(rows),
+            'review_decisions':dict(Counter(review['decision'] for review in reviews.values())),
+            'claim_normalization_resolved':sum(bool(r.get('value') or r.get('quote')) and not p.get('normalization',{}).get('review_required',True) for r,p in zip(rows,proposals)),
+            'native_quote_span_facts':sum(bool(p.get('native_quote_spans')) for p in proposals),
+            'eligible_repairs':sum(p['cache_eligible_after_reviewed_apply'] for p in proposals)}
         for name,data in [('facts',proposals),('mapping-review',mappings),('summary',summary)]:
             (out/(name+'.json')).write_text(json.dumps(data,indent=2,default=str)+'\n',encoding='utf-8')
         with (out/'fact-review.csv').open('w',encoding='utf-8',newline='') as f:
-            fields=['fact_id','manufacturer','model','attribute','original_name','value','unit','conditions','page','quote','path','sha256','verification_status','proposed_attribute','proposed_status','blockers','candidate_anchors','human_decision','human_notes']
+            fields=['fact_id','manufacturer','model','attribute','original_name','value','unit','conditions','page','quote','path','sha256','verification_status','proposed_attribute','proposed_status','blockers','candidate_anchors','human_decision','human_notes','normalization','native_quote_spans']
             writer=csv.DictWriter(f,fieldnames=fields);writer.writeheader()
             for r,p in zip(rows,proposals):
-                data={key:r.get(key) for key in fields};data.update({key:p.get(key) for key in ('proposed_attribute','proposed_status','blockers','candidate_anchors')})
-                data.update(human_decision='',human_notes='')
+                data={key:r.get(key) for key in fields};data.update({key:p.get(key) for key in ('proposed_attribute','proposed_status','blockers','candidate_anchors','normalization','native_quote_spans')})
+                review=reviews.get(r['fact_id'],{})
+                data.update(human_decision=review.get('decision',''),human_notes=review.get('notes',''))
                 writer.writerow({key:json.dumps(value) if isinstance(value,(dict,list)) else value for key,value in data.items()})
         with (out/'mapping-review.csv').open('w',encoding='utf-8',newline='') as f:
             writer=csv.DictWriter(f,fieldnames=['source_label','observations','proposed_canonical_attributes','proposal_state','approved','component_scope','current_reason','reviewed_canonical_attribute','reviewed_component_scope','human_notes','examples'])

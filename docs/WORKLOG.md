@@ -4602,3 +4602,32 @@ sandbox HTTP tests were blocked by local socket permissions and rerun with local
 mock-server access. A mixed working-tree run had1380 passes and2 failures while
 Part B changed its batch prompt/tests;those files remain untouched. No paid calls
 or application database writes. Existing unrelated conftest edits untouched.
+
+
+### 2026-11-14 - Reviewed evidence recovery dry run (D-182)
+
+Consumed73 completed claim reviews:48 supported,3 incorrect,22 uncertain.
+Reject stale/edited evidence fields,unknown/duplicate IDs and invalid reviews;
+retain annotations and file/fact checksums. Supported is not scope approval.
+Incorrect/uncertain decisions block reuse. No aliases approved. The audit now
+exports normalized fields separately and exact native quote locations with
+line IDs/geometry,all still requiring model/attribute/condition binding.
+
+Final read-only audit:.audit_tmp/part-a-reviewed-final-20261114/ including focused
+repair-review.csv and repair-summary.json.39 typed normalizations resolve;
+comparison failures68->60.52 original quote locations recovered.0 fully eligible
+repairs;17 verified-to-review transitions remain unapplied. All325 rows and
+original values/quotes preserved;independent readback matched the original fact
+snapshot.11 source pages still lack native text.197 mapping groups unapproved.
+Public aggregates:eval/audit/part-a-reviewed-2026-11-14/. Updated Part A handoff.
+
+Validation:isolated Part A backend1379 passed,3 skipped,24 integration deselected;
+collector15 and eval62 passed. The live-tree mixed run had2 failures during Part
+B's concurrent batch prompt/test edits. Isolated snapshot excluded those edits;
+Part B integration must be checked separately. No Part B files modified or staged,
+no verifier relaxation,no paid calls,no application database writes.
+
+Remaining:scoped source reconstruction/re-extraction for gate failures,reviewed
+mappings and an append-only apply preview. No current proposal can be promoted
+safely just because the human decision says supported. User need not repeat the
+completed73-row review. Old evidence and intermediate audit directories retained.

@@ -5251,7 +5251,25 @@ changes the normalization fingerprint, requiring derived resolution to be
 recalculated; extraction prompts and response contracts are unchanged. This is
 not permission to promote an old scalar endpoint or bypass an evidence gate.
 
-## D-181
+## D-182 consume reviewed claims without replacing evidence gates - 2026-11-14
+
+The read-only fact audit accepts --review-sheet. Reject unknown/duplicate IDs,
+stale or edited original evidence fields, invalid decisions and missing notes.
+Bind each accepted annotation to its fact snapshot and review-file checksum;
+preserve decisions in new reports. Incorrect/uncertain reviews block reuse.
+Supported means a reviewer assertion, never implicit model/series scope approval
+or permission to override prior rejection, column binding, conditions or ranges.
+
+Export derived normalization beside the raw claim. Check nominal comparability
+using the same configured size normalization as the matcher; missing operators
+still fail. Locate exact native quote spans with line IDs and geometry, retaining
+all ambiguous occurrences as proposals. Quote location alone does not prove an
+attribute/model binding. Keep full original page/table context, conflicts and
+prior attempts. Do not infer operators, rewrite scalar endpoints, approve aliases
+or publish repairs that fail any gate. No source verifier or LLM prompt/contract
+change. All reviewed recovery remains dry-run only before an append-only apply.
+
+## D-183 batch context dedup by shared ID - 2026-11-14
 Batch fact extraction sends identical table context once, referenced by a
 per-passage context_id into a shared "contexts" array (Part B). BATCH_INSTRUCTIONS
 and the batch input shape change, so contract_version() changes and previously
@@ -5261,11 +5279,13 @@ context_id, and the verifier still re-derives source_context per candidate.
 batch_input_chars now measures the deduplicated payload, so the configured char
 bound admits more passages per call without exceeding the true sent size.
 
-## D-182
+## D-184 verified-fact cache gated on contract and source identity - 2026-11-14
 The verified-fact cache is gated on explicit source identity and extraction
 contract (Part B). _cached_fact treats a stored fact as a miss unless its
-source_context.fact_prompt_version equals the current contract_version() and its
-document_sha256 equals the current document's sha256. A changed prompt or changed
-source bytes therefore forces a fresh read; ranges, units, conditions and
-component/model scope are unchanged. Conflicting stored values still return no
-cache hit (findings.cached_fact), so conflicts stay distinct.
+source_context.fact_prompt_version equals the current contract_version() and it
+carries a non-empty document_sha256. A changed prompt therefore forces a fresh
+read; a fact stored without source identity is never reused. Byte-level source
+integrity stays with load_page_context, which raises on a sha mismatch when the
+page is re-read, so this gate does not re-fetch the document sha. Ranges, units,
+conditions and component/model scope are unchanged. Conflicting stored values
+still return no cache hit (findings.cached_fact), so conflicts stay distinct.

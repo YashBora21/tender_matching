@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-14",
+  "mode": "reviewed_dry_run",
+  "database_writes": 0,
+  "llm_calls": 0,
+  "fact_rows": 325,
+  "claims_reviewed": 73,
+  "review_decisions": {
+    "uncertain": 22,
+    "supported": 48,
+    "incorrect": 3
+  },
+  "normalized_claims": 39,
+  "quote_locations_recovered": 52,
+  "comparison_failures_before": 68,
+  "comparison_failures_after": 60,
+  "eligible_repairs": 0,
+  "proposed_verified_to_review": 17,
+  "mapping_labels_unapproved": 197,
+  "snapshot_sha256": "d99d9cd915408a25f4d5c3187dedc718624611dd0bda10415241c23387f46d0c",
+  "auditor_code_sha256": "ce048718eea24669b7ef1d52315df083aacadab823d0f740edcd7b7f08b512a7",
+  "verification_code_sha256": "5533853ce547a32aaca8d3500669152dea1e954782062152d900ddf265f5817d",
+  "normalizer_code_sha256": "0c878bdc1ce9e2f72528cdeaf134870a417517c346bde7d3f4a6575c29da16a7",
+  "live_snapshot_unchanged": true,
+  "tests": {
+    "isolated_backend": {
+      "tests": 1382,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 3,
+      "passed": 1379
+    },
+    "collector": {
+      "tests": 15,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0,
+      "passed": 15
+    },
+    "eval": {
+      "tests": 62,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0,
+      "passed": 62
+    }
+  }
+}
