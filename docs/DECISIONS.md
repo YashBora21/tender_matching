@@ -5073,3 +5073,25 @@ grade.
 ## D-169 mixed-attachment section routing - 2026-11-14
 
 Apply exact, data-driven section-heading roles within primary attachments, carry the role across page continuations, reset at explicit technical/BOQ headings, and reset at document boundaries. Retain contract/SLA sections as typed visible context under the approved primary-only policy, including certificates and physical statements. Supporting documents cannot promote themselves via a heading. All source pages remain accounted for; 39 ambiguous property scopes remain unresolved. Exclude section-role selectors from classifier fingerprints to preserve unchanged inputs; full source fingerprints change and changed row roles/context use distinct existing cache keys. No model instructions or output schema change.
+
+## D-170 verified source accounting and blank property scope - 2026-11-14
+
+Reading an exact source label is separate from approving its canonical alias.
+Count an open-vocabulary label only when a unique verified quote supports its
+complete value and the literal label selects exactly one source header/cell.
+Wrong columns, duplicate headers/quotes and clipped ranges remain rejected.
+An explicit primary specification/BOQ role may resolve uncertain clause typing
+for such a field; structural columns and explicit ATC positions are excluded.
+Unapproved aliases and existing human-review flags remain unchanged.
+
+Preserve the parser's explicit source item number alongside extracted children.
+Account for that leading number as metadata only when a uniquely quoted field
+represents the complete remaining row. No generic numeric-token skipping.
+Native table geometry distinguishes a blank ordinary property cell from a
+label spanning the value column: only the former retains the previous item.
+Missing geometry and genuine unnumbered headings remain conservatively unbound.
+
+Reader version 20 and coverage policy structured-source-coverage-3 invalidate
+affected local checkpoints. Model prompts, schemas and LLM response cache keys
+are unchanged; existing valid responses can be revalidated. No database schema
+change, deletion, alias approval or verifier relaxation.

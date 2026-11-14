@@ -4335,3 +4335,27 @@ contains aggregate metrics/narrative only. Code and metric reporting remain with
 the user's push authorization. No further paid calls or data resets.
 Report:eval/audit/submission-2026-11-14/. Remaining:coverage/type accounting,
 merged-cell scope, reviewed aliases and human verdicts; #13/#16/#39 not claimed done.
+
+
+### 2026-11-14 — D-170 verified source accounting (offline)
+
+Literal source labels are counted only with a unique verified quote and exact
+header/value binding; this does not approve aliases. Explicit source numbers
+remain child metadata and count as read only after the rest of the complete row
+is verified. Primary source roles can resolve uncertain field typing while ATC
+positions and structural columns remain excluded. Native cell geometry retains
+item scope across blank ordinary properties; unnumbered spanning headings and
+missing geometry remain conservative. Reader20 / coverage3 refresh affected
+checkpoints; model instructions and response cache keys are unchanged.
+
+Read-only saved-field replay:108 blockers ->37, with overlapping remaining causes
+29 unknown/unextracted,2 unassigned,36 coverage flags;36 bindings changed and no
+attribute/value/unit/quote/span changed. Raw unassigned native property rows39->3.
+No database writes, paid calls or new reading:the stored tender remains incomplete.
+Do not mistake accounting improvement for fresh extraction or an accuracy grade.
+Aggregate replay:eval/audit/submission-2026-11-14/offline-accounting.json; detailed
+source rows remain private in.audit_tmp. Grouping off; no reset or data deletion.
+
+Focused checks:143 passed. Full clean-snapshot offline suite:1377 passed /6 skipped,
+zero failures/errors. Staged private-configuration scan:zero matches. Remaining:unread fields,2 item bindings, reviewed aliases,
+retrieval validation and frontend/E2E. No speculative cross-page group backfill.

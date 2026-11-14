@@ -71,7 +71,7 @@ def is_mangled(text: str) -> bool:
 # part of the stage's key: the stage runs again, and only that stage.
 # 3: a page is read as a table only when its grid is a real table, and prose
 #    is joined into clauses before it is split (D-88).
-READER_VERSION = "19"
+READER_VERSION = "20"
 
 
 @dataclass
@@ -845,7 +845,7 @@ def _is_real_table(
     return filled / cells >= floor
 
 
-def _grouped_properties(tables, page_number, tag, previous):
+def _grouped_properties(tables, page_number, tag, previous, labels=None):
     """Preserve ruled item/label/value grids whose groups have no column header."""
     state = dict(previous or {}) if (previous or {}).get('_property_page') == page_number - 1 else {}
     rows = []
@@ -868,13 +868,16 @@ def _grouped_properties(tables, page_number, tag, previous):
                     state['_property_title'] = ''
                 state['_property_number'] = number
             if not value:
-                if not number:
+                spans_value = (labels or {}).get((table_index, index))
+                if not number and spans_value is not False:
                     # A blank value may be a new unnumbered group; do not inherit its predecessor.
                     state['_property_number'] = ''
-                state['_property_title'] = label
+                if spans_value is not False:
+                    state['_property_title'] = label
             rows.append(dict(row=index, page=page_number, number=state.get('_property_number',''),
                 title=state.get('_property_title', ''), description=' '.join(filter(None,[label,value])),
                 row_text=' '.join(filter(None,cells[index])), source_grid_cells=list(table[index]),
+                source_label_spans_value=(labels or {}).get((table_index, index)),
                 source_headers=[label] if value else [], source_cells=[value] if value else cells[index],
                 source_row_id=f'properties-{table_index}-row-{index}',
                 extraction_method=ExtractionMethod.TABLE.value, page_tag=tag))
@@ -897,7 +900,21 @@ def _read_tables(
     over a page break has no header of its own and the next page needs them.
     """
     tables = page.extract_tables() or []
-    grouped = _grouped_properties(tables, page_number, tag, columns)
+    labels = {}
+    if tables and all(len(row) == 3 for table in tables for row in table) and hasattr(page, 'find_tables'):
+        try:
+            for table_index, native in enumerate(page.find_tables(), 1):
+                if table_index > len(tables) or native.extract() != tables[table_index - 1]:
+                    continue
+                for index, row in enumerate(native.rows):
+                    cell = row.cells[1] if len(row.cells) > 1 else None
+                    if (cell and native.bbox[0] <= cell[0] < cell[2] <= native.bbox[2]
+                            and native.bbox[1] <= cell[1] < cell[3] <= native.bbox[3]):
+                        labels[table_index, index] = cell[2] == native.bbox[2]
+        except Exception:
+            # No reliable geometry means the existing conservative scope rule applies.
+            labels = {}
+    grouped = _grouped_properties(tables, page_number, tag, columns, labels)
     held = sum(len(_clean_cell(cell)) for table in tables for row in table for cell in row)
     page_chars = len(' '.join(text.split()))
     if grouped and (not page_chars or held >= TABLE_TEXT_SHARE * page_chars):
@@ -1276,6 +1293,7 @@ def assign_to_items(
         assigned.append(
             RequirementRecord(
                 text=row["description"],
+                normalization={'source_context':{'source_number':number}},
                 source_text=row.get("row_text") or row["description"],
                 source_neighbors=row.get('source_neighbors'),
                 source_role=row.get("source_role"),

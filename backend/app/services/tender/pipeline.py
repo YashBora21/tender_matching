@@ -581,6 +581,7 @@ def run_pipeline(
             result.requirements.append(
                 RequirementRecord(
                     text=row.get("description", ""),
+                    normalization={'source_context':{'source_number':row.get('number')}},
                     source_text=row.get("row_text") or row.get("description", ""),
                     source_neighbors=row.get('source_neighbors'),
                     source_role=row.get('source_role'),
@@ -1351,7 +1352,7 @@ def _extract_all(
                 added = list(siblings)
             else:
                 from app.services.requirement.coverage import uncovered_tokens, MARKER
-                gap = uncovered_tokens(readable, outcome) if reader is _extract_one else []
+                gap = uncovered_tokens(readable, outcome, source_number=(requirement.normalization or {}).get('source_context',{}).get('source_number')) if reader is _extract_one else []
                 if not outcome:
                     requirement.requirement_type = RequirementType.UNKNOWN
                     requirement.review_required = True
@@ -1386,6 +1387,12 @@ def _extract_all(
                     extracted.page = requirement.page
                     extracted.source_table_id = requirement.source_table_id
                     extracted.source_row_id = requirement.source_row_id
+                    inherited = (requirement.normalization or {}).get('source_context',{})
+                    if inherited.get('source_number'):
+                        normal = dict(extracted.normalization or {})
+                        normal['source_context'] = dict(normal.get('source_context') or {},
+                            source_number=inherited['source_number'])
+                        extracted.normalization = normal
                     retype(extracted)
                     added.append(extracted)
 
@@ -1433,7 +1440,7 @@ def _cached_extraction(readable, requirement, cache):
                            version, settings.schema_version)
         if cached is not None:
             records = [_as_record(item) for item in cached]
-            if records and not uncovered_tokens(readable, records):
+            if records and not uncovered_tokens(readable, records, source_number=(requirement.normalization or {}).get('source_context',{}).get('source_number')):
                 return records
     return None
 
@@ -1526,7 +1533,7 @@ def _extract_one(
         extracted.source_section = requirement.source_section
         retype(extracted)
     from app.services.requirement.coverage import uncovered_tokens
-    if cache is not None and outcome.requirements and not outcome.rejected and outcome.limit is None and not uncovered_tokens(readable, outcome.requirements):
+    if cache is not None and outcome.requirements and not outcome.rejected and outcome.limit is None and not uncovered_tokens(readable, outcome.requirements, source_number=(requirement.normalization or {}).get('source_context',{}).get('source_number')):
         cache.put(
             _extraction_hash(readable, requirement, version),
             model,

@@ -29,6 +29,21 @@ def quote_span(text, quote):
     return start, start + len(quote)
 
 
+def labelled_field_supported(text, span, attribute, value, table):
+    """Bind a quoted value to exactly one literal source header and its cell."""
+    if span is None or not attribute or not value or not table or not span_supports(text, span, value):
+        return False
+    if quote_span(text, text[span[0]:span[1]]) != tuple(span):
+        return False
+    key = lambda label: ' '.join(str(label).casefold().split())
+    matches = [i for i, header in enumerate(table.get('headers', [])) if key(header) == key(attribute)]
+    cells = table.get('cells', [])
+    if len(matches) != 1 or matches[0] >= len(cells):
+        return False
+    cell = str(cells[matches[0]] or '')
+    return span_supports(cell, (0, len(cell)), value)
+
+
 def span_supports(text, span, value=None):
     """Require complete value support inside valid offsets, preserving ranges."""
     start, end = span

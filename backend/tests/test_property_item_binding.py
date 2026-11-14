@@ -59,3 +59,17 @@ def test_unnumbered_empty_value_stops_inheritance_without_losing_source_rows():
     rows,_=_read_tables(Page(grid),'',1,'technical',None)
     assert [r['number'] for r in rows]==['1','1','','']
     assert rows[-1]['source_cells']==['16 bar']
+
+
+def test_native_label_geometry_distinguishes_empty_property_from_new_heading():
+    from types import SimpleNamespace
+    grid=[['1','Synthetic A',None],[None,'Synthetic pressure',None],
+          [None,'Synthetic material','ZETA'],[None,'Synthetic B',None],[None,'Synthetic size','8 mm']]
+    native=SimpleNamespace(bbox=(0,0,3,5),extract=lambda:grid,
+        rows=[SimpleNamespace(cells=[None,(1,i,3 if i in (0,3) else 2,i+1),None]) for i in range(5)])
+    page=Page(grid);page.find_tables=lambda:[native]
+    rows,_=_read_tables(page,'',1,'technical',None)
+    assert [r['number'] for r in rows]==['1','1','1','','']
+    assert rows[1]['source_label_spans_value'] is False
+    assert rows[2]['source_cells']==['ZETA']
+    assert rows[3]['source_label_spans_value'] is True

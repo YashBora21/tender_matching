@@ -1,0 +1,31 @@
+{
+  "before": 108,
+  "after": 37,
+  "before_causes": {
+    "unknown_type": 29,
+    "unassigned": 35,
+    "coverage": 78
+  },
+  "after_causes": {
+    "unknown_type": 29,
+    "unassigned": 2,
+    "coverage": 36
+  },
+  "changed_bindings": 36,
+  "raw_unassigned_properties": 3,
+  "changed_types": 0,
+  "value_quote_changes": 0,
+  "generation_calls": 0,
+  "database_writes": false,
+  "qualification": "Stored verified-field/postprocessing replay, not fresh model generation or a new reading",
+  "phase": "D-170 offline source accounting replay",
+  "reading_modified": false,
+  "accuracy": "ungraded",
+  "grouping": "off",
+  "verification": {
+    "focused_passed": 143,
+    "full_offline_passed": 1377,
+    "full_offline_skipped": 6,
+    "full_offline_failed": 0
+  }
+}

@@ -131,6 +131,18 @@ def apply_clause_type(requirement: RequirementRecord) -> bool:
     decision = classify_clause(subject,
         page_tag=requirement.page_tag, source_section=requirement.source_section,
         attribute=canonical)
+    if (decision.review_required and decision.source_position in {'unknown','specification'}
+            and requirement.requirement_type in (RequirementType.UNKNOWN, RequirementType.TECHNICAL)):
+        from app.services.requirement.evidence import labelled_field_supported
+        from app.services.tender.ingest import find_columns
+        from app.services.tender.source_policy import policy as source_policy
+        columns = find_columns([(requirement.attribute or '').casefold()])
+        structural = any(columns.get(role) is not None for role in ('number','title','description','quantity','unit'))
+        if (not structural and requirement.source_role in source_policy()['requirement_source_roles']
+                and labelled_field_supported(requirement.source_text or requirement.text, requirement.source_span,
+                    requirement.attribute, requirement.value, requirement.table_context)):
+            decision = classify_clause(subject, source_section=requirement.source_role,
+                                       attribute=canonical or (requirement.attribute or '').casefold())
     if decision.review_required:
         if requirement.requirement_type in (RequirementType.UNKNOWN, RequirementType.TECHNICAL, RequirementType.CERTIFICATION):
             requirement.review_required = True
@@ -139,6 +151,9 @@ def apply_clause_type(requirement: RequirementRecord) -> bool:
                 requirement.review_reason = '; '.join(part for part in (
                     requirement.review_reason, reason) if part)
         return False
+    if requirement.review_reason:
+        requirement.review_reason = '; '.join(part.strip() for part in requirement.review_reason.split(';')
+            if not part.strip().startswith('clause_type_review:')) or None
     target = RequirementType(decision.kind)
     if target is requirement.requirement_type:
         return False
