@@ -755,6 +755,14 @@ def _cached_fact(
 
         if not cached.get("source_context"):
             return None
+        # A fact is only reusable under the contract and source identity that
+        # produced it; a changed prompt means read again, and the page-context
+        # loader below enforces the stored sha256 against the bytes (FR-21).
+        context = cached["source_context"]
+        if context.get("fact_prompt_version") != contract_version():
+            return None
+        if not context.get("document_sha256"):
+            return None
         if check_source_anchor(cached["source_context"], cached["attribute"], cached["value"]) is not None:
             return None
 

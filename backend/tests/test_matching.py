@@ -1121,8 +1121,12 @@ def test_the_transaction_is_closed_before_the_model_is_asked(monkeypatch):
 
 def _cached_fact_row(**overrides) -> dict:
     """One `cached_fact` row, as the findings read returns it (synthetic)."""
+    from app.services.match.facts import contract_version
+
     row = {
-        "source_context": {"version": 1, "tables": []},
+        "source_context": {"version": 1, "tables": [],
+                           "fact_prompt_version": contract_version(),
+                           "document_sha256": "synthetic-sha"},
         "id": "fact-1",
         "value": "CF8M",
         "unit": None,

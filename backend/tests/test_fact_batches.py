@@ -106,9 +106,11 @@ def test_matcher_bounds_context_and_does_not_rebuy_future_batches(monkeypatch,ca
     class ValidatingClient:
         def complete_json(self,system,user,**kwargs):
             payload=json.loads(user);passages=payload['passages'];seen.append(len(passages))
-            assert batch_input_chars([p['text'] for p in passages],[p['source_context'] for p in passages])<=600
+            contexts=payload.get('contexts') or []
+            assert batch_input_chars([p['text'] for p in passages],[contexts[p['context_id']] for p in passages])<=600
             return {'passages':[{'passage_id':p['passage_id'],'requirements':[{'found':False}]} for p in passages]}
     result=match.match_requirement(SimpleNamespace(commit=lambda:None),'Synthetic body material',client=ValidatingClient())
     assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
-    assert seen==[2]
+    # Shared context is sent once, so the uncached trio fits one bounded call.
+    assert seen==([2] if cached_prefix else [3])
     get_settings.cache_clear()
