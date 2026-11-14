@@ -132,3 +132,36 @@ def test_normalization_preserves_original_quote_and_human_binding_evidence():
     normalize_records([row])
     assert row.normalization['value']=='2' and row.normalization['human_review']==review
     assert (row.text,row.source_text,row.value,row.source_span)==before
+
+
+@pytest.mark.parametrize('value,unit,expected', [
+    ('25 to 200', 'DN', [1, 8]), ('2 - 24', 'NPS', [2, 24]),
+    ('10" - 16"', None, [10, 16]), ('10”–16”', None, [10, 16]),
+    ('10″–16″', None, [10, 16]), ('DN50 to DN80', None, [2, 3]),
+    ('50 mm–80 mm', None, [2, 3]), ('1¼" to 2"', None, [1.25, 2]),
+    ('1¼ to 2', 'NPS', [1.25, 2]),
+])
+def test_repeated_range_designators_and_fraction_glyphs_preserve_both_bounds(value, unit, expected):
+    result = normalize_fields('nominal_size', value, unit)
+    assert not result['review_required'], result
+    assert result['nominal_nps'] == expected and result['range'] == expected
+    assert result['unit'] == 'inch'
+
+
+@pytest.mark.parametrize('value,unit', [
+    ('10 inch–16 mm', None), ('DN50 to NPS3', None), ('2 to 3', 'unknown'),
+    ('50 to 80', 'DNonsense'), ('DN50 to DN151', None), ('10"–16"', 'mm'),
+])
+def test_conflicting_or_unknown_range_labels_do_not_gain_a_normalized_value(value, unit):
+    result = normalize_fields('nominal_size', value, unit)
+    assert result['review_required'] and result['value'] == value and result['unit'] == unit
+
+
+def test_nominal_designators_are_never_general_length_units():
+    result = normalize_fields('operating_pressure', '50', 'DN')
+    assert result['review_required'] and result['value'] == '50'
+
+
+def test_non_nominal_si_unit_case_is_preserved():
+    result = normalize_fields('operating_pressure', '150', 'kPa')
+    assert not result['review_required'] and result['unit'] == 'kPa'

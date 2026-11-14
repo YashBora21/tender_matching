@@ -4,7 +4,7 @@
     "https://www.schley-armaturen.de/en/dimensions.html",
     "https://content.spiraxsarco.com/-/media/spiraxsarco/international/documents/en/ti/tp1_tp2_tp3-ti-p169-06-en.ashx?rev=35db90e946f9426c9fb9703c30c8170f"
   ],
-  "unit_aliases": {"\"": "inch", "''": "inch", "″": "inch", "in": "inch", "inches": "inch", "inch": "inch", "mm": "mm", "millimeter": "mm", "millimeters": "mm", "millimetre": "mm", "millimetres": "mm"},
+  "unit_aliases": {"\"": "inch", "''": "inch", "″": "inch", "”": "inch", "“": "inch", "in": "inch", "inches": "inch", "inch": "inch", "mm": "mm", "millimeter": "mm", "millimeters": "mm", "millimetre": "mm", "millimetres": "mm"},
   "nominal_prefixes": {"dn": "dn", "nps": "nps"},
   "nominal_units": {"mm": "dn", "millimeter": "dn", "inch": "nps"},
   "nominal_sizes": [

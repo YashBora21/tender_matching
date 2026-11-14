@@ -4585,3 +4585,20 @@ Remaining:human review of claim/mapping sheets;plan a reviewed append-only apply
 or re-extract genuine claims with verified scope. Do not bulk-extract252 empty
 placeholders or claim the cache is repaired/applied yet. Part B can use these
 findings while implementing request reuse and context deduplication.
+
+
+### 2026-11-14 - Reviewed evidence: nominal normalization (D-181)
+
+Handle DN/NPS stored as units using configured nominal sizes; preserve full ranges
+with repeated units/designators and correct mixed Unicode fractions. Curly inch
+quotes remain unit-alias data; SI unit case is preserved. Unknown/conflicting
+sizes or units require review. Raw values, quotes, units and operators unchanged.
+Normalization fingerprint advances to structured-values-4; no extraction prompt
+or response-schema change. Source evidence gates remain unchanged.
+
+Combined Part A isolated tracked snapshot: 1379 backend unit tests passed,
+3 skipped,24 integration tests deselected;collector15 and eval62 passed. Initial
+sandbox HTTP tests were blocked by local socket permissions and rerun with local
+mock-server access. A mixed working-tree run had1380 passes and2 failures while
+Part B changed its batch prompt/tests;those files remain untouched. No paid calls
+or application database writes. Existing unrelated conftest edits untouched.

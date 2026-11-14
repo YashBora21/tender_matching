@@ -5236,3 +5236,36 @@ Do not overwrite reviewer artifacts. Require explicit opt-in for the historical
 quarantine writer;it does not apply current proposals. Current apply needs a
 separate reviewed,stale-snapshot-checked plan. No verifier,prompt,response schema
 or cache-key change;no paid call required for this offline recovery.
+
+## D-181 nominal range normalization beside immutable source evidence - 2026-11-14
+
+Interpret DN/NPS labels using the configured nominal-size table, including when
+the label is stored in the unit field. Parse repeated endpoint units/designators
+and preserve both range bounds. Reject mixed systems, unknown sizes and conflicting
+units. Space mixed Unicode fractions before compatibility folding so 1¼ cannot
+become 11/4. Unit punctuation remains configuration data; ordinary SI unit case
+is preserved. Never change the original value, unit, quote or operator.
+
+Increment the normalization version to structured-values-4. This deliberately
+changes the normalization fingerprint, requiring derived resolution to be
+recalculated; extraction prompts and response contracts are unchanged. This is
+not permission to promote an old scalar endpoint or bypass an evidence gate.
+
+## D-181
+Batch fact extraction sends identical table context once, referenced by a
+per-passage context_id into a shared "contexts" array (Part B). BATCH_INSTRUCTIONS
+and the batch input shape change, so contract_version() changes and previously
+cached facts are re-read rather than reused under a stale contract. Passage-to-
+context binding is preserved: each passage's table/row/column indices refer to its
+context_id, and the verifier still re-derives source_context per candidate.
+batch_input_chars now measures the deduplicated payload, so the configured char
+bound admits more passages per call without exceeding the true sent size.
+
+## D-182
+The verified-fact cache is gated on explicit source identity and extraction
+contract (Part B). _cached_fact treats a stored fact as a miss unless its
+source_context.fact_prompt_version equals the current contract_version() and its
+document_sha256 equals the current document's sha256. A changed prompt or changed
+source bytes therefore forces a fresh read; ranges, units, conditions and
+component/model scope are unchanged. Conflicting stored values still return no
+cache hit (findings.cached_fact), so conflicts stay distinct.

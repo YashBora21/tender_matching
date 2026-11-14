@@ -12,9 +12,9 @@ from app.comparison.units import parse_unit
 from app.core.config import get_settings
 from app.schemas.enums import RequirementType
 
-VERSION = 'structured-values-3'
+VERSION = 'structured-values-4'
 _NUMBER = r'[+-]?(?:\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)'
-_QUANTITY = re.compile(rf'^\s*(?P<prefix>[A-Za-z]+)?\s*(?P<low>{_NUMBER})(?:\s*(?:–|—|-|\bto\b)\s*(?P<high>{_NUMBER}))?\s*(?P<unit>[^\d]*)\s*$')
+_QUANTITY = re.compile(rf'^\s*(?P<prefix>[A-Za-z]+)?\s*(?P<low>{_NUMBER})(?:\s*(?P<first_unit>[^\d]*?)\s*(?:–|—|-|\bto\b)\s*(?P<high_prefix>[A-Za-z]+)?\s*(?P<high>{_NUMBER}))?\s*(?P<unit>[^\d]*)\s*$')
 
 
 def policy_path():
@@ -60,6 +60,14 @@ def _number(text):
     return -magnitude if text.startswith('-') else magnitude
 
 
+def _quantity_text(value):
+    # NFKC alone turns 1¼ into 11/4, changing the magnitude.
+    spaced = ''.join((' ' if i and value[i-1].isdigit() and
+                      unicodedata.decomposition(char).startswith('<fraction>') else '') + char
+                     for i, char in enumerate(value or ''))
+    return unicodedata.normalize('NFKC', spaced).replace('⁄', '/')
+
+
 def normalize_fields(attribute, value, unit, *, aliases=()):
     """Normalize only an approved typed attribute; never change raw input fields."""
     canonical, reason = resolve_name(attribute, aliases)
@@ -71,7 +79,7 @@ def normalize_fields(attribute, value, unit, *, aliases=()):
     if spec.value_type.value not in ('numeric', 'range'):
         return result
     policy = json.loads(policy_path().read_text(encoding='utf-8'))
-    text = unicodedata.normalize('NFKC', value or '').replace('⁄', '/')
+    text = _quantity_text(value)
     if getattr(spec, 'normalization', None) == 'nominal':
         annotated = re.fullmatch(r'\s*([^()]+?)\s*\(([^()]+)\)\s*', text)
         if annotated:
@@ -85,29 +93,46 @@ def normalize_fields(attribute, value, unit, *, aliases=()):
     match = _QUANTITY.fullmatch(text)
     if not match:
         return dict(result, review_required=True, review_reason='unresolved structured numeric value')
-    suffix = match['unit'].strip()
-    declared = unit or suffix
-    canonical_unit = policy['unit_aliases'].get(str(declared).casefold(), parse_unit(declared)) if declared else None
-    suffix_unit = policy['unit_aliases'].get(suffix.casefold(), parse_unit(suffix)) if suffix else None
-    if suffix and (suffix_unit is None or (canonical_unit and suffix_unit != canonical_unit)):
-        return dict(result, review_required=True, review_reason='conflicting or unknown numeric unit')
-    if declared and canonical_unit is None:
-        return dict(result, review_required=True, review_reason='unknown numeric unit')
+    strategy = getattr(spec, 'normalization', None)
+    systems = []
+    units = []
+    aliases_by_unit = {unicodedata.normalize('NFKC', key).casefold(): val
+                       for key, val in policy['unit_aliases'].items()}
+    for designator in (match['prefix'], match['high_prefix']):
+        if designator:
+            system = policy['nominal_prefixes'].get(designator.casefold()) if strategy == 'nominal' else None
+            if system is None:
+                return dict(result, review_required=True, review_reason='unknown numeric prefix')
+            systems.append(system)
+    for declared in (unit, match['first_unit'], match['unit']):
+        if not declared or not declared.strip():
+            continue
+        spelling = unicodedata.normalize('NFKC', declared.strip())
+        token = spelling.casefold()
+        system = policy['nominal_prefixes'].get(token) if strategy == 'nominal' else None
+        if system:
+            systems.append(system)
+            continue
+        canonical_unit = aliases_by_unit.get(token) or parse_unit(spelling)
+        if canonical_unit is None:
+            return dict(result, review_required=True, review_reason='unknown numeric unit')
+        units.append(canonical_unit)
+        if strategy == 'nominal':
+            system = policy['nominal_units'].get(canonical_unit)
+            if system is None:
+                return dict(result, review_required=True, review_reason='unknown nominal designator')
+            systems.append(system)
+    if len(set(units)) > 1 or len(set(systems)) > 1:
+        return dict(result, review_required=True, review_reason='conflicting numeric units or nominal designators')
+    canonical_unit = units[0] if units else None
     try:
         numbers = [_number(match['low'])] + ([_number(match['high'])] if match['high'] else [])
     except (ValueError, ZeroDivisionError):
         return dict(result, review_required=True, review_reason='invalid numeric value')
     if len(numbers) == 2 and numbers[0] > numbers[1]:
         return dict(result, review_required=True, review_reason='reversed numeric range')
-    strategy = getattr(spec, 'normalization', None)
     if strategy == 'nominal':
-        prefix_system = policy['nominal_prefixes'].get((match['prefix'] or '').casefold())
-        if match['prefix'] and prefix_system is None:
-            return dict(result, review_required=True, review_reason='unknown nominal designator')
-        unit_system = policy['nominal_units'].get(canonical_unit)
-        if prefix_system and unit_system and prefix_system != unit_system:
-            return dict(result, review_required=True, review_reason='conflicting nominal designators')
-        system = prefix_system or unit_system
+        system = systems[0] if systems else None
         if system is None:
             return dict(result, review_required=True, review_reason='nominal size requires an explicit DN/NPS/unit label')
         mapped = []
@@ -122,8 +147,6 @@ def normalize_fields(attribute, value, unit, *, aliases=()):
         result['nominal_nps'] = numbers
         result['kind'] = 'nominal'
         canonical_unit = 'inch'
-    elif match['prefix']:
-        return dict(result, review_required=True, review_reason='unknown numeric prefix')
     result.update(value='-'.join(f'{number:g}' for number in numbers), unit=canonical_unit,
                   range=numbers if len(numbers) == 2 else None)
     return result
