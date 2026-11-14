@@ -9,7 +9,8 @@ day or the month is already spent.
 Three rules, each deliberate:
 
 1. **Disabled by default.** With `LLM_SPEND_CAPS_ENABLED` unset the ledger is
-   never opened, so unit tests and a machine without a database behave exactly
+   never opened unless tracking-only mode is explicitly enabled, so unit tests
+   and a machine without a database behave exactly
    as before.
 2. **Fail closed.** If caps are enabled but no price is configured, or the
    ledger cannot be read, the call is refused rather than assumed free. A cap
@@ -112,7 +113,8 @@ class SpendLedger:
 
     @staticmethod
     def enabled() -> bool:
-        return bool(get_settings().llm_spend_caps_enabled)
+        settings = get_settings()
+        return bool(settings.llm_spend_caps_enabled or getattr(settings, 'llm_spend_tracking_enabled', False))
 
     def check(self) -> None:
         """Refuse the next call when the day or month budget is spent."""
@@ -121,7 +123,7 @@ class SpendLedger:
         settings = get_settings()
         daily = float(settings.llm_daily_cap_inr or 0)
         monthly = float(settings.llm_monthly_cap_inr or 0)
-        if daily <= 0 and monthly <= 0:
+        if settings.llm_spend_caps_enabled and daily <= 0 and monthly <= 0:
             raise SpendLedgerUnavailable(
                 "spend caps are enabled but neither LLM_DAILY_CAP_INR nor "
                 "LLM_MONTHLY_CAP_INR is set"
@@ -131,6 +133,8 @@ class SpendLedger:
                 "spend caps are enabled but no price is configured; set "
                 "LLM_COST_INPUT_PER_MTOK_INR and LLM_COST_OUTPUT_PER_MTOK_INR"
             )
+        if not settings.llm_spend_caps_enabled:
+            return
         try:
             with self._session_factory() as session:
                 totals = read_totals(session)
@@ -154,7 +158,7 @@ class SpendLedger:
         if not self.enabled():
             return None
         settings = get_settings()
-        if settings.llm_daily_cap_inr <= 0 and settings.llm_monthly_cap_inr <= 0:
+        if settings.llm_spend_caps_enabled and settings.llm_daily_cap_inr <= 0 and settings.llm_monthly_cap_inr <= 0:
             raise SpendLedgerUnavailable('spend caps are enabled but no positive daily or monthly cap is configured')
         cost = call_cost_inr(input_bound, output_bound)
         if cost is None:
@@ -167,7 +171,7 @@ class SpendLedger:
                 totals = read_totals(session)
                 for period, total, cap in [('daily',totals.day_inr,settings.llm_daily_cap_inr),
                                            ('monthly',totals.month_inr,settings.llm_monthly_cap_inr)]:
-                    if cap > 0 and Decimal(str(total)) + cost > Decimal(str(cap)):
+                    if settings.llm_spend_caps_enabled and cap > 0 and Decimal(str(total)) + cost > Decimal(str(cap)):
                         raise SpendCapReached(f'the {period} INR cap would be exceeded by the next call reservation')
                 session.execute(llm_spend.insert().values(id=identifier,model=model,purpose=purpose,
                     prompt_tokens=0,completion_tokens=0,cost_inr=cost))

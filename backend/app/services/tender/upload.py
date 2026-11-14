@@ -81,6 +81,7 @@ def effective_limits() -> dict:
         "classification_batch_chars": settings.requirement_classification_batch_chars,
         "source_form_heading_chars": settings.source_form_heading_chars,
         "spend_caps_enabled": getattr(settings, 'llm_spend_caps_enabled', False),
+        "spend_tracking_enabled": settings.llm_spend_caps_enabled or getattr(settings, 'llm_spend_tracking_enabled', False),
         "schema_version": settings.schema_version,
         "app_version": settings.app_version,
         "reader_version": READER_VERSION,

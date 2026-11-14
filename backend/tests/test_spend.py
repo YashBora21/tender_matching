@@ -26,6 +26,7 @@ def _clean(monkeypatch):
     # .env: the assertions below are about arithmetic, not about a deployment.
     for key in (
         "LLM_SPEND_CAPS_ENABLED",
+        "LLM_SPEND_TRACKING_ENABLED",
         "LLM_DAILY_CAP_INR",
         "LLM_MONTHLY_CAP_INR",
         "LLM_COST_INPUT_PER_MTOK_INR",
@@ -155,3 +156,26 @@ def test_the_client_stops_when_the_ledger_cannot_be_enforced(monkeypatch):
     client.ledger = Unreadable()
     with pytest.raises(LLMBudgetExceeded, match="could not be enforced"):
         client.chat("synthetic system", "synthetic user")
+
+
+
+def test_tracking_without_caps_records_even_when_old_caps_are_spent(monkeypatch):
+    _settings(monkeypatch,LLM_SPEND_CAPS_ENABLED='false',LLM_SPEND_TRACKING_ENABLED='true',
+              LLM_DAILY_CAP_INR=1,LLM_MONTHLY_CAP_INR=1,
+              LLM_COST_INPUT_PER_MTOK_INR=100,LLM_COST_OUTPUT_PER_MTOK_INR=400)
+    monkeypatch.setattr(spend,'read_totals',lambda session:spend.SpendTotals(100,100,10))
+    statements=[]
+    class Session:
+        def execute(self,statement):statements.append(statement)
+    ledger=SpendLedger(session_factory=lambda:nullcontext(Session()))
+    ledger.check()
+    identifier=ledger.reserve(model='synthetic',purpose='matching',input_bound=100,output_bound=50)
+    assert identifier is not None
+    ledger.settle(identifier,prompt_tokens=80,completion_tokens=20)
+    assert len(statements)==3 and statements[1].is_insert and statements[2].is_update
+
+
+def test_tracking_without_caps_still_requires_a_price(monkeypatch):
+    _settings(monkeypatch,LLM_SPEND_CAPS_ENABLED='false',LLM_SPEND_TRACKING_ENABLED='true')
+    with pytest.raises(SpendLedgerUnavailable,match='price'):
+        SpendLedger(session_factory=lambda:None).check()

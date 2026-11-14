@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     # machine never touch the ledger. Enabling the caps without a price is
     # refused at the first call rather than treated as free.
     llm_spend_caps_enabled: bool = False
+    llm_spend_tracking_enabled: bool = False
     llm_spend_input_overhead_tokens: int = Field(default=512, ge=0)
     llm_daily_cap_inr: float = Field(default=0.0, ge=0, allow_inf_nan=False)
     llm_monthly_cap_inr: float = Field(default=0.0, ge=0, allow_inf_nan=False)

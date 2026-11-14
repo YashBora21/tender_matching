@@ -5201,3 +5201,18 @@ accepts requests immediately, and both loaders stay lazy so a read that starts
 before warm-up finishes loads what it needs. On shutdown the in-flight load is
 not interruptible, so close waits for it before closing the worker (no stray
 engine). No route, schema or limit changed.
+
+
+## D-179 uncapped local runs with independent spend tracking - 2026-11-14
+
+The user explicitly requested removal of local processing limits,overriding the
+earlier monthly spending ceiling. Private configuration now sets call/token
+budgets0 (existing unlimited semantics),disables spend caps and clears daily/
+monthly ceilings. Preserve per-call accounting with optional
+LLM_SPEND_TRACKING_ENABLED;caps still imply tracking. Tracking-only mode reserves
+and settles usage without enforcing caps. Existing enabled-cap validation and
+positive-cap enforcement remain unchanged. Prices and an available ledger are
+still required when tracking is enabled. No provider settings,prompts,response
+keys,evidence verification,request-size bounds or retry policy changed.
+The private deployment now explicitly chooses tracking=true and caps=false;
+public defaults do not enable accounting or impose new limits.
