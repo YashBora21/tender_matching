@@ -30,3 +30,25 @@ def test_legacy_writer_requires_explicit_opt_in_before_reading_or_writing(monkey
     monkeypatch.setattr(apply_evidence_review,'get_engine',lambda:pytest.fail('Database must not open without opt-in'))
     with pytest.raises(SystemExit,match='No database changes made'):
         apply_evidence_review.main([])
+
+
+def test_current_quarantine_preserves_claim_and_never_promotes():
+    from copy import deepcopy
+    from eval.apply_evidence_review import quarantine_plan
+    from app.services.cli.fact_cache import digest
+    rows=[dict(fact_id='synthetic-fact',verification_status='verified',value='Synthetic value',quote='Synthetic quote')]
+    original=deepcopy(rows)
+    proposals=[dict(fact_id='synthetic-fact',original_fact_sha256=digest(rows[0]),
+        proposed_status='needs_review',blockers=['Synthetic missing scope'],cache_eligible_after_reviewed_apply=False)]
+    assert len(quarantine_plan(rows,proposals))==1
+    proposals[0]['proposed_status']='verified'
+    assert quarantine_plan(rows,proposals)==[] and rows==original
+
+
+def test_current_quarantine_rejects_stale_or_duplicate_snapshots():
+    import pytest
+    from eval.apply_evidence_review import quarantine_plan
+    row=dict(fact_id='synthetic-fact',verification_status='verified')
+    proposal=dict(fact_id='synthetic-fact',original_fact_sha256='synthetic-stale')
+    with pytest.raises(ValueError,match='Stale'):quarantine_plan([row],[proposal])
+    with pytest.raises(ValueError,match='identities'):quarantine_plan([row],[proposal,proposal])

@@ -4631,3 +4631,27 @@ Remaining:scoped source reconstruction/re-extraction for gate failures,reviewed
 mappings and an append-only apply preview. No current proposal can be promoted
 safely just because the human decision says supported. User need not repeat the
 completed73-row review. Old evidence and intermediate audit directories retained.
+
+
+### 2026-11-14 - Applied reviewed fact quarantine after Part B (D-185)
+
+Part B commit604f381 present. Added current-audit dry-run/apply path to the review
+writer with code/snapshot/fact-digest checks,row locks and whole-transaction
+rollback on mismatches. No promotion path. Save recovery before writing;append
+previous full fact snapshots and review reasons to source-context history.
+
+Read-only preview:.audit_tmp/quarantine-preview-20261114/. Applied user-authorized
+17 verified-to-needs_review downgrades via --yes;recovery and completed records:
+.audit_tmp/quarantine-applied-20261114/. Readback confirmed325 facts preserved,
+all claim/provenance fields unchanged,17 previous snapshots stored in history,
+0 verified facts remaining. No deletion,promotion,schema change or paid call.
+This removes unreliable cache entries;it does not establish manufacturer failure
+or complete the scoped source reconstruction. Old audit snapshots are historical
+following this intentional write;do not replay them as current plans.
+
+Focused planner/audit/Part B matcher tests passed. Combined backend unit suite:
+1387 passed,24 integration tests deselected. Existing unrelated conftest changes
+untouched. Public aggregate:eval/audit/quarantine-2026-11-14/summary.json.
+Remaining:scoped fresh evidence extraction/reverification,reviewed mappings and
+measured first/repeat tender runs. Part B multi-attribute extraction remains
+deferred per its handoff;current reuse is per verified product/attribute.

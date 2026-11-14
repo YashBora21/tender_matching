@@ -1,0 +1,14 @@
+{
+  "facts_preserved": 325,
+  "quarantined": 17,
+  "promoted": 0,
+  "unchanged_claims_and_provenance": true,
+  "previous_snapshots_preserved": true,
+  "verified_remaining": 0,
+  "paid_calls": 0,
+  "integrated_unit_tests": {
+    "passed": 1387,
+    "failures": 0,
+    "integration_deselected": 24
+  }
+}

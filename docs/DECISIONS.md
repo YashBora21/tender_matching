@@ -5289,3 +5289,18 @@ integrity stays with load_page_context, which raises on a sha mismatch when the
 page is re-read, so this gate does not re-fetch the document sha. Ranges, units,
 conditions and component/model scope are unchanged. Conflicting stored values
 still return no cache hit (findings.cached_fact), so conflicts stay distinct.
+
+## D-185 reviewed quarantine with transactional recovery history - 2026-11-14
+
+The user authorized database writes after Part B. Extend the review writer with
+--audit-dir and --output-dir; default to a read-only dry run. Only verified facts
+whose unchanged audit proposes needs_review with failed gates can be downgraded;
+never promote a fact through this command. Validate auditor/verifier hashes,
+complete snapshot and every fact digest. Lock fact rows during apply and roll
+back the entire transaction on an unexpected update count. Refuse output-directory
+overwrites. Save the plan and full recovery snapshot before updates, and append
+each changed fact's previous snapshot, gate reasons and human review to its source
+context history. Keep every claim field, extraction provenance and existing result
+reference. Write completion only after commit. No schema, prompt, contract or
+source-verification change. An applied audit becomes historical; a future apply
+requires a fresh snapshot. Paid calls are unnecessary for this downgrade.

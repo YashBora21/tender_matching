@@ -11,6 +11,64 @@ sys.path.insert(0,str(ROOT/'backend'))
 from sqlalchemy import text
 from app.repositories.db import get_engine
 
+
+def quarantine_plan(rows, proposals):
+    from app.services.cli.fact_cache import digest
+    by_id = {p['fact_id']: p for p in proposals}
+    if len(by_id) != len(proposals) or set(by_id) != {r['fact_id'] for r in rows}:
+        raise ValueError('Audit identities do not match the database')
+    changes = []
+    for row in rows:
+        proposal = by_id[row['fact_id']]
+        if proposal['original_fact_sha256'] != digest(row):
+            raise ValueError('Stale fact snapshot; rerun the audit before applying')
+        if row['verification_status'] == 'verified' and proposal['proposed_status'] == 'needs_review':
+            if proposal.get('cache_eligible_after_reviewed_apply') or not proposal.get('blockers'):
+                raise ValueError('Quarantine requires failed evidence gates')
+            changes.append((row, proposal))
+    return changes
+
+
+def apply_current(audit_dir, output_dir, *, yes=False):
+    from copy import deepcopy
+    from hashlib import sha256
+    from app.services.cli.fact_cache import main as audit_main, digest
+    from app.services.match.verify import verify
+    summary = json.loads((audit_dir/'summary.json').read_text(encoding='utf-8'))
+    proposals = json.loads((audit_dir/'facts.json').read_text(encoding='utf-8'))
+    for key, path in [('auditor_code_sha256', Path(audit_main.__code__.co_filename)),
+                      ('verification_code_sha256', Path(verify.__code__.co_filename))]:
+        if sha256(path.read_bytes()).hexdigest() != summary[key]:
+            raise ValueError('Audit/verifier code changed; rerun the audit')
+    output_dir.mkdir(parents=True, exist_ok=False)
+    query = next(q for q in audit_main.__code__.co_consts if isinstance(q,str) and q.startswith('SELECT f.id::text fact_id'))
+    with get_engine().begin() as conn:
+        if not yes:
+            conn.execute(text('SET TRANSACTION READ ONLY'))
+        conn.execute(text('SET LOCAL statement_timeout=30000'))
+        rows = [dict(r) for r in conn.execute(text(query + (' FOR UPDATE OF f' if yes else ''))).mappings()]
+        if digest(rows) != summary['snapshot_sha256']:
+            raise ValueError('Database snapshot changed; rerun the audit')
+        changes = quarantine_plan(rows, proposals)
+        plan = {'mode':'apply' if yes else 'dry_run', 'promotions':0,
+                'quarantines':len(changes), 'snapshot_sha256':summary['snapshot_sha256'],
+                'fact_ids':[row['fact_id'] for row, _ in changes]}
+        (output_dir/'plan.json').write_text(json.dumps(plan,indent=2)+'\n',encoding='utf-8')
+        (output_dir/'recovery.json').write_text(json.dumps(rows,default=str,indent=2)+'\n',encoding='utf-8')
+        for row, proposal in changes if yes else []:
+            context = deepcopy(row.get('source_context') or {})
+            history = context.setdefault('evidence_review_history', [])
+            history.append({'recorded_at':datetime.now(timezone.utc).isoformat(),
+                'action':'quarantine', 'previous_fact':deepcopy(row),
+                'blockers':proposal['blockers'], 'human_review':proposal.get('human_review'),
+                'audit_snapshot_sha256':summary['snapshot_sha256']})
+            result = conn.execute(text("UPDATE fact SET verification_status='needs_review', source_context=CAST(:context AS jsonb) WHERE id::text=:id AND verification_status='verified'"),
+                {'id':row['fact_id'],'context':json.dumps(context,default=str)})
+            if result.rowcount != 1:
+                raise RuntimeError('Fact changed during quarantine; transaction rolled back')
+    (output_dir/'completed.json').write_text(json.dumps(dict(plan,database_writes=len(changes) if yes else 0),indent=2)+'\n',encoding='utf-8')
+    print(json.dumps({'mode':plan['mode'],'quarantines':len(changes),'promotions':0}))
+
 QUARANTINE = {
  '2021ac72-c034-4fa0-b85d-2ded7e6c7ad9':'AVK source names Series 55; linked product names Series 06/71/820',
  'e28b7dd7-145d-411c-afb8-1bfb3febdffe':'AVK source names Series 55; linked product names Series 06/71/820',
@@ -24,8 +82,14 @@ QUARANTINE = {
 
 def main(argv=None):
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--yes',action='store_true',help='Apply the historical reviewed quarantine only;not current repair proposals')
+    parser.add_argument('--yes',action='store_true',help='Apply the selected quarantine; --audit-dir defaults to dry run')
+    parser.add_argument('--audit-dir',type=Path,help='Current reviewed dry-run directory; quarantine only, never promote')
+    parser.add_argument('--output-dir',type=Path,help='New private directory for plan and recovery record')
     args=parser.parse_args(argv)
+    if args.audit_dir or args.output_dir:
+        if not (args.audit_dir and args.output_dir):
+            parser.error('--audit-dir and --output-dir are required together')
+        return apply_current(args.audit_dir,args.output_dir,yes=args.yes)
     if not args.yes:
         raise SystemExit('No database changes made. First run reassess_source_context.py --output-dir PATH and review its dry-run report. Historical quarantine application requires --yes.')
     source=ROOT/'eval/audit/evidence-review.csv'
