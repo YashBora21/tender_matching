@@ -5135,3 +5135,17 @@ and unassigned rows. No label words,values,categories or tender-specific branche
 Reader21 refreshes the local requirement checkpoint. Changed table context uses
 the existing table-context cache hash;unchanged contexts retain valid responses.
 No LLM instructions,schema,verifier or alias approval change.
+
+
+## D-174 user-reviewed item assignment is evidence,not an inferred rule - 2026-11-14
+
+The user confirmed2 page-break source rows belong to BOQ item6. Apply only that
+confirmation to uniquely identified current source rows;retain source identity,
+confirmation digest and reviewer metadata. Use the existing append-only reading
+attempt and superseding requirement write;never edit old rows or loosen the
+completion gate. Extract the remaining field through the normal bounded client
+and verifier. This is manual review data,not a tender-specific parser branch.
+Store the detailed confirmation privately with the tender and in normalization.
+The existing forced-reread pipeline does not automatically consume that private
+confirmation file;it must be reapplied/reviewed after a forced reread. A complete
+unchanged reading continues to be reused. No prompt or response-cache-key change.

@@ -1,0 +1,63 @@
+{
+  "code_rc": "rc-2026-11-14.5",
+  "code_commit": "e583d68184257b6dd810afb9831010a84dcd92e0",
+  "automatic_read": {
+    "attempt_id": "8a8c5f57-2342-46ea-900b-de85812c23a4",
+    "status": "incomplete",
+    "remaining_blockers": 2,
+    "wall_seconds": 133.933617499948,
+    "stage_seconds": {
+      "_read_items": 6.066136999987066,
+      "_read_package": 88.0382725999807,
+      "_extract_all": 5.56042209995212,
+      "_persist": 0.4300747999805026
+    },
+    "calls": 1,
+    "input_tokens": 2389,
+    "output_tokens": 597,
+    "cache_hits": 143,
+    "estimated_cost_inr": 0.221,
+    "pages": {
+      "parsed": 60
+    },
+    "boq_technical_candidates": 21
+  },
+  "human_reviewed_revision": {
+    "attempt_id": "76dc79a3-d48e-4edb-8c84-9a5038c4da43",
+    "metrics": {
+      "human_reviewed_bindings": 2,
+      "llm_calls": 1,
+      "prompt_tokens": 1285,
+      "completion_tokens": 102,
+      "wall_seconds": 2.3949910000083037,
+      "estimated_cost_inr": 0.0641,
+      "code_commit": "e583d68184257b6dd810afb9831010a84dcd92e0",
+      "label_sha256": "749ffb17d6229dd68bbcc566cea6f34220589fed7a9a88ad17f93c8be08e7c5b",
+      "prior_rows_preserved": true
+    },
+    "status": "done",
+    "completion_gaps": [],
+    "human_reviewed_bindings": 2,
+    "active_rows": 914,
+    "accounted_pages": 60
+  },
+  "phase_total_estimated_cost_inr": 0.9956,
+  "phase_total_llm_calls": 6,
+  "phase_total_input_tokens": 11185,
+  "phase_total_output_tokens": 2639,
+  "accuracy": "ungraded",
+  "retrieval_and_e2e": "not run in this phase",
+  "grouping": "off",
+  "profile_summary": {
+    "document_reading_seconds": 88.0383,
+    "pdfplumber_parse_objects_seconds": 73.004,
+    "pdfplumber_textmap_seconds": 54.828,
+    "pdf_layout_seconds": 45.455,
+    "note": "Inclusive times overlap;do not sum. Persistence0.430s;model extraction5.560s."
+  },
+  "limitations": [
+    "Automatic read still had2 unassigned rows;user explicitly confirmed both as item6.",
+    "Manual confirmation is stored in private source data and database normalization;future forced rereads must reapply/review the saved confirmation.",
+    "Completion does not approve aliases,normalize every value or grade manufacturer matching."
+  ]
+}

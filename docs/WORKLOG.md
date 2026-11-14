@@ -4423,3 +4423,34 @@ metadata propagation. Full offline suite:1382 passed /6 skipped,zero failures/er
 The resume reused its parsed checkpoint,so did not invoke package reading and
 produced no document-reading profile. Do not treat115s as a cold-document result.
 No further paid calls yet;new reader checkpoint must be measured separately.
+
+
+### 2026-11-14 — measured source recovery and reviewed completion
+
+On rc-2026-11-14.5 /e583d68,the new reader completed its automatic pass in133.934s:
+1 call,2389 input/597 output tokens,INR0.221 estimated,143 reported cache hits.
+60 pages parsed;21 BOQ technical candidates. All5 recovered value rows and the
+standards condition were represented. Only2 unassigned item rows remained.
+
+The user explicitly confirmed both DN80 page-break rows belong to item6. Saved
+that confirmation privately with the tender,including original source row IDs
+and source-text digests. A superseding reviewed revision assigns only those rows;
+its remaining field was extracted with1 verified call,1285 input/102 output
+tokens,INR0.0641 estimated,2.395s. The first INR1 reservation guard declined before
+any call/write;INR1.50 accommodated configured maximum output reservation.
+Read-only database verification:status done,no completion gaps,2 human-reviewed
+assignments,914 active rows,60 pages accounted. Old rows and attempts preserved.
+This is human-reviewed completion,not a fully automatic item-binding result.
+
+Phase total:6 calls,11185 input/2639 output tokens,INR0.9956 estimated. No new
+manufacturer matching;accuracy/false-confident grade remains ungraded. Grouping
+off. Full offline suite1382 passed/6 skipped. Aggregate report:
+eval/audit/submission-2026-11-14/reviewed-completion.json. Detailed confirmations,
+source pages,responses and profiles remain private.
+
+Profile:package reading88.038s,extraction5.560s,persistence0.430s. Inclusive
+pdfplumber parsing73.004s,text-map54.828s,layout45.455s overlap and must not be
+summed. Native PDF parsing dominates;do not remove persistence to fix it.
+Next phase:retrieval and frontend/E2E validation with reviewed labels. A forced
+read-again currently needs the saved human confirmation reapplied/reviewed;normal
+reuse of this complete reading preserves it. No claim of production readiness.
