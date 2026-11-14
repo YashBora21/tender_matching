@@ -1,0 +1,35 @@
+{
+  "source_scan": {
+    "pages": 60,
+    "assigned_rows": 147,
+    "assigned_by_role": {
+      "boq": 48,
+      "specification": 99
+    },
+    "unassigned_candidates": 39,
+    "unassigned_property_scope": 39,
+    "bound_specification_rows_by_item": {
+      "1": 13,
+      "2": 13,
+      "3": 13,
+      "4": 6,
+      "5": 6,
+      "6": 3,
+      "7": 5,
+      "8": 12,
+      "9": 6,
+      "10": 11,
+      "11": 11
+    }
+  },
+  "paid_calls": 0,
+  "database_mutations": false,
+  "merged_cell_review": "39 unresolved property rows deliberately retained, no guessed values or item IDs",
+  "offline_suite": {
+    "tests": "1371",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "6",
+    "time": "116.904"
+  }
+}

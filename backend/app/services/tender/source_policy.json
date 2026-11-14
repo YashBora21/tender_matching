@@ -17,6 +17,12 @@
   "fragment_prose_roles": ["cover", "atc", "sla", "supporting"],
   "primary_roles": ["specification", "boq"],
   "requirement_source_roles": ["specification", "boq"],
+  "section_role_patterns": {
+    "atc": ["(?:special|general|additional)\\s+(?:terms\\s+and\\s+)?conditions\\s+(?:of\\s+)?contract", "(?:special|general|additional)\\s+terms\\s+and\\s+conditions"],
+    "sla": ["service\\s+level\\s+agreement"],
+    "specification": ["(?:annexure\\s*[-–—:]?\\s*[a-z0-9]+\\s+)?technical\\s+(?:specifications?|requirements?)"],
+    "boq": ["(?:bill|schedule)\\s+of\\s+quantities", "boq"]
+  },
   "restricted_roles": ["cover", "atc", "sla", "supporting", "unknown"],
   "nontechnical_types": ["commercial", "eligibility", "informational"],
   "template_min_distinct_tenders": 3,

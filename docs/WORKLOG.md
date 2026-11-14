@@ -4285,3 +4285,26 @@ Remaining before the capped measured re-read: mixed-attachment section routing
 and merged-cell ambiguity (39 property rows may stay flagged). Then one paid
 re-read of the frozen tender, reporting per-stage calls/tokens/cost with the
 purpose split, unresolved well under 460 and technical candidates back to 18.
+
+
+## 2026-11-14 - Submission routing gate and merged-cell review, offline
+
+Verified the other agent's39875d2 extraction-batching handoff and clean tracked
+working tree. Added explicit section-heading role routing inside primary files:
+contract/SLA roles persist across page continuations, explicit technical/BOQ
+headings reset the role, and each document starts with its own source role.
+Supporting/form documents cannot promote themselves. Rows and pages stay visible;
+nonprimary sections make0 model calls. Full source keys change; unchanged
+classifier input keys remain reusable. No model instruction/schema changes.
+
+Saved package:60 pages retained,147 bound rows (48 BOQ+99 specification),39
+unassigned candidates, all property-scope ambiguities. Previously119 candidates
+included80 prose rows in contract sections; those now remain context. Original
+cells show missing/merged value or number scope, so retain the39 for review;
+do not invent values or item IDs. No accuracy grade from routing counts.
+
+Clean-snapshot backend+collector+eval suite:1365 passed/6 skipped/0 failures.
+Benchmark instrumentation self-checks both batch schemas and singles, blocking
+context-only records. No paid generation in this gate; tariff checked privately
+against the configured target. Next:one approved capped re-read on a new RC,
+with native spend ledger, per-purpose metrics and all reading history preserved.

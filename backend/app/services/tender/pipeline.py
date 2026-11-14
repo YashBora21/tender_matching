@@ -997,12 +997,13 @@ def _read_package(tender_id, directory, attachments, specification, repo, *, ali
         attachment_id = (_attachment_id(repo, tender_id, source)
                          if repo is not None and source.get('source_key') != 'wrapper' else None)
         source_key = source.get('source_key') or attachment_id or source.get('sha256') or 'legacy'
-        from app.services.tender.source_policy import source_role, triage, form_heading, policy as source_policy
+        from app.services.tender.source_policy import source_role, section_role, triage, form_heading, policy as source_policy
         role = source_role(source, specification=source is specification)
         read = _read_specification(source, directory)
         heading = form_heading(read.rows)
         if heading:
             role = source_policy()['form_source_role']
+        active_role = role
         if read.error:
             combined.error = read.error
             for number in range(1, (source.get('pages') or 0) + 1):
@@ -1012,20 +1013,24 @@ def _read_package(tender_id, directory, attachments, specification, repo, *, ali
             page.source_role = role
             page_rows = [row for row in read.rows if row['page'] == page.page]
             for position, row in enumerate(page_rows):
+                if role in source_policy()['primary_roles']:
+                    active_role = section_role(row.get('title'), active_role)
+                row_role = active_role
                 if row.get('source_row_id') is None:
                     row['source_row_id'] = f'prose:{position}'
-                decision = triage(row.get('row_text') or row['description'], role,
+                decision = triage(row.get('row_text') or row['description'], row_role,
                                   page_tag=row.get('page_tag'), section=row.get('title'),
                                   table=(row.get('extraction_method') in {'table', 'item'} or
                                          bool(row.get('source_cells'))),
                                   aliases=aliases, form_context=bool(heading))
-                row.update(source_role=role, context_only=decision.context_only,
+                row.update(source_role=row_role, context_only=decision.context_only,
                            candidate_type=decision.candidate_type, clause_type=decision.clause_type,
                            source_policy_reason=decision.reason, fragment_reason=decision.fragment_reason)
             for row in page_rows:
                 row['source_neighbors'] = [candidate.get('row_text') or candidate['description']
                     for candidate in page_rows
-                    if candidate is not row and candidate.get('title') == row.get('title')]
+                    if candidate is not row and candidate.get('title') == row.get('title')
+                    and candidate.get('source_role') == row.get('source_role')]
             context = page.source_context
             if context is None:
                 context = {'headers': next((row['source_headers'] for row in page_rows if row.get('source_headers')), ['Field', 'Value'] if any(row.get('source_cells') for row in page_rows) else []),

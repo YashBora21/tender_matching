@@ -5068,3 +5068,8 @@ stop, and pipeline integration with cache reuse and context rows excluded).
 Full offline suite green: backend 1317 tests / 0 failures / 24 skipped, collect
 and eval 76 / 0. No paid calls; this is call-count evidence, not an accuracy
 grade.
+
+
+## D-169 mixed-attachment section routing - 2026-11-14
+
+Apply exact, data-driven section-heading roles within primary attachments, carry the role across page continuations, reset at explicit technical/BOQ headings, and reset at document boundaries. Retain contract/SLA sections as typed visible context under the approved primary-only policy, including certificates and physical statements. Supporting documents cannot promote themselves via a heading. All source pages remain accounted for; 39 ambiguous property scopes remain unresolved. Exclude section-role selectors from classifier fingerprints to preserve unchanged inputs; full source fingerprints change and changed row roles/context use distinct existing cache keys. No model instructions or output schema change.

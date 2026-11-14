@@ -24,7 +24,7 @@ def fingerprint(*, for_classification=False):
     from app.comparison.vocabulary import vocabulary_path
     settings = get_settings()
     data = {k:v for k,v in policy().items() if not (for_classification and
-            (k.startswith('form_') or k == 'requirement_source_roles'))}
+            (k.startswith('form_') or k in {'requirement_source_roles','section_role_patterns'}))}
     inputs = [data, classification_policy_fingerprint(),
                               certification_pattern().pattern, reviewed_data(),
                               settings.req_min_chars, settings.req_min_words,
@@ -74,6 +74,13 @@ def source_role(source, *, specification=False):
     if source.get('kind') == 'spec' or specification:
         return 'specification'
     return 'supporting'
+
+
+def section_role(title, current):
+    """Only explicit section headings change scope inside a primary attachment."""
+    matches = [role for role, patterns in policy()['section_role_patterns'].items()
+               if any(re.fullmatch(pattern, ' '.join((title or '').split()), re.I) for pattern in patterns)]
+    return matches[0] if len(matches) == 1 else current
 
 
 @dataclass(frozen=True)
