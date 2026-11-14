@@ -165,6 +165,11 @@ def contract_version() -> str:
     ], sort_keys=True)).encode()).hexdigest()
 
 
+def batch_input_chars(passages, source_contexts=None):
+    contexts = [_prompt_context(context) for context in source_contexts] if source_contexts else []
+    return sum(map(len, passages)) + len(json.dumps(contexts))
+
+
 def extract_fact_batch(requirement_text: str, passages: list[str], *, client=None, source_contexts=None) -> list[FactResult]:
     """Read a bounded group, retaining a separate result for every passage."""
     from app.core.config import get_settings
@@ -172,7 +177,7 @@ def extract_fact_batch(requirement_text: str, passages: list[str], *, client=Non
     settings = get_settings()
     source_contexts = [_prompt_context(context) for context in source_contexts] if source_contexts else None
     if (not passages or len(passages) > settings.match_extraction_batch_size
-            or sum(map(len, passages)) + len(json.dumps(source_contexts or [])) > settings.match_extraction_batch_chars):
+            or batch_input_chars(passages, source_contexts) > settings.match_extraction_batch_chars):
         raise ValueError("fact extraction batch exceeds configured bounds")
     prompt = SYSTEM_PROMPT + BATCH_INSTRUCTIONS
     try:

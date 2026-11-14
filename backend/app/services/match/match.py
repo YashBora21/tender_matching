@@ -44,7 +44,7 @@ from app.schemas.enums import (
     ValueType,
     VerificationOutcome,
 )
-from app.services.match.facts import extract_fact, extract_fact_batch, FactResult, contract_version
+from app.services.match.facts import extract_fact, extract_fact_batch, FactResult, contract_version, batch_input_chars
 from app.services.llm import LLMClient
 from app.services.requirement.normalize import parse_range
 from app.services.match.retrieve import Candidate, search
@@ -271,23 +271,27 @@ def match_requirement(
     best: Optional[MatchResult] = None
     grouped = {}
     for candidate_index, candidate in enumerate(candidates):
-        if settings.match_extraction_batch_size > 1 and candidate.chunk_id not in grouped:
+        if (settings.match_extraction_batch_size > 1 and candidate.chunk_id not in grouped
+                and _cached_fact(session, requirement_text, candidate.manufacturer, candidate.model) is None):
             pending = []
-            chars = 0
+            contexts = []
             for next_candidate in candidates[candidate_index:]:
                 if len(pending) >= settings.match_extraction_batch_size:
                     break
-                if chars + len(next_candidate.text) > settings.match_extraction_batch_chars:
-                    break
+                if next_candidate.chunk_id in grouped:
+                    continue
                 if _cached_fact(session, requirement_text, next_candidate.manufacturer, next_candidate.model) is not None:
                     continue
+                context = _evidence_context(session, next_candidate)
+                if batch_input_chars([p.text for p in pending] + [next_candidate.text], contexts + [context]) > settings.match_extraction_batch_chars:
+                    break
                 pending.append(next_candidate)
-                chars += len(next_candidate.text)
+                contexts.append(context)
             if len(pending) > 1:
                 session.commit()
                 with stage(result.stage_seconds, "extract"):
                     extracted_batch = extract_fact_batch(requirement_text, [p.text for p in pending], client=client,
-                                                        source_contexts=[_evidence_context(session, p) for p in pending])
+                                                        source_contexts=contexts)
                 result.llm_calls += 1
                 grouped.update((p.chunk_id, value) for p, value in zip(pending, extracted_batch))
         outcome = _match_candidate(

@@ -80,3 +80,35 @@ def test_budget_exhaustion_propagates_instead_of_becoming_silence(monkeypatch):
         extract_fact('Synthetic','Synthetic passage',client=Exhausted())
     with pytest.raises(LLMBudgetExceeded):
         extract_fact_batch('Synthetic',['Synthetic A','Synthetic B'],client=Exhausted())
+
+
+@pytest.mark.parametrize('cached_prefix',[False,True])
+def test_matcher_bounds_context_and_does_not_rebuy_future_batches(monkeypatch,cached_prefix):
+    import json
+    from types import SimpleNamespace
+    from app.services.match import match
+    from app.services.match.retrieve import Candidate
+    from app.services.match.facts import batch_input_chars
+    from app.core.config import get_settings
+    from app.schemas.enums import RequirementStatus
+    monkeypatch.setenv('LLM_MATCH_EXTRACTION_BATCH_SIZE','3')
+    monkeypatch.setenv('MATCH_EXTRACTION_BATCH_CHARS','600')
+    get_settings.cache_clear()
+    rows=[Candidate(chunk_id=str(i),document_id='synthetic-document',text='Synthetic passage '+str(i),
+                    page=1,manufacturer='Synthetic maker',model=str(i)) for i in range(6 if cached_prefix else 3)]
+    cached_ids={str(i) for i in range(4)} if cached_prefix else set()
+    monkeypatch.setattr(match,'_cached_fact',lambda s,r,m,model: {'synthetic':True} if model in cached_ids else None)
+    monkeypatch.setattr(match,'search',lambda *a,**k:rows)
+    context={'tables':[{'headers':['Synthetic label'],'rows':[['X'*150]]}],'native_lines':['unprompted geometry'*100]}
+    monkeypatch.setattr(match,'_evidence_context',lambda *a:context)
+    monkeypatch.setattr(match,'_match_candidate',lambda *a,**k:match.MatchResult(requirement_text='Synthetic',review_required=True))
+    seen=[]
+    class ValidatingClient:
+        def complete_json(self,system,user,**kwargs):
+            payload=json.loads(user);passages=payload['passages'];seen.append(len(passages))
+            assert batch_input_chars([p['text'] for p in passages],[p['source_context'] for p in passages])<=600
+            return {'passages':[{'passage_id':p['passage_id'],'requirements':[{'found':False}]} for p in passages]}
+    result=match.match_requirement(SimpleNamespace(commit=lambda:None),'Synthetic body material',client=ValidatingClient())
+    assert result.status is RequirementStatus.NO_EVIDENCE_FOUND
+    assert seen==[2]
+    get_settings.cache_clear()

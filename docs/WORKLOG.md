@@ -4493,3 +4493,15 @@ normalizes agreeing labels with the configured DN/NPS table and preserves human
 binding provenance through normalization. Focused normalization/parser checks:
 103 passed. Frontend:40 tests passed;production build clean. No paid call yet
 in this phase. Full backend suite:1394 passed /6 skipped,zero failures/errors;before the capped live matcher probe.
+
+
+### 2026-11-14 — real matcher exposed context-bound crash before spending
+
+On f3de332,the derived-only refresh preserved raw values/quotes/spans/item IDs
+and2 human bindings,with9 newly resolved values. Tender remains done. The live
+matcher then raised ValueError:fact extraction batch exceeds configured bounds,
+before any generative request (no paid journal). D-177 fixes the builder/
+extractor context-count mismatch and avoids eager future batches at cached
+candidates.64 focused fact/matcher/source-guard tests pass,including dense-context
+and cached-prefix regressions. Full suite pending before retry. No fact/result
+rows were published or changed by the failed matcher probe.

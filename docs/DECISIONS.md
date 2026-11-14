@@ -5177,3 +5177,16 @@ quotes and spans remain unchanged. Preserve human_review alongside source_contex
 when derived normalization is recalculated. No alias approval or category words.
 Structured-values version3 invalidates the derived resolution fingerprint,not
 the unchanged model prompts or response cache keys.
+
+
+## D-177 one fact-batch character calculation at builder and extractor - 2026-11-14
+
+The real matcher crashed before HTTP:its cohort counted passage characters only,
+but extract_fact_batch also counted projected source context. Share the existing
+extractor size calculation with the builder,including context and excluding
+unprompted native_lines. Build only cohorts that fit the existing configured
+bound;keep the extractor's defensive check. Cached current candidates must not
+buy future cohorts,and already scheduled candidates stay excluded. Source tables
+are not truncated and verification is unchanged. Prompt text,schema,contract hash
+and response-cache rules are unchanged;batch composition may be smaller when
+context is dense. No limit increase,provider change or new dependency.
