@@ -4481,3 +4481,15 @@ Keep the retrieval architecture/cutoff for now. This small gold slice does not
 grade all914 active context/requirement rows or final manufacturer claims.
 Next:bounded real matching/verifier evaluation and frontend/E2E checks;do not
 claim end-to-end accuracy or that6/6 retrieval pages mean6 correct matches.
+
+
+### 2026-11-14 — matching preflight found normalization blockers
+
+The current item10/11 fields are atomic;the6 confirmed historical labels are
+compound. They cannot be used as atomic status labels without reviewer approval.
+Several source labels remain unmapped by policy;do not approve Type or Pressure
+Rating silently. Paired nominal annotations were another general blocker. D-176
+normalizes agreeing labels with the configured DN/NPS table and preserves human
+binding provenance through normalization. Focused normalization/parser checks:
+103 passed. Frontend:40 tests passed;production build clean. No paid call yet
+in this phase. Full backend suite:1394 passed /6 skipped,zero failures/errors;before the capped live matcher probe.

@@ -5163,3 +5163,17 @@ model filtering,cache-first flow and evidence guards. No retrieval rewrite,
 threshold edit,embedding migration or corpus change is justified by this slice.
 This measures source retrieval only;matching-status accuracy needs a separate
 verifier/comparison evaluation. No prompt or response-cache-key change.
+
+
+## D-176 dual nominal annotations and retained human review metadata - 2026-11-14
+
+Matching validation found that2-inch(50mm) source sizes were read completely but
+rejected by the single-quantity normalizer. For approved nominal attributes only,
+normalize the outer quantity and its single parenthesized annotation separately
+through the existing DN/NPS policy. Accept only identical configured nominal
+size sequences;unknown units,sizes,conflicts and clipped ranges remain reviewed.
+Never use physical length conversion for nominal equivalence. Raw source values,
+quotes and spans remain unchanged. Preserve human_review alongside source_context
+when derived normalization is recalculated. No alias approval or category words.
+Structured-values version3 invalidates the derived resolution fingerprint,not
+the unchanged model prompts or response cache keys.

@@ -12,7 +12,7 @@ from app.comparison.units import parse_unit
 from app.core.config import get_settings
 from app.schemas.enums import RequirementType
 
-VERSION = 'structured-values-2'
+VERSION = 'structured-values-3'
 _NUMBER = r'[+-]?(?:\d+\s+\d+/\d+|\d+/\d+|\d+(?:\.\d+)?)'
 _QUANTITY = re.compile(rf'^\s*(?P<prefix>[A-Za-z]+)?\s*(?P<low>{_NUMBER})(?:\s*(?:–|—|-|\bto\b)\s*(?P<high>{_NUMBER}))?\s*(?P<unit>[^\d]*)\s*$')
 
@@ -72,6 +72,16 @@ def normalize_fields(attribute, value, unit, *, aliases=()):
         return result
     policy = json.loads(policy_path().read_text(encoding='utf-8'))
     text = unicodedata.normalize('NFKC', value or '').replace('⁄', '/')
+    if getattr(spec, 'normalization', None) == 'nominal':
+        annotated = re.fullmatch(r'\s*([^()]+?)\s*\(([^()]+)\)\s*', text)
+        if annotated:
+            primary = normalize_fields(canonical, annotated[1].strip(), unit, aliases=aliases)
+            secondary = normalize_fields(canonical, annotated[2].strip(), None, aliases=aliases)
+            if primary['review_required'] or secondary['review_required']:
+                return dict(result, review_required=True, review_reason='unresolved nominal size annotation')
+            if primary.get('nominal_dn') != secondary.get('nominal_dn'):
+                return dict(result, review_required=True, review_reason='conflicting nominal size annotations')
+            return primary
     match = _QUANTITY.fullmatch(text)
     if not match:
         return dict(result, review_required=True, review_reason='unresolved structured numeric value')
@@ -121,18 +131,17 @@ def normalize_fields(attribute, value, unit, *, aliases=()):
 
 def normalize_records(records, aliases=()):
     for record in records:
-        source_context = (record.normalization or {}).get('source_context')
+        metadata = {key: record.normalization[key] for key in ('source_context', 'human_review')
+                    if key in (record.normalization or {})}
         if record.requirement_type not in {RequirementType.TECHNICAL, RequirementType.CERTIFICATION}:
             # Clause-type/scope uncertainty is independent of technical alias resolution.
             record.normalization = {'policy': fingerprint(), 'attribute': None,
                 'value': record.value, 'unit': record.unit,
                 'review_required': False, 'review_reason': None}
-            if source_context is not None:
-                record.normalization['source_context'] = source_context
+            record.normalization.update(metadata)
             continue
         record.normalization = normalize_fields(record.attribute, record.value, record.unit, aliases=aliases)
-        if source_context is not None:
-            record.normalization['source_context'] = source_context
+        record.normalization.update(metadata)
         if record.normalization['review_required']:
             record.review_required = True
             record.review_reason = '; '.join(filter(None, (record.review_reason, record.normalization['review_reason'])))

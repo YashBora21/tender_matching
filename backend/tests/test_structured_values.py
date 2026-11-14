@@ -105,3 +105,30 @@ def test_alias_threshold_changes_normalization_lineage(monkeypatch):
         assert fingerprint() != before
     finally:
         get_settings.cache_clear()
+
+
+@pytest.mark.parametrize('source,expected', [('2" (50mm)','2'),('DN150 (6 inches)','6'),
+    ('50 mm (NPS2)','2'),('2–3 inches (50–80 mm)','2-3'),('1/2 inch (DN15)','0.5')])
+def test_dual_nominal_labels_agree_by_configured_size_table(source,expected):
+    result=normalize_fields('nominal_size',source,None)
+    assert not result['review_required'] and result['value']==expected and result['unit']=='inch'
+
+
+@pytest.mark.parametrize('source', ['6 inches (100 mm)','6 inches (152.4 mm)',
+    '2 (50mm)','2" (unknown50)','2–3 inches (DN50)','2" (50 mm) optional'])
+def test_dual_nominal_unknown_conflicting_and_clipped_ranges_stay_review_required(source):
+    result=normalize_fields('nominal_size',source,None)
+    assert result['review_required'] and result['value']==source
+
+
+def test_normalization_preserves_original_quote_and_human_binding_evidence():
+    from app.services.tender.ingest import RequirementRecord
+    from app.services.requirement.structured_values import normalize_records
+    source='Synthetic nominal size 2" (50mm)'
+    review={'reviewer':'synthetic-reviewer','item_id':'synthetic-item'}
+    row=RequirementRecord(text=source,source_text=source,attribute='nominal_size',value='2" (50mm)',
+        item_id='synthetic-item',source_span=(23,len(source)),normalization={'human_review':review})
+    before=(row.text,row.source_text,row.value,row.source_span)
+    normalize_records([row])
+    assert row.normalization['value']=='2' and row.normalization['human_review']==review
+    assert (row.text,row.source_text,row.value,row.source_span)==before
