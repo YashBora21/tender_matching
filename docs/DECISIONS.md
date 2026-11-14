@@ -5095,3 +5095,17 @@ Reader version 20 and coverage policy structured-source-coverage-3 invalidate
 affected local checkpoints. Model prompts, schemas and LLM response cache keys
 are unchanged; existing valid responses can be revalidated. No database schema
 change, deletion, alias approval or verifier relaxation.
+
+
+## D-171 OCR cache signatures without engine startup - 2026-11-14
+
+The measured follow-up failed before extraction:OCR initialization timed out
+after194.825s, with zero model calls/tokens/cost. Building a requirements cache
+key must not initialize a GPU engine. The isolated OCR worker now offers a
+metadata-only signature mode, using the same code/config/package/weight digest
+as its live mode; GPU imports and initialization occur only for actual OCR.
+Worker timeouts have an explicit local-OCR diagnostic instead of an empty queue
+error. Cache identities still include worker code, settings, installed package
+versions and model-weight bytes. The worker code change intentionally refreshes
+OCR-dependent checkpoints; no text-model prompt/schema/response-key change.
+No verification bypass or reuse of failed page readings.

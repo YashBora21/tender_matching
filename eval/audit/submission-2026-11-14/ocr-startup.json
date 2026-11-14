@@ -1,0 +1,13 @@
+{
+  "release_candidate": "rc-2026-11-14.2",
+  "commit": "0f5b76c21152ec336cb897e73742af780b91cacd",
+  "outcome": "failed_before_extraction",
+  "cause": "local_ocr_worker_initialization_timeout",
+  "wall_seconds": 194.8250473,
+  "llm_calls": 0,
+  "tokens": 0,
+  "estimated_cost_inr": 0,
+  "prior_requirements_preserved": true,
+  "signature_only_probe_seconds": 1.3895717,
+  "accuracy": "ungraded"
+}

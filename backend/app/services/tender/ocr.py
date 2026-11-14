@@ -64,6 +64,9 @@ class Worker:
             if result.get('error'):
                 raise RuntimeError('OCR worker failed (' + result['error'] + ')')
             return result
+        except queue.Empty as exc:
+            self.close()
+            raise TimeoutError('Local OCR worker did not respond within its configured timeout') from exc
         except Exception:
             self.close()
             raise
@@ -99,7 +102,16 @@ def ocr_signature():
                  'layout_hash': hashlib.sha256(Path(__file__).with_name('ocr_layout.py').read_bytes()).hexdigest()}
     if settings.ocr_backend == 'paddle':
         with _lock:
-            signature['worker_fingerprint'] = _get_worker().ready['fingerprint']
+            # A native-text tender needs the cache identity, not a running GPU engine.
+            options = {'creationflags': subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}
+            result = subprocess.run([str(settings.ocr_worker_python),
+                str(Path(__file__).with_name('paddle_worker.py')), '--signature-only'],
+                input=json.dumps(worker_config(settings)) + '\n', capture_output=True,
+                text=True, encoding='utf-8', timeout=settings.ocr_timeout_seconds, check=True, **options)
+            data = json.loads(result.stdout)
+            if 'fingerprint' not in data:
+                raise RuntimeError('Local OCR cache signature could not be read')
+            signature['worker_fingerprint'] = data['fingerprint']
     return signature
 
 

@@ -4359,3 +4359,19 @@ source rows remain private in.audit_tmp. Grouping off; no reset or data deletion
 Focused checks:143 passed. Full clean-snapshot offline suite:1377 passed /6 skipped,
 zero failures/errors. Staged private-configuration scan:zero matches. Remaining:unread fields,2 item bindings, reviewed aliases,
 retrieval validation and frontend/E2E. No speculative cross-page group backfill.
+
+
+### 2026-11-14 — follow-up read and D-171 OCR startup fix
+
+On rc-2026-11-14.2 the read stopped before any model request:local Paddle worker
+initialization timed out;194.825s,0 calls,0 tokens,INR0. The failed attempt and all
+previous requirements remain preserved. The requirements-key path unnecessarily
+initialized the GPU engine merely to obtain an OCR fingerprint.
+
+Added metadata-only worker mode using the existing code/config/package/weight
+fingerprint. The live path still fingerprints after engine initialization so
+newly provisioned weights are included. No heavyweight imports in signature-only
+mode; actual scanned pages still require a successful live worker and verifier.
+A local signature probe succeeded in1.390s.48 focused tests passed;after the final
+fingerprint helper refactor,all5 OCR tests passed again. Full offline suite:1379 passed /6 skipped,zero failures/errors.
+No provider configuration change,extra paid call,reset or old-reading deletion.

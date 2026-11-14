@@ -13,26 +13,7 @@ import time
 from contextlib import redirect_stdout
 
 
-def main():
-    config = json.loads(sys.stdin.readline())
-    for path in config.pop('extra_sites'):
-        sys.path.append(path)
-    dll = config.pop('dll_dir')
-    dll_handle = os.add_dll_directory(dll) if dll and os.name == 'nt' else None
-    if dll:
-        os.environ['PATH'] = dll + os.pathsep + os.environ.get('PATH', '')
-    weights = Path(config.pop('weights_dir'))
-    os.environ['PADDLE_PDX_CACHE_HOME'] = str(weights)
-    os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
-    logging.disable(logging.CRITICAL)
-    started = time.perf_counter()
-    with redirect_stdout(sys.stderr):
-        import cv2
-        import numpy as np
-        import paddle
-        from paddleocr import PaddleOCR
-        engine = PaddleOCR(**config, enable_mkldnn=False, use_doc_orientation_classify=True,
-                           use_doc_unwarping=False, use_textline_orientation=False)
+def fingerprint(config, weights):
     digest = hashlib.sha256(Path(__file__).read_bytes())
     digest.update(json.dumps(config, sort_keys=True).encode())
     for package in ('paddleocr', 'paddlepaddle-gpu', 'paddlepaddle'):
@@ -46,7 +27,33 @@ def main():
             with path.open('rb') as source:
                 for block in iter(lambda: source.read(1024 * 1024), b''):
                     digest.update(block)
-    print(json.dumps({'ready': True, 'fingerprint': digest.hexdigest(),
+    return digest.hexdigest()
+
+
+def main():
+    config = json.loads(sys.stdin.readline())
+    for path in config.pop('extra_sites'):
+        sys.path.append(path)
+    dll = config.pop('dll_dir')
+    dll_handle = os.add_dll_directory(dll) if dll and os.name == 'nt' else None
+    if dll:
+        os.environ['PATH'] = dll + os.pathsep + os.environ.get('PATH', '')
+    weights = Path(config.pop('weights_dir'))
+    os.environ['PADDLE_PDX_CACHE_HOME'] = str(weights)
+    os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] = 'True'
+    logging.disable(logging.CRITICAL)
+    started = time.perf_counter()
+    if '--signature-only' in sys.argv:
+        print(json.dumps({'fingerprint': fingerprint(config, weights)}), flush=True)
+        return dll_handle
+    with redirect_stdout(sys.stderr):
+        import cv2
+        import numpy as np
+        import paddle
+        from paddleocr import PaddleOCR
+        engine = PaddleOCR(**config, enable_mkldnn=False, use_doc_orientation_classify=True,
+                           use_doc_unwarping=False, use_textline_orientation=False)
+    print(json.dumps({'ready': True, 'fingerprint': fingerprint(config, weights),
                       'setup_seconds': time.perf_counter() - started}), flush=True)
     for line in sys.stdin:
         try:
