@@ -309,10 +309,10 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
   return (
     <div className="stack">
       <section className="panel">
-        <h1>Upload a tender</h1>
+        <h2>Upload a tender</h2>
         <p className="lede">
-          The backend parses the document, extracts its requirements and records the page
-          each one came from. Nothing is matched until you choose manufacturers and run it.
+          Read the tender's requirements with their original source pages. Once the reading
+          is complete, choose manufacturers to compare against the catalogue evidence.
         </p>
 
         {error && (
@@ -321,7 +321,15 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
           </Notice>
         )}
 
-        <label className={`dropzone${following ? ' dropzone-busy' : ''}`}>
+        <label
+          className={`dropzone${following ? ' dropzone-busy' : ''}`}
+          onDragOver={(event) => event.preventDefault()}
+          onDrop={(event) => {
+            event.preventDefault()
+            const file = event.dataTransfer.files[0]
+            if (file && !following) void choose(file)
+          }}
+        >
           <input
             type="file"
             accept="application/pdf,.pdf"

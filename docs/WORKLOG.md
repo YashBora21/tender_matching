@@ -4655,3 +4655,36 @@ untouched. Public aggregate:eval/audit/quarantine-2026-11-14/summary.json.
 Remaining:scoped fresh evidence extraction/reverification,reviewed mappings and
 measured first/repeat tender runs. Part B multi-attribute extraction remains
 deferred per its handoff;current reuse is per verified product/attribute.
+
+
+### 2026-11-14 - Tender Genie public frontend reference inspection
+
+Used reverse-engineer-anything REA controlled browser scenario on the public
+homepage,1440x1000;captured screenshot/DOM/accessibility and owned-browser
+cleanup confirmed. Observed light navigation,dark hero,orange accents,large
+sans-serif headings. Read public valve/BOQ descriptions separately;their
+marketing matrix is not proof of private product behavior or accuracy.
+Compared existing React components/styles and prepared proposed adaptation in
+docs/parallel/FRONTEND_REFERENCE_PLAN.md. Implementation awaits user approval;
+no frontend code,API,DB,login or paid LLM action changed. No private dashboard
+was inspected. Existing evidence/completeness semantics must remain visible.
+
+
+### 2026-11-14 - Approved Tender Genie inspired review frontend (D-186)
+
+Implemented the reference plan in existing React components:neutral/orange theme,
+sans-serif typography,dark workflow introduction,workspace anchors and skip link.
+Added catalogue capability column,explicit unverified/family labels and local
+search;unsupported rows remain not technically assessed. Review-queue jumps clear
+search. Retained evidence drawer,backend totals and completeness/review states.
+Upload is keyboard accessible;actual drop events now use the existing PDF guard.
+
+42 frontend tests passed;production build and lint passed. Regression coverage
+includes capability search/clear,review navigation after search,and valid/invalid
+file drops. REA desktop1440x1000/mobile390x844 upload screenshots inspected;
+synthetic report desktop inspected. All owned browsers cleaned up;temporary
+visual harness files removed. No backend edits,DB writes or paid calls in this
+phase. Unrelated conftest changes and other untracked files remain untouched.
+Plan and evidence identities:docs/parallel/FRONTEND_REFERENCE_PLAN.md.
+Remaining:live tender-to-report E2E and evidence quality validation;styling and
+synthetic tests do not establish extraction/retrieval accuracy.

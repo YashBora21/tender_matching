@@ -216,6 +216,17 @@ function chooseFile(container: HTMLElement, name = 'tender.pdf') {
   fireEvent.change(input, { target: { files: [file] } })
 }
 
+it('accepts a dropped synthetic PDF and rejects other dropped formats', async () => {
+  const { container } = render(<UploadPage onStarted={() => {}} />)
+  const zone = container.querySelector('.dropzone')!
+  fireEvent.drop(zone, { dataTransfer: { files: [new File(['Synthetic text'], 'synthetic.txt')] } })
+  expect(screen.getByText('A tender must be a PDF. Other documents are added as attachments.')).toBeTruthy()
+  expect(uploadTender).not.toHaveBeenCalled()
+  const pdf = new File(['%PDF-1.7 synthetic'], 'synthetic-dropped.pdf', { type: 'application/pdf' })
+  fireEvent.drop(zone, { dataTransfer: { files: [pdf] } })
+  await waitFor(() => expect(uploadTender).toHaveBeenCalledWith(pdf))
+})
+
 describe('UploadPage', () => {
   it('shows stored source context separately and permits rereading a complete tender', async () => {
     vi.mocked(getRequirements).mockResolvedValue(read({

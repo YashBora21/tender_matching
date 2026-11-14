@@ -27,6 +27,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <a className="skip-link" href="#workspace">Skip to workspace</a>
       <header className="topbar">
         <button type="button" className="brand" onClick={() => go({ kind: 'upload' })}>
           {/* The verdict rail, in miniature: three clauses, three outcomes. */}
@@ -55,9 +56,8 @@ export default function App() {
           </svg>
           Tender matching
         </button>
-        <span className="tagline">
-          Requirements compared with the corpus, each claim backed by its quote.
-        </span>
+        <span className="tagline">Engineering review workspace</span>
+        <a className="workspace-link" href="#workspace">{view.kind === 'upload' ? 'Tender workspace' : 'Comparison workspace'} <span aria-hidden="true">↗</span></a>
         {view.kind === 'run' && (
           <div className="actions actions-end">
             <button type="button" className="button" onClick={() => go({ kind: 'upload' })}>
@@ -67,7 +67,24 @@ export default function App() {
         )}
       </header>
 
-      <main className="main">
+      {view.kind === 'upload' && (
+        <section className="workspace-hero" aria-labelledby="workspace-title">
+          <div className="hero-inner">
+            <div>
+              <span className="eyebrow">From specification to evidence</span>
+              <h1 id="workspace-title">Every requirement.<br /><span>Evidence in view.</span></h1>
+              <p>Bring your tender and catalogue evidence together. Review technical requirements, compare manufacturers and inspect the source behind each finding.</p>
+              <a className="button button-primary" href="#workspace">Open tender workspace <span aria-hidden="true">↓</span></a>
+            </div>
+            <ol className="workflow-outline" aria-label="Review workflow">
+              <li><span className="workflow-number">01</span><div><strong>Read the tender</strong><p>Specifications, BOQ items and source pages.</p></div></li>
+              <li><span className="workflow-number">02</span><div><strong>Compare the evidence</strong><p>Requirements alongside catalogue capabilities.</p></div></li>
+              <li><span className="workflow-number">03</span><div><strong>Review each finding</strong><p>Verified citations, uncertainty and deviations.</p></div></li>
+            </ol>
+          </div>
+        </section>
+      )}
+      <main className="main" id="workspace" tabIndex={-1}>
         {view.kind === 'upload' ? (
           <UploadPage onStarted={(runId) => go({ kind: 'run', runId })} />
         ) : (

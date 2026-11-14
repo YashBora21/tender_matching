@@ -20,13 +20,14 @@ export function AssessmentTable({
   }
 
   return (
-    <div className="table-wrap">
+    <div className="table-wrap" role="region" aria-label="Requirement comparison table" tabIndex={0}>
       <table className="report-table">
         <thead>
           <tr>
             <th scope="col">Item</th>
             <th scope="col">Requirement</th>
             <th scope="col">Manufacturer</th>
+            <th scope="col">Catalogue capability</th>
             <th scope="col">Status</th>
             <th scope="col">Score</th>
             <th scope="col">Review</th>
@@ -64,6 +65,12 @@ export function AssessmentTable({
                   </div>
                 </td>
                 <td>{result.manufacturer}</td>
+                <td className="capability-cell">
+                  {unsupported ? 'Not technically assessed' : result.capability_text ?? 'No documented value returned'}
+                  {!unsupported && result.capability_text && result.verification_outcome !== 'passed' && (
+                    <div className="muted">{result.applicability === 'family_level' ? 'Family evidence — review scope' : 'Unverified reading'}</div>
+                  )}
+                </td>
                 <td>
                   <span
                     className={`pill pill-${result.status}`}

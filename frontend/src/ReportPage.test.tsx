@@ -26,6 +26,20 @@ function renderReport() {
 }
 
 describe('ReportPage', () => {
+  it('searches catalogue capabilities and restores rows when filters are cleared', async () => {
+    renderReport()
+    await screen.findByText('synthetic-tender.pdf')
+    expect(screen.getByRole('columnheader', { name: 'Catalogue capability' })).toBeTruthy()
+    const search = screen.getByRole('searchbox', { name: 'Search requirements' })
+    fireEvent.change(search, { target: { value: 'CF8M' } })
+    expect(within(screen.getByRole('table')).queryByText('Warranty shall be 24 months')).toBeNull()
+    expect(within(screen.getByRole('table')).getAllByText('Body: ASTM A351 CF8M (SS316)').length).toBeGreaterThan(0)
+    fireEvent.change(search, { target: { value: 'synthetic absent value' } })
+    expect(screen.getByText('No rows match these filters.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    expect(screen.getByRole('table')).toBeTruthy()
+    expect((search as HTMLInputElement).value).toBe('')
+  })
   it('keeps fragments in a collapsed source view without adding assessments', async () => {
     vi.mocked(getReport).mockResolvedValue(report({context_clauses: [{
       requirement_id: 'fragment-1', text: 'Loose <script>scrap</script>',
@@ -70,12 +84,15 @@ describe('ReportPage', () => {
     renderReport()
     await screen.findByText('synthetic-tender.pdf')
 
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search requirements' }), { target: { value: 'synthetic absent value' } })
+
     fireEvent.click(screen.getByRole('tab', { name: /Review queue/ }))
     expect(screen.getByText('The corpus says nothing about the end connection')).toBeTruthy()
     // The queue points at what to look at; it is not a place to record a decision.
     expect(screen.getByText(/does not record the decision/)).toBeTruthy()
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Show in table' })[0])
+    expect((screen.getByRole('searchbox') as HTMLInputElement).value).toBe('')
 
     // Back on the requirements tab, narrowed to the reviewed manufacturer and
     // status, so the row is visible rather than hunted for.

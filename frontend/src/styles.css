@@ -10,21 +10,22 @@
   color-scheme: light;
 
   /* --- ground --------------------------------------------------------- */
-  --paper: #eaeef4;
+  --paper: #f7f6f3;
   --surface: #ffffff;
-  --sunk: #f2f5fa;
-  --ink: #0f1a26;
-  --ink-2: #2c3a48;
-  --muted: #5d6b79;
-  --rule: #d5dee8;
-  --rule-2: #b4c2d1;
+  --sunk: #f5f4f1;
+  --ink: #202220;
+  --ink-2: #393e3a;
+  --muted: #626860;
+  --rule: #e2e3dc;
+  --rule-2: #b7bcb2;
 
-  /* --- the two blues that do the work --------------------------------- */
+  /* --- brand and interaction ------------------------------------------ */
   /* seal: structure, active states, the gate. action: anything clickable. */
-  --seal: #12325f;
-  --seal-soft: #e2eaf6;
-  --action: #2f66cc;
-  --action-ink: #123f86;
+  --seal: #9f3712;
+  --seal-soft: #fff0e8;
+  --action: #9f3712;
+  --action-ink: #76280d;
+  --brand: #ff7845;
 
   /* --- the verdict vocabulary (PRD 4) --------------------------------- */
   --v-full: #0d6146;
@@ -38,14 +39,12 @@
   --v-na: #4a5561;
   --v-na-soft: #eaedf1;
 
-  --shadow: 0 10px 30px rgba(15, 26, 38, 0.1);
+  --shadow: 0 4px 18px rgba(32, 34, 32, 0.04);
   --shadow-lift: 0 14px 34px rgba(15, 26, 38, 0.16);
 
   /* --- type ----------------------------------------------------------- */
   /* No webfont: the bundle is served static and must render the same with no
      network. Three roles out of faces that already exist. */
-  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua',
-    'URW Palladio L', Georgia, serif;
   --sans: system-ui, -apple-system, 'Segoe UI Variable Text', 'Segoe UI', Roboto,
     Helvetica, Arial, sans-serif;
   --mono: ui-monospace, 'Cascadia Mono', 'Segoe UI Mono', SFMono-Regular,
@@ -63,13 +62,6 @@
 body {
   margin: 0;
   background-color: var(--paper);
-  /* A faint rule down the page, the margin of a ledger: the gutters between
-     panels are paper, not dead air. */
-  background-image: repeating-linear-gradient(
-    180deg,
-    transparent 0 31px,
-    rgba(18, 50, 95, 0.05) 31px 32px
-  );
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
 }
@@ -86,12 +78,10 @@ h3 {
   text-wrap: balance;
 }
 
-/* The document voice: a serif for the things that are titled — the tender, the
-   brand, a verdict — and sans for everything that is a control. */
 h1,
 .panel > h1,
 .panel > h2 {
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-weight: 600;
   letter-spacing: -0.015em;
 }
@@ -159,9 +149,7 @@ ul {
   padding: 0.75rem 1.5rem;
   background: var(--surface);
   border-bottom: 1px solid var(--rule);
-  /* A seal-blue edge across the top: the one line that says "this is the
-     product" on every screen. */
-  box-shadow: inset 0 2px 0 var(--seal);
+  min-height: 76px;
 }
 
 .brand {
@@ -171,7 +159,7 @@ ul {
   border: 0;
   background: none;
   padding: 0;
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-size: 1.12rem;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -196,10 +184,69 @@ ul {
 }
 
 .main {
-  width: min(1240px, 100%);
+  width: min(1360px, 100%);
   margin: 0 auto;
   padding: 1.6rem 1.5rem 3rem;
+  scroll-margin-top: 100px;
 }
+
+.skip-link {
+  position: fixed;
+  left: 1rem;
+  top: -100px;
+  z-index: 60;
+  padding: 0.7rem 1rem;
+  background: var(--surface);
+}
+
+.skip-link:focus { top: 1rem; }
+
+.workspace-link {
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.workspace-hero {
+  background: radial-gradient(ellipse at 100% 100%, #442b20, transparent 65%), #171b19;
+  color: #fafaf5;
+}
+
+.hero-inner {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 4rem;
+  align-items: center;
+  max-width: 1360px;
+  margin: auto;
+  padding: 3.25rem 1.5rem;
+}
+
+.workspace-hero .eyebrow { color: #ffb08e; }
+.workspace-hero h1 { font-size: clamp(2.3rem, 4.6vw, 4rem); letter-spacing: -0.045em; }
+.workspace-hero h1 span { color: var(--brand); }
+.workspace-hero p { max-width: 57ch; color: #c7cec7; line-height: 1.7; }
+.workspace-hero .button { margin-top: 0.75rem; }
+
+.workflow-outline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid #556057;
+}
+
+.workflow-outline li {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  padding: 1.15rem 0;
+  border-bottom: 1px solid #556057;
+}
+
+.workflow-number { color: #ffb08e; font-family: var(--mono); font-size: 0.8rem; padding-top: 0.15rem; }
+.workflow-outline strong { font-size: 1.1rem; font-weight: 600; }
+.workflow-outline p { margin: 0.3rem 0 0; font-size: 0.9rem; }
 
 .stack {
   display: grid;
@@ -378,6 +425,7 @@ ul {
 /* --- upload ----------------------------------------------------------- */
 
 .dropzone {
+  position: relative;
   display: grid;
   justify-items: center;
   gap: 0.4rem;
@@ -419,7 +467,11 @@ ul {
 }
 
 .dropzone input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
 }
 
 .dropzone-busy {
@@ -586,14 +638,15 @@ ul {
 }
 
 .button-primary {
-  border-color: var(--seal);
-  background: var(--seal);
-  color: #fff;
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #202220;
 }
 
 .button-primary:hover {
-  background: #0b2749;
-  color: #fff;
+  border-color: #ff9267;
+  background: #ff9267;
+  color: #202220;
 }
 
 .button:disabled {
@@ -1063,6 +1116,20 @@ input[type='file'] {
   gap: 0.25rem;
 }
 
+.toolbar .search-field { flex: 1 1 280px; }
+
+input[type='search'] {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--rule-2);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.capability-cell { min-width: 200px; max-width: 36ch; overflow-wrap: anywhere; }
+
 .toolbar label .muted {
   font-family: var(--mono);
   font-size: 0.68rem;
@@ -1396,7 +1463,7 @@ input[type='file'] {
 }
 
 .drawer-head h2 {
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-size: 1.35rem;
   margin: 0;
   color: var(--rail);
@@ -1424,7 +1491,7 @@ input[type='file'] {
   border-left: 3px solid var(--rail);
   border-radius: 0 8px 8px 0;
   background: var(--sunk);
-  font-family: var(--serif);
+  font-family: var(--sans);
   font-size: 1.05rem;
   line-height: 1.45;
   color: var(--ink);
@@ -1476,6 +1543,8 @@ details[open] summary {
 }
 
 @media (max-width: 720px) {
+  .hero-inner { grid-template-columns: 1fr; gap: 1.75rem; padding: 2rem 1rem; }
+  .workspace-link { margin-left: 0; }
   .main {
     padding: 1rem 1rem 2rem;
   }

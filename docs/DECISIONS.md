@@ -5304,3 +5304,18 @@ context history. Keep every claim field, extraction provenance and existing resu
 reference. Write completion only after commit. No schema, prompt, contract or
 source-verification change. An applied audit becomes historical; a future apply
 requires a fresh snapshot. Paid calls are unnecessary for this downgrade.
+
+## D-186 adapt public Tender Genie visual direction to the review workspace - 2026-11-14
+
+User approved the public-reference frontend plan. Keep React/Vite and existing
+API contracts. Adopt original project branding with orange actions,neutral panels,
+sans-serif headings and a dark workflow introduction. Preserve status colors and
+incomplete-reading,context,source and review states. Add the returned catalogue
+capability beside the requirement,explicitly label unverified/family readings,
+and show unsupported rows as not technically assessed. Local search spans item,
+requirement,manufacturer and assessed capability text;it does not recompute scores
+or change backend totals. Clear search on review-queue navigation. Preserve the
+evidence drawer. Make file selection keyboard accessible and route actual dropped
+files through the existing PDF validator. No new dependency,backend,LLM prompt,
+cache key or database change. Public marketing illustrations do not establish
+private product equivalence or measured correctness.

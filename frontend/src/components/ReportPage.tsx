@@ -35,6 +35,7 @@ export function ReportPage({
   const [attempt, setAttempt] = useState(0)
   const [tab, setTab] = useState<Tab>('requirements')
   const [filters, setFilters] = useState<Filters>(NO_FILTERS)
+  const [query, setQuery] = useState('')
   const [openRow, setOpenRow] = useState<Assessment | null>(null)
 
   useEffect(() => {
@@ -56,7 +57,12 @@ export function ReportPage({
   const rows = useMemo(() => (report ? assessments(report) : []), [report])
   const counts = useMemo(() => countStatuses(rows), [rows])
   const statuses = useMemo(() => statusesPresent(counts), [counts])
-  const visible = useMemo(() => filterAssessments(rows, filters), [rows, filters])
+  const visible = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase()
+    return filterAssessments(rows, filters).filter((row) => !needle ||
+      [row.requirement.text, row.requirement.item_id, row.requirement.item_title,
+        row.result.manufacturer, row.unsupported ? null : row.result.capability_text].some((value) => value?.toLocaleLowerCase().includes(needle)))
+  }, [rows, filters, query])
 
   if (error) {
     return (
@@ -89,6 +95,7 @@ export function ReportPage({
   const flagged = report.review_queue.length
 
   function showReview(entry: ReviewEntry) {
+    setQuery('')
     setFilters({ status: entry.status, manufacturer: entry.manufacturer, reviewOnly: false })
     setTab('requirements')
   }
@@ -294,6 +301,10 @@ export function ReportPage({
         {tab === 'requirements' ? (
           <>
             <div className="toolbar">
+              <label className="search-field">
+                <span className="muted">Search requirements</span>
+                <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Item, requirement, manufacturer or capability" />
+              </label>
               <label>
                 <span className="muted">Manufacturer</span>
                 <select
@@ -345,8 +356,8 @@ export function ReportPage({
                 />
                 Needs review only
               </label>
-              {(filters.status || filters.manufacturer || filters.reviewOnly) && (
-                <button type="button" className="link" onClick={() => setFilters(NO_FILTERS)}>
+              {(filters.status || filters.manufacturer || filters.reviewOnly || query) && (
+                <button type="button" className="link" onClick={() => { setFilters(NO_FILTERS); setQuery('') }}>
                   Clear filters
                 </button>
               )}
