@@ -4750,3 +4750,9 @@ concurrent session holds App.tsx/styles.css/DECISIONS.md uncommitted; only the f
 backend/test paths and this WORKLOG entry are committed. The kept
 `_require_current_extraction` guard still refuses tenders whose stored prompt
 version predates the concurrent prompt bump.
+
+
+### 2026-11-15 - Commit pending work (D-188)
+
+Commit prompt correction: distinguish compound cells from atomic fields;single prompt10 and batch2;validators unchanged. Backend1392 unit tests passed;no paid call made in this commit phase.
+Unrelated untracked artifacts remain excluded.

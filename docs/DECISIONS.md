@@ -5338,3 +5338,20 @@ Coverage policy advances to structured-source-coverage-4,invalidation propagates
 to extraction/resolution stage keys. Per-clause response keys and model prompts
 are unchanged;cached responses are revalidated with the stricter coverage rule.
 No verifier relaxation or match-status change.
+
+## D-188 distinguish compound description cells from atomic table fields - 2026-11-14
+
+The bounded paid retry revealed conflicting extraction instructions:the general
+rules require one attribute per output,but the table rules demanded exactly one
+output per cell with its enclosing header. That forces compound specifications
+into an unmapped container even when their values are readable. Require coverage
+of every nonempty cell;keep exact headers for atomic fields,while explicitly
+splitting stated criteria within compound cells into separate source-quoted
+attributes. Retain column context and all original source text. Never infer an
+unstated property or approve a mapping through the model. Preserve identity and
+ordering metadata as their proper types. Quote/value validators are unchanged.
+
+Single prompt version advances9->10,batch version batch-1->batch-2. Existing
+prompt-based stage and response keys therefore invalidate prior answers instead
+of silently reusing incompatible cell-level extraction. Probe a bounded source
+before any further whole-tender paid retry.
