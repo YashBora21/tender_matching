@@ -119,7 +119,7 @@ describe('ReportPage', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
-  it('labels an incomplete ingestion instead of hiding it', async () => {
+  it('labels an incomplete ingestion but still ranks what was read', async () => {
     const partial = report()
     partial.tender.pages = {
       ...partial.tender.pages,
@@ -133,10 +133,30 @@ describe('ReportPage', () => {
     renderReport()
 
     await screen.findByText('Incomplete ingestion')
-    expect(screen.getByText('Ranking unavailable')).toBeTruthy()
-    expect(screen.queryByText('80%')).toBeNull()
+    // An unread page outside the spec/BOQ is honest ledger noise; the reading
+    // of the requirements is complete, so the ranking still stands (D-190).
+    expect(screen.getByText('Ranking')).toBeTruthy()
+    expect(screen.getByText('80%')).toBeTruthy()
     expect(screen.getByText(/2 declared page\(s\) were never accounted for/)).toBeTruthy()
     expect(screen.getByText(/Pages that could not be read: 3/)).toBeTruthy()
+  })
+
+  it('labels a partial reading, shows its coverage and still ranks it', async () => {
+    vi.mocked(getReport).mockResolvedValue(report({
+      partial_reading: true,
+      reading_coverage: {
+        represented: 1, total: 2, percent: 50, basis: 'specification & BOQ pages read',
+      },
+    }))
+
+    renderReport()
+
+    await screen.findByText('Partial reading')
+    expect(screen.getByText('Ranking — partial reading')).toBeTruthy()
+    expect(screen.getAllByText(/no manufacturer is bid-compliant/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Reading coverage: 50%/).length).toBeGreaterThan(0)
+    // A partial reading is ranked, not hidden: the scores are still shown.
+    expect(screen.getByText('80%')).toBeTruthy()
   })
 
   it('says when a report is partial instead of presenting it as complete', async () => {

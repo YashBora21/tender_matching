@@ -8,6 +8,7 @@ import {
   formatPercent,
   formatScore,
   label,
+  readingCoverageText,
   requirementText,
   statusesPresent,
 } from './report'
@@ -166,5 +167,25 @@ describe('counts and labels', () => {
         reason: null,
       }),
     ).toBeNull()
+  })
+})
+
+describe('readingCoverageText', () => {
+  it('states the figure as the report counts it', () => {
+    expect(
+      readingCoverageText({
+        represented: 1,
+        total: 2,
+        percent: 50,
+        basis: 'specification & BOQ pages read',
+      }),
+    ).toBe('Reading coverage: 50% (1 of 2 specification & BOQ pages read).')
+  })
+
+  it('shows nothing when no pages were counted', () => {
+    expect(
+      readingCoverageText({ represented: 0, total: 0, percent: 0, basis: 'specification & BOQ pages read' }),
+    ).toBe('')
+    expect(readingCoverageText(undefined)).toBe('')
   })
 })

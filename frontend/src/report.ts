@@ -4,7 +4,7 @@
  * called, which rows a filter keeps - can be tested without a browser.
  */
 
-import type { Assessment, Report, ReviewEntry } from './types'
+import type { Assessment, ReadingCoverage, Report, ReviewEntry } from './types'
 
 const LABELS: Record<string, string> = {
   full_match: 'Full match',
@@ -67,6 +67,13 @@ export function formatBytes(value: number | null | undefined): string {
   if (value < 1024) return `${value} B`
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
   return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** The reading-coverage figure as the report states it, or nothing when no
+ * pages were counted (a complete reading shows no figure). */
+export function readingCoverageText(coverage: ReadingCoverage | undefined): string {
+  if (!coverage || !coverage.total) return ''
+  return `Reading coverage: ${formatPercent(coverage.percent)} (${coverage.represented} of ${coverage.total} ${coverage.basis}).`
 }
 
 /** Every requirement × manufacturer, unsupported clauses included.

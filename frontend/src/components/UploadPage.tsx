@@ -300,7 +300,7 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
   /** The read is running *and* this page is still listening to it. */
   const following = reading && watching
   const canRun =
-    phase === 'ready' &&
+    (phase === 'ready' || resumable) &&
     tender !== null &&
     tender.requirements.length > 0 &&
     selected.length > 0 &&
@@ -439,8 +439,9 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
             {tender.error ?? 'The API reported a failure without a reason.'}
           </Notice>
           <p className="muted">
-            Running it now would report requirements nobody managed to read. Upload a readable
-            copy, or add the missing documents as attachments to it first.
+            {tender.requirements.length === 0 &&
+              'Running it now would report requirements nobody managed to read. '}
+            Upload a readable copy, or add the missing documents as attachments to it first.
           </p>
           <button type="button" className="button" onClick={reset}>
             Upload another tender
@@ -457,8 +458,7 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
               'A part of the tender was never read.'}
           </Notice>
           <p className="muted">
-            Running it now would be refused: a requirement nobody read is not a requirement the
-            manufacturer fails.
+            A requirement nobody read is not a requirement the manufacturer fails.
             {tender.reason_code === 'no_specification_found'
               ? ' Add the missing specification above, then upload the same tender again.'
               : tender.reason_code === 'specification_unreadable'
@@ -482,7 +482,7 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
         </div>
       )}
 
-      {(phase === 'ready' || phase === 'rate_limited') && tender && (
+      {(phase === 'ready' || resumable) && tender && (
         <>
           {phase === 'rate_limited' && (
             <section className="panel">
@@ -498,18 +498,20 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
             </section>
           )}
           {tender.requirements.length === 0 ? (
-            <section className="panel">
-              <h2>{phase === 'rate_limited' ? 'No requirements have been published yet' : 'No technical requirements were extracted'}</h2>
-              <p className="muted">
-                {phase === 'rate_limited'
-                  ? 'Reading stopped before any requirements were saved. Check the displayed budget or provider limit, then upload the same tender to resume.'
-                  : 'The tender was read; the documents it contains state no technical requirement the pipeline could extract. There is nothing to match.'}
-              </p>
-              <button type="button" className="button" onClick={reset}>
-                Upload another tender
-              </button>
-            </section>
-          ) : phase === 'ready' ? (
+            (phase === 'ready' || phase === 'rate_limited') && (
+              <section className="panel">
+                <h2>{phase === 'rate_limited' ? 'No requirements have been published yet' : 'No technical requirements were extracted'}</h2>
+                <p className="muted">
+                  {phase === 'rate_limited'
+                    ? 'Reading stopped before any requirements were saved. Check the displayed budget or provider limit, then upload the same tender to resume.'
+                    : 'The tender was read; the documents it contains state no technical requirement the pipeline could extract. There is nothing to match.'}
+                </p>
+                <button type="button" className="button" onClick={reset}>
+                  Upload another tender
+                </button>
+              </section>
+            )
+          ) : (
             <section className="panel">
               <h2>Choose manufacturers</h2>
               {corpusError && (
@@ -528,7 +530,7 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
                 <ManufacturerPicker
                   rows={corpus.manufacturers}
                   selected={selected}
-                  focus={tender ? tenderCategory(tender.requirements) : null}
+                  focus={tenderCategory(tender.requirements)}
                   onChange={setSelected}
                 />
               )}
@@ -539,17 +541,22 @@ export function UploadPage({ onStarted }: { onStarted: (runId: string) => void }
                   disabled={!canRun || starting}
                   onClick={() => void run()}
                 >
-                  {starting ? 'Starting…' : 'Run the match'}
+                  {starting
+                    ? 'Starting…'
+                    : phase === 'ready'
+                      ? 'Run the match'
+                      : `Run on the ${tender.requirements.length} requirements read`}
                 </button>
                 {selected.length === 0 && (
                   <span className="muted">Choose at least one manufacturer.</span>
                 )}
               </div>
-            </section>
-          ) : (
-            <section className="panel">
-              <h2>Saved requirements</h2>
-              <p className="muted">Resume and complete extraction before starting manufacturer comparison.</p>
+              {phase !== 'ready' && (
+                <p className="muted">
+                  This matches only the requirements read so far. The report is labelled a
+                  partial reading, and no manufacturer is called bid-compliant on it.
+                </p>
+              )}
             </section>
           )}
         </>

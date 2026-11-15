@@ -10,6 +10,7 @@ import {
   formatDate,
   formatPercent,
   label,
+  readingCoverageText,
   statusesPresent,
 } from '../report'
 import type { Filters } from '../report'
@@ -178,6 +179,20 @@ export function ReportPage({
           </Notice>
         )}
 
+        {report.partial_reading && (
+          <Notice variant="warning" title="Partial reading">
+            <p>
+              This run matched only the specification and BOQ requirements that were read.
+              Unread lines are listed as <em>not assessed</em> (source_not_read), never as no
+              evidence found. Rankings are partial and no manufacturer is bid-compliant on a
+              partial reading.
+            </p>
+            {readingCoverageText(report.reading_coverage) && (
+              <p className="muted">{readingCoverageText(report.reading_coverage)}</p>
+            )}
+          </Notice>
+        )}
+
         {statuses.length > 0 && (
           <div className="status-bar" aria-label="Status counts">
             <span className="eyebrow">Statuses</span>
@@ -219,10 +234,17 @@ export function ReportPage({
       <ContextClauses rows={report.context_clauses ?? []} />
 
       <section className="panel">
-        <h2>{report.incomplete_ingestion || pages.incomplete_ingestion ? 'Ranking unavailable' : 'Ranking'}</h2>
-        {report.incomplete_ingestion || pages.incomplete_ingestion ? (
-          <p className="muted">Complete extraction and start a new run before comparing manufacturer rankings. This saved report retains the limits and results from its original attempt.</p>
-        ) : report.manufacturers.length === 0 ? (
+        <h2>{report.partial_reading ? 'Ranking — partial reading' : 'Ranking'}</h2>
+        {report.partial_reading && (
+          <p className="muted">
+            Ranked on the requirements read so far, not the whole tender. This is a partial
+            ranking: no manufacturer is bid-compliant on a partial reading, however high its
+            score, and one that fails a mandatory requirement is never bid-compliant either.
+            {readingCoverageText(report.reading_coverage) &&
+              ` ${readingCoverageText(report.reading_coverage)}`}
+          </p>
+        )}
+        {report.manufacturers.length === 0 ? (
           <div className="empty">
             <strong>No manufacturer summary was produced.</strong>
             <span className="muted">The run stored no results to summarise.</span>

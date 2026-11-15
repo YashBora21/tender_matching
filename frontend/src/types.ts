@@ -216,6 +216,15 @@ export interface ReviewEntry {
   reason: string | null
 }
 
+/** How much of the specification and BOQ was read, as the report counts it.
+ * Page-granular: the ledger tracks pages, not individual lines (D-190). */
+export interface ReadingCoverage {
+  represented: number
+  total: number
+  percent: number
+  basis: string
+}
+
 export interface Report {
   run: {
     id: string
@@ -237,6 +246,11 @@ export interface Report {
   /** True when the tender was not read in full, by pages or by extraction. A
    * report with this set is not a final compatibility report (D16). */
   incomplete_ingestion?: boolean
+  /** True when a specification/BOQ page or the extraction fell short: the run
+   * matched only what was read, so rankings are partial and nobody is
+   * bid-compliant (D-190). */
+  partial_reading?: boolean
+  reading_coverage?: ReadingCoverage
   config: Record<string, unknown>
   results: { stored: number; expected: number; complete: boolean }
   manufacturers: ManufacturerSummary[]

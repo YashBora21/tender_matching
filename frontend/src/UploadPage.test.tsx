@@ -333,7 +333,7 @@ describe('UploadPage', () => {
     expect(screen.getByRole('button', { name: 'Upload another tender' })).toBeTruthy()
   })
 
-  it('stops polling at a rate-limited read and offers what was read', async () => {
+  it('stops polling at a rate-limited read and offers to run on what was read', async () => {
     vi.mocked(getRequirements).mockResolvedValue(
       read({
         status: 'rate_limited',
@@ -346,10 +346,31 @@ describe('UploadPage', () => {
 
     await screen.findByText(/reached a processing limit/)
     expect(screen.getByText(/retry in 24.9s/)).toBeTruthy()
-    await screen.findByText('Saved requirements')
+    // The read stopped with requirements parsed: a partial run is offered on
+    // exactly those, labelled, rather than a refusal (D-190).
+    expect(
+      await screen.findByRole('button', { name: 'Run on the 2 requirements read' }),
+    ).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Run the match' })).toBeNull()
     // One poll was enough: the state is final until the caller uploads again.
     expect(vi.mocked(getRequirements)).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts a partial run on the requirements a stopped read parsed', async () => {
+    const started = vi.fn()
+    vi.mocked(getRequirements).mockResolvedValue(
+      read({ status: 'incomplete', error: 'a specification page could not be read' }),
+    )
+    const { container } = render(<UploadPage onStarted={started} />)
+
+    chooseFile(container)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Run on the 2 requirements read' }),
+    )
+
+    await waitFor(() => expect(started).toHaveBeenCalledWith('run-1'))
+    expect(vi.mocked(startRun)).toHaveBeenCalledWith('t1', ['Acme', 'Beta'])
   })
 
   it('resumes a stopped reading by asking for it again, not by re-uploading', async () => {
