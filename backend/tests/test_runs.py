@@ -910,13 +910,52 @@ def test_a_run_against_a_rate_limited_tender_is_refused(monkeypatch):
         create_run(FakeSession(), TENDER_ID, repo=FakeRunRepo())
 
 
+def test_a_stopped_read_with_a_parsed_primary_line_is_runnable(monkeypatch):
+    """Option 1 (D-190): an incomplete tender that parsed at least one
+    specification/BOQ line is matched on exactly those lines and labelled
+    partial, not refused. The hard stop is zero primary lines, not the
+    incomplete status itself."""
+
+    class Incomplete(FakeTenderRepo):
+        def get_tender(self, tender_id):
+            return {"id": TENDER_ID, "status": "incomplete"}
+
+    monkeypatch.setattr(
+        "app.services.output.runs.list_manufacturers", lambda session: [{"name": "Acme"}]
+    )
+    monkeypatch.setattr(
+        "app.services.output.runs.TenderRepo",
+        lambda session: Incomplete([dict(REQUIREMENTS[1])]),
+    )
+    monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
+    repo = FakeRunRepo()
+
+    assert create_run(FakeSession(), TENDER_ID, repo=repo) == RUN_ID
+    assert repo.created["manufacturers"] == ["Acme"]
+
+
+def test_a_tender_with_only_cover_lines_has_no_primary_line_to_match(monkeypatch):
+    """Cover/ATC/SLA lines are context, not specifications. A tender whose only
+    parsed lines are non-primary has nothing to match, so it is refused — the
+    same hard stop as an all-unreadable tender (D-190)."""
+    cover = {**REQUIREMENTS[1], "source_role": "cover", "context_only": True}
+    monkeypatch.setattr(
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([cover])
+    )
+
+    with pytest.raises(ConflictError) as raised:
+        create_run(FakeSession(), TENDER_ID)
+
+    assert "no parsed specification or BOQ" in raised.value.message
+
+
 def test_a_run_against_a_manufacturer_the_corpus_lacks_is_a_validation_error(monkeypatch):
     monkeypatch.setattr(
         "app.services.output.runs.list_manufacturers",
         lambda session: [{"name": "Acme"}, {"name": "Beta"}],
     )
     monkeypatch.setattr(
-        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([])
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([dict(REQUIREMENTS[1])])
     )
 
     with pytest.raises(ValidationError) as raised:
@@ -933,7 +972,7 @@ def test_a_run_without_manufacturers_covers_the_whole_corpus(monkeypatch):
         lambda session: [{"name": "Beta"}, {"name": "Acme"}],
     )
     monkeypatch.setattr(
-        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([])
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([dict(REQUIREMENTS[1])])
     )
     monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
     repo = FakeRunRepo()
@@ -962,7 +1001,7 @@ def test_the_same_command_after_a_limit_continues_that_run(monkeypatch):
         lambda session: [{"name": "Acme"}],
     )
     monkeypatch.setattr(
-        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([])
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([dict(REQUIREMENTS[1])])
     )
     monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
     repo = FakeRunRepo(status="rate_limited")
@@ -1005,7 +1044,7 @@ def test_the_snapshot_an_attempt_is_compared_with_is_the_one_a_run_stores(monkey
         lambda session: [{"name": "Acme"}],
     )
     monkeypatch.setattr(
-        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([])
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([dict(REQUIREMENTS[1])])
     )
     monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
     repo = FakeRunRepo()
@@ -1022,7 +1061,7 @@ def test_a_new_run_is_created_when_nothing_can_be_continued(monkeypatch):
         lambda session: [{"name": "Acme"}],
     )
     monkeypatch.setattr(
-        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([])
+        "app.services.output.runs.TenderRepo", lambda session: FakeTenderRepo([dict(REQUIREMENTS[1])])
     )
     monkeypatch.setattr("app.services.output.runs.corpus_hash", lambda session: "hash")
     repo = FakeRunRepo()

@@ -91,18 +91,29 @@ def needs_model(requirements: list[dict]) -> bool:
     )
 
 
-# A tender in one of these states has no complete requirement list: it is still
-# being read, or the read stopped without finishing. A run against it would
-# report unread requirements as a manufacturer having no evidence (D-82).
-_UNREAD = frozenset(
-    {
-        TenderStatus.QUEUED.value,
-        TenderStatus.PROCESSING.value,
-        TenderStatus.RATE_LIMITED.value,
-        TenderStatus.FAILED.value,
-        TenderStatus.INCOMPLETE.value,
-    }
-)
+# A tender still being read has a requirement list that is growing under the
+# writer; matching it would race the read and answer "no evidence" for lines
+# nobody has read yet (D-82). A read that *stopped* (incomplete, rate-limited,
+# failed) is different: it may have parsed specification/BOQ lines, and a run
+# is allowed on exactly those, labelled partial (D-190).
+_READING = frozenset({TenderStatus.QUEUED.value, TenderStatus.PROCESSING.value})
+
+
+def _primary_parsed(requirements: list[dict]) -> bool:
+    """Whether at least one specification or BOQ line was parsed (D-190).
+
+    A legacy row with no recorded source role is conservatively primary, as
+    elsewhere; an explicit cover/ATC/SLA/supporting role is not. Zero primary
+    lines is the hard stop that also covers a tender whose pages are all
+    unreadable.
+    """
+    from app.services.tender.source_policy import policy, source_context
+    primary = policy()["primary_roles"]
+    return any(
+        source_context(row).get("source_role") in primary
+        or source_context(row).get("source_role") is None
+        for row in requirements
+    )
 
 
 @dataclass
@@ -268,14 +279,11 @@ def create_run(
     tender = tender_repo.get_tender(tender_id)
     if tender is None:
         raise NotFoundError(f"no tender with id {tender_id}")
-    # A run compares the tender's requirements, and while the read is running
-    # the list is only what has been read so far (D-82). Matching a partial
-    # list would answer "no evidence" for requirements nobody has read yet,
-    # which is the absence-of-evidence error PRD 4 forbids. A read that failed
-    # has no complete list either.
-    if tender.get("status") in _UNREAD:
+    # A tender still being read has no stable list: matching it would race the
+    # writer and answer "no evidence" for lines nobody has read yet (D-82).
+    if tender.get("status") in _READING:
         raise ConflictError(
-            f"tender {tender_id} has not been read yet (status {tender.get('status')})",
+            f"tender {tender_id} is still being read (status {tender.get('status')})",
             {"status": tender.get("status")},
         )
 
@@ -289,6 +297,15 @@ def create_run(
     # it is not refused for want of a key.
     requirements = tender_repo.list_requirements(tender_id)
     _require_current_extraction(requirements)
+    # A stopped read may still have parsed specification/BOQ lines. A run is
+    # allowed on exactly those and labelled partial; the only hard stop here is
+    # zero parsable primary lines, which also covers all pages unreadable
+    # (D-190). Cover, ATC and SLA never block.
+    if not _primary_parsed(requirements):
+        raise ConflictError(
+            f"tender {tender_id} has no parsed specification or BOQ requirement to match",
+            {"status": tender.get("status")},
+        )
     if needs_model(requirements):
         reason = config_error()
         if reason:

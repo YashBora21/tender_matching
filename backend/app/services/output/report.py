@@ -351,6 +351,29 @@ def build_report(
     # report a partial one.
     incomplete = pages["incomplete_ingestion"] or not extraction["complete"]
     pages["incomplete_ingestion"] = incomplete
+    from app.services.tender.completeness import reading_coverage
+    from app.services.tender.source_policy import policy
+    coverage_figure = reading_coverage(pages)
+    # A partial *reading* is primary-only: a failed cover/ATC/SLA page is honest
+    # ledger noise but does not make the matching partial (D-190).
+    partial = pages.get("primary_incomplete", False) or not extraction["complete"]
+    # An unread specification/BOQ page was never checked, so its lines are not
+    # assessed and never "no evidence found" (PRD 4, D-190). List each so the
+    # gap stays visible beside the clauses nothing could type.
+    for source in pages.get("sources", []):
+        if source.get("source_role") not in policy()["primary_roles"]:
+            continue
+        for page_no in source.get("unread_pages", []):
+            not_assessed.append({
+                "requirement_id": None,
+                "item_id": None,
+                "text": f"{source.get('source_role')} page {page_no} was not read",
+                "page": page_no,
+                "source_role": source.get("source_role"),
+                "reason": "source_not_read: the page was not read, so its lines were not assessed",
+                "reason_code": "source_not_read",
+                "results": [],
+            })
     return {
         "run": {
             "id": run["id"],
@@ -373,6 +396,10 @@ def build_report(
         # word on that tender: it says so at the top, where a consumer looks
         # before it reads a score (PRD 4, D16).
         "incomplete_ingestion": incomplete,
+        # A partial reading is ranked, but no manufacturer is bid-compliant on
+        # it, and the figure says how much of the spec/BOQ was read (D-190).
+        "partial_reading": partial,
+        "reading_coverage": coverage_figure,
         "historical_inputs_complete": bool(inputs and inputs.get("complete")),
         "historical_context_complete": bool(context.get("complete")),
         # The config is the run's own snapshot: what it was scored with, not
@@ -518,8 +545,7 @@ def _status_cell(status: Optional[str]) -> str:
 
 
 def _manufacturer_table(report: dict) -> str:
-    if report.get('incomplete_ingestion') or report['tender']['pages']['incomplete_ingestion']:
-        return '<h2>Ranking unavailable</h2><p>Complete extraction and start a new run before comparing manufacturers. This report preserves its original reading limits and results.</p>'
+    partial = report.get('partial_reading', False)
     rows = []
     for summary in report["manufacturers"]:
         counts = ", ".join(
@@ -537,13 +563,35 @@ def _manufacturer_table(report: dict) -> str:
             f"<td class=\"num\">{_escape(summary.get('review_count'))}</td>"
             "</tr>"
         )
+    coverage = report.get("reading_coverage") or {}
+    reading_note = (
+        f" Reading coverage: {coverage.get('percent', 0):g}% "
+        f"({_escape(coverage.get('represented', 0))} of {_escape(coverage.get('total', 0))} "
+        f"{_escape(coverage.get('basis', 'specification & BOQ pages read'))})."
+        if coverage.get("total") else ""
+    )
+    if partial:
+        # A partial reading is ranked so the reader sees what was read, but it
+        # is not a final ranking and nobody is bid-compliant on it (D-190).
+        head = (
+            "<h2>Manufacturers — partial reading</h2>"
+            "<p class=\"muted\">Ranked on the requirements read so far, not the whole "
+            "tender. This is a partial ranking: no manufacturer is bid-compliant on a "
+            "partial reading, however high its score, and one that fails a mandatory "
+            "requirement is never bid-compliant either." + reading_note + "</p>"
+        )
+    else:
+        head = (
+            "<h2>Manufacturers</h2>"
+            "<p class=\"muted\">Ranked by compatibility %, then coverage %, then fewer "
+            "review flags. The two percentages are shown side by side so a high score "
+            "on thin evidence is visible. A manufacturer that fails a mandatory "
+            "requirement is never presented as bid-compliant, however high its score."
+            + reading_note + "</p>"
+        )
     return (
-        "<h2>Manufacturers</h2>"
-        "<p class=\"muted\">Ranked by compatibility %, then coverage %, then fewer "
-        "review flags. The two percentages are shown side by side so a high score "
-        "on thin evidence is visible. A manufacturer that fails a mandatory "
-        "requirement is never presented as bid-compliant, however high its score.</p>"
-        "<table><thead><tr><th>#</th><th>Manufacturer</th><th>Compatibility</th>"
+        head
+        + "<table><thead><tr><th>#</th><th>Manufacturer</th><th>Compatibility</th>"
         "<th>Coverage</th><th>Results</th><th>Mandatory</th><th>Reviews</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table>"
     )
@@ -643,10 +691,10 @@ def _not_assessed_table(report: dict) -> str:
         return "<h2>Not assessed</h2><p class=\"muted\">None.</p>"
     return (
         "<h2>Not assessed</h2>"
-        "<p class=\"muted\">The clause could not be typed as a capability, so no "
-        "manufacturer was assessed against it. It is not a missing capability and "
-        "not a pass: it is a gap in what this tender states, kept visible so it "
-        "can be read by hand.</p>"
+        "<p class=\"muted\">A clause nothing could type, or a specification/BOQ page "
+        "that was not read (source_not_read). No manufacturer was assessed against "
+        "it. It is not a missing capability and not a pass, and not no-evidence: it "
+        "is a gap in what was read, kept visible so it can be read by hand.</p>"
         "<table><thead><tr><th>Item</th><th>Requirement</th><th>Page</th>"
         f"<th>Why it was not assessed</th></tr></thead><tbody>{''.join(rows)}</tbody></table>"
     )
@@ -739,6 +787,21 @@ def _banner(report: dict) -> str:
             + "), so a requirement marked <em>no evidence found</em> may be a page "
             "nobody read rather than a capability nobody documents. This is not a "
             "final compatibility report.</div>"
+        )
+    if report.get("partial_reading"):
+        coverage = report.get("reading_coverage") or {}
+        figure = (
+            f" Reading coverage: {coverage.get('percent', 0):g}% "
+            f"({coverage.get('represented', 0)} of {coverage.get('total', 0)} "
+            f"{coverage.get('basis', 'specification & BOQ pages read')})."
+            if coverage.get("total") else ""
+        )
+        parts.append(
+            '<div class="banner warn"><strong>Partial reading.</strong> '
+            "This run matched only the specification and BOQ requirements that were "
+            "read. Unread lines are listed as <em>not assessed</em> (source_not_read), "
+            "never as no evidence found. Rankings are partial and no manufacturer is "
+            "bid-compliant on a partial reading." + figure + "</div>"
         )
     if report["run"].get("error"):
         parts.append(

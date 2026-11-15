@@ -4506,7 +4506,7 @@ candidates.64 focused fact/matcher/source-guard tests pass,including dense-conte
 and cached-prefix regressions. Full suite pending before retry. No fact/result
 rows were published or changed by the failed matcher probe.
 
-### 2026-11-14 — matcher probe pass 1, live services restored (rc-2026-11-14.7)
+### 2026-11-14 ï¿½ matcher probe pass 1, live services restored (rc-2026-11-14.7)
 
 Committed f242bc9 (agent 2's staged D-177 fix; full suite exit 0) and froze RC
 tag rc-2026-11-14.7. Capped matcher probe on it: 9 paid calls, INR 1.60
@@ -4711,3 +4711,42 @@ document recall@3 5/6,page recall@3 3/6;both@20 6/6. Local model load plus first
 encode37.599s,warm retrieval2.493s,no paid call. This is separate from current
 end-to-end status accuracy. Private artifacts referenced by
 .audit_tmp/latest-live-e2e.txt;earlier attempt remains preserved.
+
+
+### 2026-11-15 - Unblock stopped reads, label partial (D-190, offline)
+
+Implemented the approved Option 1 backend. A run is now allowed when at least one
+specification/BOQ requirement is parsed and matches only those; the hard stops are
+an LLM configuration error, zero parsable primary lines (which also covers all
+pages unreadable), and a tender still being read (queued/processing). The old
+blanket refusal of incomplete/rate_limited/failed tenders is gone. completeness.py
+splits the all-pages `incomplete_ingestion` banner (honest ledger) from a new
+primary-only `primary_incomplete`: cover, ATC and SLA pages never block a run, and
+an unattributed legacy page is conservatively primary so a failed page there still
+blocks. Unread specification/BOQ pages are listed as not_assessed with a new
+report-only ReasonCode `source_not_read` (never a stored result, never
+no_evidence_found). The report gains a partial-reading banner, a reading-coverage
+figure, partial rankings, and an explicit "no manufacturer is bid-compliant on a
+partial reading"; a failed cover page no longer suppresses rankings.
+
+Deviation to flag: there is no per-line source ledger, so reading-coverage is
+measured as primary-source PAGES read/declared, not lines. The figure is labelled
+"specification & BOQ pages read" so it does not overstate granularity.
+
+Read-only diagnosis of the all-unknown tender (acdd1135 / GeM-Bidding-9713870.pdf,
+82 requirements all type unknown): NOT a configuration or rate-limit failure. All
+stages are done with zero error detail, every row carries a model and prompt
+version, and all 82 are extraction_method=table with item_id NULL and the single
+review reason "the specification row names no item in the bill of quantities". The
+clauses are held unknown by the BOQ item-assignment guard upstream of classification
+â€” the deferred item-assignment root cause, not a guard to remove here.
+
+3 new focused tests (runnable stopped read, cover-only refusal, failed-spec-page
+partial reading). Targeted report/runs/source-scope suites green; full offline unit
+suite 1392 passed / 24 integration deselected, zero failures. No model calls, no DB
+writes, no resets. Deferred: the frontend "Run on the N requirements read" action
+and partial banner (#49) and the DECISIONS.md D-190 entry, both because the
+concurrent session holds App.tsx/styles.css/DECISIONS.md uncommitted; only the free
+backend/test paths and this WORKLOG entry are committed. The kept
+`_require_current_extraction` guard still refuses tenders whose stored prompt
+version predates the concurrent prompt bump.

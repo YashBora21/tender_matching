@@ -1,6 +1,6 @@
 """One completion gate shared by ingestion, recovery and reports."""
 from collections import Counter
-from app.services.tender.source_policy import blocking_requirement, source_role
+from app.services.tender.source_policy import blocking_requirement, policy, source_role
 
 
 def page_coverage(tender, attachments, pages):
@@ -18,20 +18,28 @@ def page_coverage(tender, attachments, pages):
         groups['wrapper'] = {'keys': {'wrapper'}, 'pages': wrapper_count, 'source_role': 'cover'}
     missing = 0
     sources = []
+    page_role = {}
     for identity, group in groups.items():
-        actual = {page['page'] for page in pages if
-                  str(page.get('source_key') or page.get('attachment_id') or 'legacy') in group['keys']}
-        if not actual and len(groups) == 1:
-            actual = {page['page'] for page in pages if not page.get('attachment_id') and
-                      page.get('source_key', 'legacy') == 'legacy'}
+        member = [page for page in pages if
+                  str(page.get('source_key') or page.get('attachment_id') or 'legacy') in group['keys']]
+        if not member and len(groups) == 1:
+            member = [page for page in pages if not page.get('attachment_id') and
+                      page.get('source_key', 'legacy') == 'legacy']
+        actual = {page['page'] for page in member}
         absent = sorted(set(range(1, group['pages'] + 1)) - actual)
         missing += len(absent)
-        roles = {tag.split(':', 1)[1] for page in pages
-                 if str(page.get('source_key') or page.get('attachment_id') or 'legacy') in group['keys']
+        roles = {tag.split(':', 1)[1] for page in member
                  for tag in page.get('tags') or [] if tag.startswith('source_role:')}
         role = next(iter(roles)) if len(roles) == 1 else group['source_role']
+        for page in member:
+            page_role[id(page)] = role
+        read = sum(1 for page in member if page.get('ledger_status') in {'parsed', 'ocr'})
+        bad_pages = [page['page'] for page in member
+                     if page.get('ledger_status') not in {'parsed', 'ocr', 'skipped'}
+                     or (page.get('ledger_status') == 'skipped' and not page.get('skip_reason'))]
         sources.append({'source': str(identity), 'declared': group['pages'], 'missing_pages': absent,
-                        'source_role': role})
+                        'source_role': role, 'read': read,
+                        'unread_pages': sorted(set(absent) | set(bad_pages))})
     unresolved, skipped = [], []
     for page in pages:
         status = page.get('ledger_status')
@@ -46,15 +54,64 @@ def page_coverage(tender, attachments, pages):
             'accounted': len(pages), 'unaccounted': missing,
             'counts': dict(Counter(page.get('ledger_status') or '' for page in pages)),
             'unresolved': unresolved, 'skipped': skipped, 'sources': sources,
-            'incomplete_ingestion': bool(unresolved or missing)}
+            'incomplete_ingestion': bool(unresolved or missing),
+            'primary_incomplete': _primary_incomplete(sources, pages, page_role)}
+
+
+def _primary_incomplete(sources, pages, page_role):
+    """Specification/BOQ pages block; cover, ATC and SLA never do (D-190).
+
+    An unattributed page (a legacy single-source tender with no attachment
+    records) is conservatively primary, so a failed page there still blocks.
+    """
+    roles = policy()
+    if any(s['unread_pages'] for s in sources if s['source_role'] in roles['primary_roles']):
+        return True
+    for page in pages:
+        if id(page) in page_role:  # attributed; its source already decided
+            continue
+        status = page.get('ledger_status')
+        if status not in {'parsed', 'ocr', 'skipped'} or (status == 'skipped' and not page.get('skip_reason')):
+            return True
+    return False
+
+
+def _primary_sources(coverage):
+    primary = policy()['primary_roles']
+    return [s for s in coverage.get('sources', []) if s.get('source_role') in primary]
+
+
+def primary_incomplete(coverage):
+    """Only specification/BOQ pages can mark a reading incomplete (D-190).
+
+    Cover, ATC and SLA pages never block a run; the all-pages
+    `incomplete_ingestion` label stays honest for the report banner.
+    """
+    return coverage.get('primary_incomplete', False)
+
+
+def reading_coverage(coverage):
+    """Specification & BOQ pages read / declared, the partial-reading figure.
+
+    Page granularity is what the ledger stores; there is no per-line ledger,
+    so this honestly measures how much of the primary source was read (D-190).
+    """
+    primary = _primary_sources(coverage)
+    total = sum(s['declared'] for s in primary)
+    represented = sum(s.get('read', 0) for s in primary)
+    return {'represented': represented, 'total': total,
+            'percent': round(100.0 * represented / total, 1) if total else 0.0,
+            'basis': 'specification & BOQ pages read'}
 
 
 def completion_gaps(tender, attachments, pages, requirements):
     gaps = []
-    if page_coverage(tender, attachments, pages)['incomplete_ingestion']:
-        gaps.append('source pages are failed, unaccounted for, or have invalid skip records')
-    if any(attachment.get('status') in {'failed', 'restricted'} for attachment in attachments):
-        gaps.append('a source attachment is unresolved')
+    coverage = page_coverage(tender, attachments, pages)
+    if primary_incomplete(coverage):
+        gaps.append('specification or BOQ pages are failed, unaccounted for, or have invalid skip records')
+    if any(attachment.get('status') in {'failed', 'restricted'}
+           and source_role(attachment) in policy()['primary_roles'] for attachment in attachments):
+        gaps.append('a specification or BOQ attachment is unresolved')
     requirements = [row for row in requirements if blocking_requirement(row)]
     if requirements and all(row.get('type', row.get('requirement_type')) == 'unknown' for row in requirements):
         gaps.append('all extracted clauses have unresolved requirement types')

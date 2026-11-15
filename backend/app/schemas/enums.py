@@ -110,6 +110,11 @@ class ReasonCode(StrEnum):
     REQUIREMENT_NOT_PARSED = "requirement_not_parsed"
     CORPUS_GAP = "corpus_gap"
     SCOPE_UNRESOLVED = "scope_unresolved"
+    # A specification or BOQ line on a page that was never read. Report-only:
+    # it labels a not_assessed entry, never a stored result, so the result
+    # CHECK constraint does not carry it. The line was not checked, so it is
+    # not "no evidence found" (PRD 4, D-190).
+    SOURCE_NOT_READ = "source_not_read"
 
 
 class LedgerStatus(StrEnum):

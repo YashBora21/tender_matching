@@ -254,8 +254,12 @@ def test_a_failed_page_labels_the_tender_incomplete_ingestion():
     assert pages["unresolved"] == [{"page": 2}]
     page = render_html(report)
     assert "Incomplete ingestion" in page
-    assert "Ranking unavailable" in page
-    assert "Ranked by compatibility" not in page
+    # The failed page is the wrapper/cover, not the specification: ingestion is
+    # labelled incomplete, but the matching reading is whole, so rankings stand
+    # and it is not a partial reading (D-190).
+    assert report["partial_reading"] is False
+    assert "Ranking unavailable" not in page
+    assert "Ranked by compatibility" in page
 
 
 def test_a_ledger_short_of_the_page_count_is_incomplete_too():
@@ -342,7 +346,37 @@ def test_an_extraction_that_stopped_short_is_not_a_final_report():
     assert "the extraction of requirements stopped short" in page
     assert "the model is rate limited" in page
     assert "This is not a final compatibility report" in page
-    assert "Ranking unavailable" in page
+    # A stopped extraction is a partial reading: ranked, but labelled partial
+    # and never bid-compliant (D-190).
+    assert report["partial_reading"] is True
+    assert "partial reading" in page
+    assert "no manufacturer is bid-compliant" in page
+    assert "Ranked by compatibility" not in page
+
+
+def test_a_failed_specification_page_is_a_partial_reading_with_source_not_read():
+    """A specification page that failed was never read, so its lines are not
+    assessed (source_not_read), never "no evidence found". The reading is
+    partial: ranked, but no manufacturer is bid-compliant, and the figure says
+    how much of the spec/BOQ was read (D-190)."""
+    report = _report(
+        pages=[
+            {"page": 1, "ledger_status": "parsed", "skip_reason": None, "attachment_id": "spec-1"},
+            {"page": 2, "ledger_status": "failed", "skip_reason": None, "attachment_id": "spec-1"},
+        ],
+        tender={"id": TENDER_ID, "filename": "tender.pdf"},
+        attachments=[{"id": "spec-1", "url": "upload://spec.pdf", "pages": 2, "kind": "spec"}],
+    )
+
+    assert report["partial_reading"] is True
+    coverage = report["reading_coverage"]
+    assert (coverage["represented"], coverage["total"], coverage["percent"]) == (1, 2, 50.0)
+    unread = [row for row in report["not_assessed"] if row["reason_code"] == "source_not_read"]
+    assert [row["page"] for row in unread] == [2]
+    page = render_html(report)
+    assert "Partial reading" in page
+    assert "no manufacturer is bid-compliant" in page
+    assert "Reading coverage: 50%" in page
     assert "Ranked by compatibility" not in page
 
 
