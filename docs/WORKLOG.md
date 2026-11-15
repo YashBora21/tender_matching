@@ -4780,3 +4780,27 @@ Unrelated untracked artifacts remain excluded.
 
 Complete the missing D-190 decision for backend commit aa2b5b4. React partial-run action and partial-reading banner (#49) remain deferred and are not claimed complete. Reading coverage is primary pages,not line recall. No new backend behavior or database change.
 Unrelated untracked artifacts remain excluded.
+
+
+### 2026-11-15 - Diagnosed and closed abandoned motor reading
+
+User reported10-minute spinner for GEM_8184062_Motor.pdf. Live API/DB showed
+processing but latest reading attempt7 started2026-11-14 14:01:57 UTC and never
+closed. Today's09:59 duplicate upload did not schedule a new attempt. There were
+no extraction stage checkpoints and no active requirements;recover.final_state
+returnsNone for precisely that combination. Backend restarted today;the old
+name-length failures predate applied migration0024 (verified TEXT column).
+Other agent's d9a4393 implemented partial-run UI;browser testing used synthetic
+t-stop payloads,not a live motor extraction. It did not fix stale ownership.
+
+Scoped recovery only:locked motor tender and exact prior attempt,asserted old
+running state,latest attempt identity,no stages/no requirements. Saved full
+pre-write snapshot under.audit_tmp/motor-orphan-recovery-f087b2e50e1a413695143127a1b78f5a/.
+Closed abandoned attempt and tender as failed with explicit interrupted-read
+reason. Readback HTTP200/statusfailed confirms polling can stop and explicit
+retry is available. No paid read started,no reset/deletion,no valve job touched.
+
+Separate GEM_8197773_Valve.pdf job was genuinely active with model calls. Recent
+ledger activity must not be attributed to the stale motor attempt. No global
+timeout-based state repair or automatic restart was implemented;durable worker
+ownership/heartbeat is still needed to safely recover this case generally.
