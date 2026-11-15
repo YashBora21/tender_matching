@@ -5395,3 +5395,23 @@ Use the existing inline SVG/CSS for a document-and-review mark and TenderMatch
 wordmark with the approved orange accent. No borrowed logo,external asset,route,
 API,extraction or scoring behavior changes. The mark is branding,not evidence
 that any tender or capability passed verification.
+
+## D-193 recover abandoned reads using database worker ownership - 2026-11-15
+
+Startup alone cannot prove that another worker is dead. New ingestion attempts
+hold a per-tender PostgreSQL session advisory lock on their pinned ORM connection
+across checkpoint commits,and store pg-session-lock-1 ownership metadata in the
+existing attempt limits. This uses one pooled connection per reader,not a second
+lock connection. A second ingestion with the same key does not start another read.
+Release the lock on every exit;discard a connection if unlocking fails.
+
+Recovery acquires the conflicting transaction lock and re-checks the latest
+attempt and locked tender state before changing either. A marked running attempt
+with no worker is failed when no requirements were stored,otherwise incomplete;
+preserve metrics,source rows and all history. A live lock always prevents recovery,
+even before the first stage checkpoint. Unmarked running attempts are left alone:
+legacy workers cannot prove ownership and require separately reviewed recovery.
+No age cutoff,LLM call,schema migration,prompt or cache-key change. Recovery before
+any attempt was registered remains outside this marked-attempt protocol. Requires
+direct PostgreSQL or session-affine pooling;transaction pooling is not supported
+by session locks. Restart/load the backend after current legacy reads finish.

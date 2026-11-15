@@ -6,7 +6,8 @@ needs; it backs GET /api/health.
 
 from __future__ import annotations
 
-from contextlib import contextmanager
+from contextlib import contextmanager, ExitStack
+from hashlib import sha256
 from typing import Iterator, Optional
 
 from sqlalchemy import create_engine, text
@@ -41,18 +42,43 @@ def get_engine() -> Engine:
     return _engine
 
 
-@contextmanager
-def session_scope() -> Iterator[Session]:
-    """Transactional session: commit on success, roll back on error."""
-    session = Session(get_engine(), future=True)
+def reading_lock_key(tender_id: str) -> int:
+    return int.from_bytes(sha256(('tender-reading:' + str(tender_id)).encode()).digest()[:8], 'big', signed=True)
+
+
+def _release_reading_lock(connection, key):
     try:
-        yield session
-        session.commit()
+        connection.rollback()
+        connection.execute(text('SELECT pg_advisory_unlock(:key)'), {'key': key})
+        connection.commit()
     except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
+        # Never return a connection holding a worker lock to the pool.
+        connection.invalidate()
+
+
+@contextmanager
+def session_scope(*, reading_tender: Optional[str] = None) -> Iterator[Optional[Session]]:
+    """Transactional session: commit on success, roll back on error."""
+    with ExitStack() as stack:
+        bind = get_engine()
+        if reading_tender is not None:
+            bind = stack.enter_context(bind.connect())
+            key = reading_lock_key(reading_tender)
+            acquired = bind.execute(text('SELECT pg_try_advisory_lock(:key)'), {'key': key}).scalar_one()
+            bind.commit()
+            if not acquired:
+                yield None
+                return
+            stack.callback(_release_reading_lock, bind, key)
+        session = Session(bind, future=True)
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
 
 
 def ping(engine: Optional[Engine] = None) -> None:

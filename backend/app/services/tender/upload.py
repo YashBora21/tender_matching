@@ -100,7 +100,7 @@ def _attempt_start(repo: TenderRepo, tender_id: str) -> Optional[str]:
     try:
         with repo.session.begin_nested():
             tender = repo.get_tender(tender_id) or {}
-            return repo.start_reading_attempt(tender_id, limits=effective_limits(),
+            return repo.start_reading_attempt(tender_id, limits=dict(effective_limits(), reading_ownership='pg-session-lock-1'),
                 sha256=tender.get("sha256"), filename=tender.get("filename"))
     except Exception:  # The savepoint preserves the caller's successful writes.
         logger.warning("tender %s: reading history unavailable; apply migrations", tender_id)
@@ -239,7 +239,9 @@ def ingest(tender_id: str, *, force: bool = False) -> str:
     """
     from app.repositories.db import session_scope
 
-    with session_scope() as session:
+    with session_scope(reading_tender=tender_id) as session:
+        if session is None:
+            return TenderStatus.PROCESSING.value
         repo = TenderRepo(session)
         # History writes use savepoints so a bookkeeping error cannot undo a read.
         attempt_id = _attempt_start(repo, tender_id)

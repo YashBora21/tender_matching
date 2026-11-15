@@ -4804,3 +4804,30 @@ Separate GEM_8197773_Valve.pdf job was genuinely active with model calls. Recent
 ledger activity must not be attributed to the stale motor attempt. No global
 timeout-based state repair or automatic restart was implemented;durable worker
 ownership/heartbeat is still needed to safely recover this case generally.
+
+
+### 2026-11-15 - Ownership-aware orphan reading recovery (D-193)
+
+Option A had already closed motor attempt7 with its recovery snapshot. Implemented
+Option B for new marked attempts:session advisory ownership survives checkpoints
+on the same pinned DB connection;duplicate ingestion returns without a second
+read. Recovery uses a conflicting xact lock,rechecks latest attempt and tender
+after acquiring it,and closes an abandoned running attempt even with zero stages
+and zero requirements. Existing metrics/history retained;no false done status.
+Legacy unmarked live attempts are conservatively untouched.
+
+1400 backend unit tests passed,24 integration deselected;9 focused ownership
+tests passed (including an additional unlock-failure cleanup test). Regression
+cases cover empty-stage crash,active lock,legacy worker,partial requirements,
+finish-during-recovery race,duplicate starts and release after exceptions. Two
+real PostgreSQL connections verified lock persistence across commits,contention,
+duplicate refusal,release on exit and release after connection loss. Synthetic
+lock probes changed no tender data and made no LLM calls. Earlier sandbox-local
+focused attempts were interrupted;the final full suite and focused suite passed.
+
+Files:db.py,tender repository,upload ingestion,recover.py,ownership tests and fake
+session fixture compatibility. No migration,threshold,provider configuration or
+cache/prompt changes. No deliberate backend restart during an active valve read.
+Rollout:load new backend once current legacy reads finish. Unmarked attempts or
+queued reads without a registered attempt still require explicit diagnosis;do not
+auto-fail them by elapsed time. Direct/session-affine PostgreSQL required.

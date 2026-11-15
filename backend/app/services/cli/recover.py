@@ -6,12 +6,12 @@ leaves the stage rows behind and the tender's own row still saying `processing`.
 Nothing then ever writes a terminal state: the row is polled forever, and the
 requirements stream stays open because `processing` means "still being read".
 
-This closes that hole at the only moment it can be closed safely - when a
-process starts and has not scheduled a read of its own yet. It decides from the
-stage rows, never from a timer: a stage that stopped at the provider's limit
-says so, and that is a state the next run resumes from. A read that is genuinely
-in flight has a stage in a non-terminal state, so it is left alone even when
-another worker shares the database.
+New reads hold a PostgreSQL session lock across checkpoints and record their
+ownership protocol in the attempt. Recovery must acquire the conflicting lock
+before closing an abandoned attempt, even if no stage was written. Unmarked
+running attempts are left alone because an older worker cannot prove ownership.
+Stage-only legacy records retain their existing recovery rules; no age cutoff
+is used to decide that a worker died.
 """
 
 from __future__ import annotations
@@ -104,6 +104,25 @@ def settle(
     caller's own re-upload from scheduling a read (D-157).
     """
     repo = repo or TenderRepo(session)
+    # Only marked reads participate: an older worker has no ownership lock.
+    attempt = repo.latest_running_reading(tender_id) if hasattr(repo, 'latest_running_reading') else None
+    if attempt is not None:
+        if (attempt.get('limits') or {}).get('reading_ownership') != 'pg-session-lock-1':
+            return None
+        if not repo.claim_reading_recovery(tender_id):
+            return None
+        # The worker may have finished between the first lookup and our lock.
+        current = repo.latest_running_reading(tender_id)
+        tender = repo.get_tender(tender_id, for_update=True)
+        if current is None or current['id'] != attempt['id'] or not tender or tender['status'] not in {'queued', 'processing'}:
+            return None
+        attempt = current
+        status = TenderStatus.INCOMPLETE if repo.count_requirements(tender_id) else TenderStatus.FAILED
+        reason = 'The reading worker stopped before finishing; retry to resume valid cached answers.'
+        repo.finish_reading_attempt(str(attempt['id']), status=status.value,
+            stop_reason=reason, metrics=attempt.get('metrics') or {})
+        repo.set_status(tender_id, status, error=reason)
+        return status
     status = final_state(
         repo.stage_statuses(tender_id), repo.count_requirements(tender_id)
     )

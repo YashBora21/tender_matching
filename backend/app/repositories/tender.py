@@ -628,6 +628,20 @@ class TenderRepo:
             )
         )
 
+    def latest_running_reading(self, tender_id: str) -> Optional[dict]:
+        row = self.session.execute(select(reading_attempt).where(
+            reading_attempt.c.tender_id == tender_id).order_by(
+                reading_attempt.c.attempt_no.desc()).limit(1)).mappings().first()
+        if row and row['status'] == 'running':
+            return dict(row)
+        return None
+
+    def claim_reading_recovery(self, tender_id: str) -> bool:
+        from sqlalchemy import text
+        from app.repositories.db import reading_lock_key
+        return bool(self.session.execute(text('SELECT pg_try_advisory_xact_lock(:key)'),
+            {'key': reading_lock_key(tender_id)}).scalar_one())
+
     def list_reading_attempts(self, tender_id: str) -> list[dict]:
         """Every attempt to read the tender, oldest first.
 

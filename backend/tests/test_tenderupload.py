@@ -477,7 +477,7 @@ def test_a_tender_whose_file_is_gone_is_failed_with_what_to_do(_fakes, monkeypat
 
 def _scope(session):
     @contextmanager
-    def scope():
+    def scope(**kwargs):
         yield session
 
     return scope
