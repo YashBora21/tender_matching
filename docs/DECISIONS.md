@@ -5367,6 +5367,21 @@ short name changes behaviour. Downgrade refuses rather than silently truncating
 evidence. The migration test asserts the migrated column has no length cap.
 Tenders already marked failed need a re-read; widening does not retry them.
 
+## D-190 assess only the primary requirements already read - 2026-11-15
+
+Document backend commit aa2b5b4. A stopped reading may be assessed when at least
+one specification/BOQ requirement was parsed; zero usable primary lines,active
+reading and missing LLM configuration remain hard stops. Preserve failed pages
+and tender-level incomplete ingestion. Separate primary-page completeness from
+cover/ATC/SLA accounting. Unread primary pages are reported as not assessed with
+source_not_read,never as no evidence or a manufacturer capability failure.
+Reading coverage measures specification/BOQ PAGES,not line recall. Rankings from
+partial readings are provisional;no manufacturer is bid-compliant on that basis.
+Stored extraction-version and source-integrity guards remain. Historical readings
+and results remain preserved. The React partial-run action/banner (#49) is still
+pending;backend partial support does not mean frontend integration is complete.
+No prompt or cache-key changes in this decision.
+
 ## D-191 isolate unit tests from persistent spend accounting - 2026-11-15
 
 Disable both spend caps and tracking in the autouse unit fixture. Tracking-only

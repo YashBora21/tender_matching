@@ -4774,3 +4774,9 @@ Unrelated untracked artifacts remain excluded.
 
 Commit original inline SVG and orange-accent TenderMatch wordmark. Frontend42 tests,production build and lint passed. No backend behavior change.
 Unrelated untracked artifacts remain excluded.
+
+
+### 2026-11-15 - Commit pending work (D-190)
+
+Complete the missing D-190 decision for backend commit aa2b5b4. React partial-run action and partial-reading banner (#49) remain deferred and are not claimed complete. Reading coverage is primary pages,not line recall. No new backend behavior or database change.
+Unrelated untracked artifacts remain excluded.
