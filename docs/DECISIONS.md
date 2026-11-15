@@ -5373,3 +5373,10 @@ Disable both spend caps and tracking in the autouse unit fixture. Tracking-only
 configuration must not turn a fake client call into a live-ledger reservation.
 Tests of accounting explicitly opt into their isolated setup. Production limits,
 tracking and provider settings remain unchanged.
+
+## D-192 original TenderMatch header branding - 2026-11-15
+
+Use the existing inline SVG/CSS for a document-and-review mark and TenderMatch
+wordmark with the approved orange accent. No borrowed logo,external asset,route,
+API,extraction or scoring behavior changes. The mark is branding,not evidence
+that any tender or capability passed verification.

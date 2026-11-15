@@ -30,31 +30,40 @@ export default function App() {
       <a className="skip-link" href="#workspace">Skip to workspace</a>
       <header className="topbar">
         <button type="button" className="brand" onClick={() => go({ kind: 'upload' })}>
-          {/* The verdict rail, in miniature: three clauses, three outcomes. */}
+          {/* TenderMatch mark: the clause under the lens, swept into a match. */}
           <svg
             className="brand-mark"
-            width="20"
-            height="20"
-            viewBox="0 0 20 20"
+            width="30"
+            height="30"
+            viewBox="0 0 32 32"
             aria-hidden="true"
             focusable="false"
           >
-            <rect
-              x="0.75"
-              y="0.75"
-              width="18.5"
-              height="18.5"
-              rx="4.5"
+            <path
+              d="M6.5 11.5 C3 15.5 3.6 21.5 8.5 24.5"
               fill="none"
-              stroke="currentColor"
-              strokeOpacity="0.3"
+              stroke="var(--brand)"
+              strokeWidth="2.6"
+              strokeLinecap="round"
             />
-            <rect x="3" y="3" width="2" height="14" rx="1" fill="currentColor" />
-            <rect x="7" y="4.5" width="9.5" height="2" rx="1" fill="#0d6146" />
-            <rect x="7" y="9" width="9.5" height="2" rx="1" fill="#8a5b06" />
-            <rect x="7" y="13.5" width="9.5" height="2" rx="1" fill="#9d1b2e" />
+            <path
+              d="M10 4.5 h8 L23.5 10 V25.5 a2 2 0 0 1 -2 2 H10 a2 2 0 0 1 -2 -2 V6.5 a2 2 0 0 1 2 -2 Z"
+              fill="none"
+              stroke="var(--seal)"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+            <path d="M18 4.5 V10 H23.5" fill="none" stroke="var(--seal)" strokeWidth="2" strokeLinejoin="round" />
+            <path d="M11.5 11 H17 M11.5 14.5 H16 M11.5 18 H13.5" fill="none" stroke="var(--seal)" strokeWidth="2" strokeLinecap="round" />
+            <rect x="25.5" y="2" width="2.6" height="2.6" rx="0.6" fill="var(--brand)" />
+            <rect x="28.6" y="4.8" width="2.2" height="2.2" rx="0.5" fill="var(--brand)" />
+            <rect x="23.6" y="6.2" width="2.2" height="2.2" rx="0.5" fill="var(--v-silent)" />
+            <rect x="26.6" y="8.8" width="1.8" height="1.8" rx="0.4" fill="var(--v-silent)" />
+            <circle cx="20" cy="20" r="6" fill="var(--surface)" stroke="var(--seal)" strokeWidth="2.4" />
+            <path d="M24.4 24.4 L28.2 28.2" fill="none" stroke="var(--seal)" strokeWidth="2.8" strokeLinecap="round" />
+            <path d="M17.3 20.2 L19.4 22.3 L23 18.2" fill="none" stroke="var(--brand)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Tender matching
+          <span className="brand-name">Tender<span className="brand-accent">Match</span></span>
         </button>
         <span className="tagline">Engineering review workspace</span>
         <a className="workspace-link" href="#workspace">{view.kind === 'upload' ? 'Tender workspace' : 'Comparison workspace'} <span aria-hidden="true">↗</span></a>

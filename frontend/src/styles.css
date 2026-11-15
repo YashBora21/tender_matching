@@ -177,6 +177,10 @@ ul {
   color: var(--seal);
 }
 
+.brand-accent {
+  color: var(--brand);
+}
+
 .tagline {
   color: var(--muted);
   font-size: 0.84rem;
