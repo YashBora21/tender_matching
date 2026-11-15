@@ -72,9 +72,15 @@ def test_migration_creates_all_prd_tables(test_database_url: str) -> None:
                 row[0]
                 for row in conn.execute(text("SELECT extname FROM pg_extension"))
             }
+            item_name = next(
+                c for c in inspect(conn).get_columns("tender_item", schema=schema)
+                if c["name"] == "name"
+            )
 
         assert EXPECTED_TABLES <= names
         assert "vector" in extensions
+        # A BOQ line can be a whole sentence; a 255-char cap aborted ingestion.
+        assert item_name["type"].length is None
     finally:
         with engine.begin() as conn:
             conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))

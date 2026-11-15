@@ -252,7 +252,7 @@ tender_item = Table(
     # tenders both have an item "1".
     Column("tender_id", Uuid(), ForeignKey("tender.id"), nullable=False, primary_key=True),
     Column("item_id", String(64), primary_key=True),
-    Column("name", String(255), nullable=False),
+    Column("name", Text, nullable=False),
     Column("category", String(255)),
     Column("boq_ref", String(64)),
     Column("active", Boolean, nullable=False, server_default="true"),

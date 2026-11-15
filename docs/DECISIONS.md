@@ -5355,3 +5355,14 @@ Single prompt version advances9->10,batch version batch-1->batch-2. Existing
 prompt-based stage and response keys therefore invalidate prior answers instead
 of silently reusing incompatible cell-level extraction. Probe a bounded source
 before any further whole-tender paid retry.
+
+## D-189 item names are unbounded text, not a 255-char label - 2026-11-14
+
+A BOQ item name can be a whole specification sentence. The varchar(255) cap on
+tender_item.name made one over-long line raise StringDataRightTruncation and abort
+the entire ingestion transaction, labelling a readable tender "could not be read".
+Widen the column to Text (migration 0024) and match it in schema.py, the single
+source of truth for DDL. Widening is non-destructive; no name is truncated and no
+short name changes behaviour. Downgrade refuses rather than silently truncating
+evidence. The migration test asserts the migrated column has no length cap.
+Tenders already marked failed need a re-read; widening does not retry them.

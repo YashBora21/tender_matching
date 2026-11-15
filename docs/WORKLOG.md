@@ -4756,3 +4756,9 @@ version predates the concurrent prompt bump.
 
 Commit prompt correction: distinguish compound cells from atomic fields;single prompt10 and batch2;validators unchanged. Backend1392 unit tests passed;no paid call made in this commit phase.
 Unrelated untracked artifacts remain excluded.
+
+
+### 2026-11-15 - Commit pending work (D-189)
+
+Commit migration0024,matching SQLAlchemy schema and migration assertion. Offline SQL generation verified ALTER COLUMN name TYPE TEXT. Backend1392 unit tests passed;24 integration tests deselected. Migration NOT applied by this turn;no live DB writes.
+Unrelated untracked artifacts remain excluded.
