@@ -36,6 +36,11 @@ def fresh_settings(monkeypatch) -> None:
     monkeypatch.setenv('LLM_TEXT_API_KEY', '')
     monkeypatch.setenv('LLM_CALL_BUDGET', '0')
     monkeypatch.setenv('LLM_TOKEN_BUDGET', '0')
+    # A developer .env that enables persistent spend accounting must not turn
+    # unit tests into writers of the live ledger: a fake model call reserves
+    # a real row, and phantom rows inflate every cap the deployment reads.
+    monkeypatch.setenv('LLM_SPEND_CAPS_ENABLED', 'false')
+    monkeypatch.setenv('LLM_SPEND_TRACKING_ENABLED', 'false')
     monkeypatch.setenv('LLM_MAX_RETRIES', '3')
     monkeypatch.setenv('LLM_RETRY_SECONDS', '0')
     # Single-answer fakes must not inherit a deployment batch size.

@@ -4762,3 +4762,9 @@ Unrelated untracked artifacts remain excluded.
 
 Commit migration0024,matching SQLAlchemy schema and migration assertion. Offline SQL generation verified ALTER COLUMN name TYPE TEXT. Backend1392 unit tests passed;24 integration tests deselected. Migration NOT applied by this turn;no live DB writes.
 Unrelated untracked artifacts remain excluded.
+
+
+### 2026-11-15 - Commit pending work (D-191)
+
+Commit test isolation:both persistent caps and tracking disabled by the autouse fixture;production accounting unchanged. Full unit invocation used the same disabled tracking setting;1392 tests passed.
+Unrelated untracked artifacts remain excluded.
